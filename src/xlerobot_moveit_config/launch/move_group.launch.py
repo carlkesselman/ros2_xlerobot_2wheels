@@ -52,6 +52,7 @@ def launch_setup(context):
         .robot_description_kinematics(file_path="config/kinematics.yaml")
         .joint_limits(file_path="config/joint_limits.yaml")
         .trajectory_execution(file_path="config/moveit_controllers.yaml")
+        .sensors_3d(file_path="config/sensors_3d.yaml")
         .planning_pipelines(pipelines=["ompl"], default_planning_pipeline="ompl")
         .planning_scene_monitor(
             publish_robot_description=False,
@@ -66,7 +67,15 @@ def launch_setup(context):
             package="moveit_ros_move_group",
             executable="move_group",
             output="screen",
-            parameters=[moveit_config.to_dict(), {"use_sim_time": use_sim_time}],
+            parameters=[
+                moveit_config.to_dict(),
+                {
+                    "use_sim_time": use_sim_time,
+                    "octomap_frame": "odom",
+                    "octomap_resolution": 0.05,
+                    "max_range": 1.2,
+                },
+            ],
         ),
         Node(
             package="rviz2",

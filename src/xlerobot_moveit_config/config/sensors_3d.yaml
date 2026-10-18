@@ -1,0 +1,17 @@
+# Head depth camera -> MoveIt octomap, so planning avoids what the robot sees. The point-cloud
+# updater needs no display (the depth-image updater renders with OpenGL and crashes without one).
+# The cloud is the decimated one from cameras.launch.py (about 58k points, 4x smaller than the
+# depth image). Range is cut to 1.2 m, the arms reach about 0.6 m, and a longer range makes the
+# octomap large enough to stall planning. padding_* grows the robot's own links before they are
+# masked out of the cloud.
+sensors:
+  - head_depth
+head_depth:
+  sensor_plugin: occupancy_map_monitor/PointCloudOctomapUpdater
+  point_cloud_topic: /cameras/head/depth/points_low
+  max_range: 1.2
+  point_subsample: 1
+  padding_offset: 0.06
+  padding_scale: 1.0
+  max_update_rate: 2.0
+  filtered_cloud_topic: head_depth_filtered
