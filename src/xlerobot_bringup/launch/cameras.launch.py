@@ -46,7 +46,8 @@ from launch import LaunchDescription
 from launch.actions import DeclareLaunchArgument, GroupAction, IncludeLaunchDescription, OpaqueFunction
 from launch.launch_description_sources import PythonLaunchDescriptionSource
 from launch.substitutions import LaunchConfiguration
-from launch_ros.actions import Node, PushRosNamespace, SetRemap
+from launch_ros.actions import ComposableNodeContainer, Node, PushRosNamespace, SetRemap
+from launch_ros.descriptions import ComposableNode
 
 
 def _camera_nodes(context, *args, **kwargs):
@@ -75,7 +76,44 @@ def _camera_nodes(context, *args, **kwargs):
                         # static transforms showed up fine, the driver's own tree did not, until
                         # this was set.
                         "enable_publish_extrinsic": "true",
+                        # The driver's own cloud is 1280x720 (about 920k points) and costs most of
+                        # a core; MoveIt's octomap gets the decimated one below instead.
+                        "enable_point_cloud": "false",
                     }.items(),
+                ),
+                # depth/points_low: the depth image shrunk 4x (nearest, so no depth blending at
+                # edges) and turned into a cloud, about 58k points, for the MoveIt octomap.
+                ComposableNodeContainer(
+                    package="rclcpp_components",
+                    executable="component_container",
+                    name="depth_cloud_container",
+                    namespace="/cameras/head",
+                    composable_node_descriptions=[
+                        ComposableNode(
+                            package="image_proc",
+                            plugin="image_proc::ResizeNode",
+                            name="depth_resize",
+                            namespace="/cameras/head",
+                            parameters=[{"scale_height": 0.25, "scale_width": 0.25, "interpolation": 0}],
+                            remappings=[
+                                ("image/image_raw", "depth/image_raw"),
+                                ("image/camera_info", "depth/camera_info"),
+                                ("resize/image_raw", "depth_low/image_raw"),
+                                ("resize/camera_info", "depth_low/camera_info"),
+                            ],
+                        ),
+                        ComposableNode(
+                            package="depth_image_proc",
+                            plugin="depth_image_proc::PointCloudXyzNode",
+                            name="depth_points_low",
+                            namespace="/cameras/head",
+                            remappings=[
+                                ("image_rect", "depth_low/image_raw"),
+                                ("camera_info", "depth_low/camera_info"),
+                                ("points", "depth/points_low"),
+                            ],
+                        ),
+                    ],
                 ),
             ]))
             continue

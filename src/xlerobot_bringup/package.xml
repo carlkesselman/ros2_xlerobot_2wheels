@@ -25,6 +25,8 @@
   <exec_depend>foxglove_bridge</exec_depend>
   <exec_depend>usb_cam</exec_depend>
   <exec_depend>orbbec_camera</exec_depend>
+  <exec_depend>image_proc</exec_depend>
+  <exec_depend>depth_image_proc</exec_depend>
   <exec_depend>ffmpeg_image_transport</exec_depend>
   <exec_depend>image_transport_plugins</exec_depend>
   <exec_depend>python3-yaml</exec_depend>
