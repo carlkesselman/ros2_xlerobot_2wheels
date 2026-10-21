@@ -30,7 +30,7 @@ def main():
     # send to every bus first, wait for the answers after, so the stop is not serial
     futures = {}
     for bus, client in clients.items():
-        if client.wait_for_service(timeout_sec=3.0):
+        if client.wait_for_service(timeout_sec=5.0):
             futures[bus] = client.call_async(SetBool.Request(data=not args.release))
     ok = True
     for bus in BUSES:
@@ -38,7 +38,7 @@ def main():
             print(f"{bus}: service not available")
             ok = False
             continue
-        rclpy.spin_until_future_complete(node, futures[bus], timeout_sec=2.0)
+        rclpy.spin_until_future_complete(node, futures[bus], timeout_sec=5.0)
         result = futures[bus].result()
         print(f"{bus}: {result.message if result else 'no answer'}")
         ok = ok and bool(result and result.success)
