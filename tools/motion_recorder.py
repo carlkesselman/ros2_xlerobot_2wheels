@@ -48,12 +48,12 @@ def motion_path(name):
 BUSES = ["xlerobot_bus1", "xlerobot_bus2"]
 
 
-def set_torque_cut(node, cut, timeout=5.0):
+def set_torque_cut(node, cut, timeout=5.0, buses=None):
     """Cut (True) or restore (False) torque on both servo buses, same service tools/estop.py uses.
     Bus 2 also carries the wheels. Returns an error string or None. Needs the node's executor to
     be spinning, it only waits on the futures."""
     futures = {}
-    for bus in BUSES:
+    for bus in buses or BUSES:
         client = node.create_client(SetBool, f"/emergency_stop_{bus}")
         if not client.wait_for_service(timeout_sec=timeout):
             return f"/emergency_stop_{bus} not available"

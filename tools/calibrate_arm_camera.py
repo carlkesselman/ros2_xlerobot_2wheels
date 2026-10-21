@@ -1,11 +1,15 @@
 #!/usr/bin/env python3
 """Arm / wrist-camera calibration against one fixed ChArUco board.
 
-  python3 tools/calibrate_arm_camera.py left [--samples 12]
+  python3 tools/calibrate_arm_camera.py left            # you press Space for each sample
+  python3 tools/calibrate_arm_camera.py left --auto     # takes a sample whenever the board is steady
 
 The head camera measures the board's pose once. The board then stays put while you hold the arm
-(torque off) so its wrist camera sees the board from many different poses. Every steady, well
-detected view is saved with the joint angles, and a least-squares fit finds the five joint zero
+(torque off) so its wrist camera sees the board from many different poses. In the default mode you
+hold the arm at a pose and press Space (or Enter): it waits for a fresh frame, checks the arm was
+still while that frame was taken and that the board is detected, and saves it with the joint angles.
+Keys: Space/Enter take a sample, u drop the last one, q finish and fit. Every saved view has the joint
+angles from the moment the image was captured (wrist frames arrive about 0.6 s late), and a least-squares fit finds the five joint zero
 offsets and the wrist camera's real mounting pose that make all views agree with the head's
 measurement (it minimises the corner reprojection error, in pixels).
 
@@ -13,8 +17,8 @@ Needs: stack running with cameras and the arm, the board flat and rigid and not 
 run, visible to the head camera at the start. The head camera's pose is trusted (IMU and board
 checked), so the arm and its camera come out in the head camera's frame.
 
-Torque on the arm's bus is cut for the capture (bus1 also holds the head and bus2 the wheels, so
-the head droops and the base can roll) and restored at the end, also on Ctrl-C. Hold the arm.
+Torque on the selected arm's servo bus is cut for the capture (bus1 also holds the head, so it droops,
+and bus2 the wheels, so the base can roll) and restored at the end, also on Ctrl-C. Hold the arm.
 
 Board defaults match tools/calibrate_camera_charuco.py (11x8, 15 mm squares, 11 mm markers,
 DICT_4X4_250). The wrist camera sees 11 mm markers only within about 20 cm.
@@ -23,11 +27,14 @@ import argparse
 import atexit
 import json
 import math
+import select
 import pathlib
 import signal
 import sys
+import termios
 import threading
 import time
+import tty
 import xml.etree.ElementTree as ET
 
 import cv2
@@ -46,6 +53,7 @@ from tf2_ros import Buffer, TransformListener
 sys.path.insert(0, str(pathlib.Path(__file__).resolve().parent))
 import motion_recorder  # noqa: E402  (torque cut/restore helper)
 
+ARM_BUS = {"left": "xlerobot_bus1", "right": "xlerobot_bus2"}   # bus1 also has the head, bus2 the wheels
 JOINTS = ["shoulder_pan", "shoulder_lift", "elbow_flex", "wrist_flex", "wrist_roll"]
 OUT_DIR = pathlib.Path.home() / ".ros" / "arm_camera_calibration"
 
@@ -122,8 +130,8 @@ class Capture:
 
     def _joints(self, m):
         self.q.update(zip(m.name, m.position))
-        self.history.append((time.monotonic(), dict(self.q)))
-        del self.history[:-60]
+        self.history.append((m.header.stamp.sec + m.header.stamp.nanosec * 1e-9, dict(self.q)))
+        del self.history[:-400]
 
     def _urdf(self, m):
         self.urdf = m.data
@@ -139,13 +147,18 @@ class Capture:
             time.sleep(0.1)
         return False
 
-    def still(self, window=0.5, eps=0.003):
-        now = time.monotonic()
-        rows = [h for h in self.history if now - h[0] <= window]
-        if len(rows) < 3:
-            return False
+    def joints_at(self, stamp, before=0.5, after=0.2, eps=0.007):
+        """Mean joint angles around an image's capture time, None unless the arm was still then.
+        The wrist camera's frames arrive about 0.6 s after they were taken, so what the arm is
+        doing now says nothing about what the image shows."""
+        rows = [h for h in self.history if stamp - before <= h[0] <= stamp + after]
+        if len(rows) < 5 or self.history[-1][0] < stamp + after:
+            return None
         names = [f"{self.arm}_arm_{j}_joint" for j in JOINTS]
-        return all(max(r[1][n] for r in rows) - min(r[1][n] for r in rows) < eps for n in names)
+        vals = np.array([[r[1][n] for n in names] for r in rows])
+        if (vals.max(0) - vals.min(0)).max() > eps:
+            return None
+        return vals.mean(0)
 
 
 def make_board(a):
@@ -213,16 +226,24 @@ def head_board_in_base(cap, board, dic):
 
 def collect(cap, a, board, dic, T_bb):
     K, D = camera_matrices(cap.info[a.arm])
-    samples, last_msg = [], 0.0
+    samples, last_msg, last_stamp = [], 0.0, 0.0
     names = [f"{a.arm}_arm_{j}_joint" for j in JOINTS]
     print("move the arm so its camera sees the board, hold it still, then move on. Ctrl-C finishes.")
     while len(samples) < a.samples:
-        time.sleep(0.25)
-        if a.arm not in cap.frames or not cap.still():
+        try:
+            time.sleep(0.25)
+        except KeyboardInterrupt:
+            break
+        if a.arm not in cap.frames:
             continue
         t, m = cap.frames[a.arm]
-        if time.monotonic() - t > 0.5:
+        stamp = m.header.stamp.sec + m.header.stamp.nanosec * 1e-9
+        if stamp <= last_stamp or time.monotonic() - t > 0.5:
             continue
+        q = cap.joints_at(stamp, eps=a.still_eps)
+        if q is None:
+            continue
+        last_stamp = stamp
         det = detect(m, board, dic, K, D)
         if det is None or len(det[0]) < a.min_corners:
             if time.time() - last_msg > 2:
@@ -230,9 +251,8 @@ def collect(cap, a, board, dic, T_bb):
                 last_msg = time.time()
             continue
         pose = board_pose(det[0], det[1], board, K, D)
-        if pose is None or pose[1] > 1.0:
+        if pose is None or pose[1] > a.max_rms:
             continue
-        q = np.array([cap.q[n] for n in names])
         if samples and min(np.abs(q - np.array(s["q"])).max() for s in samples) < a.min_move:
             if time.time() - last_msg > 2:
                 print("  too close to an earlier pose, move further")
@@ -242,6 +262,93 @@ def collect(cap, a, board, dic, T_bb):
         dist = float(np.linalg.norm(pose[0][:3, 3]))
         print(f"  sample {len(samples)}/{a.samples}: {len(det[0])} corners, board {dist * 100:.0f} cm away, "
               f"pnp rms {pose[1]:.2f} px")
+    return samples
+
+
+
+class Keys:
+    """Single key presses from the terminal, without waiting for Enter."""
+
+    def __enter__(self):
+        if not sys.stdin.isatty():
+            sys.exit("manual mode needs a terminal, run it yourself (or use --auto)")
+        self.fd = sys.stdin.fileno()
+        self.old = termios.tcgetattr(self.fd)
+        tty.setcbreak(self.fd)
+        return self
+
+    def __exit__(self, *exc):
+        termios.tcsetattr(self.fd, termios.TCSADRAIN, self.old)
+
+    def get(self, timeout):
+        if select.select([sys.stdin], [], [], timeout)[0]:
+            return sys.stdin.read(1)
+        return None
+
+
+def collect_manual(cap, a, board, dic):
+    K, D = camera_matrices(cap.info[a.arm])
+    samples = []
+    print("hold the arm so its camera sees the board, keep it STILL, press Space (or Enter) to take a sample.")
+    print("u = drop the last sample, q = finish and fit. Need at least 6, 12 or more is better.\n")
+    with Keys() as keys:
+        while True:
+            try:
+                key = keys.get(0.5)
+            except KeyboardInterrupt:
+                break
+            if key in ("q", "Q", "\x03"):
+                break
+            if key in ("u", "U") and samples:
+                samples.pop()
+                print(f"\ndropped, {len(samples)} samples")
+                continue
+            if key not in (" ", "\n", "\r"):
+                if a.arm in cap.frames:
+                    det = detect(cap.frames[a.arm][1], board, dic, K, D)
+                    n = 0 if det is None else len(det[0])
+                    print(f"\rboard corners in view: {n:3d}  samples: {len(samples):2d}   (live view is ~0.6 s old)   ",
+                          end="", flush=True)
+                continue
+            # a sample: wait for a frame taken after the key press, with the arm still around it
+            t_press = cap.node.get_clock().now().nanoseconds * 1e-9
+            print("\n  hold still...", end="", flush=True)
+            result, deadline = None, time.time() + 6.0
+            while time.time() < deadline and result is None:
+                time.sleep(0.1)
+                t, m = cap.frames.get(a.arm, (0, None))
+                if m is None:
+                    continue
+                stamp = m.header.stamp.sec + m.header.stamp.nanosec * 1e-9
+                if stamp < t_press + 0.1:
+                    continue
+                q = cap.joints_at(stamp, before=0.3, eps=a.still_eps)
+                if q is None:
+                    if cap.history and cap.history[-1][0] >= stamp + 0.2:
+                        result = ("the arm moved around the frame, hold it still", None)
+                    continue
+                det = detect(m, board, dic, K, D)
+                if det is None or len(det[0]) < a.min_corners:
+                    result = (f"only {0 if det is None else len(det[0])} corners seen (need {a.min_corners})", None)
+                    break
+                pose = board_pose(det[0], det[1], board, K, D)
+                if pose is None or pose[1] > a.max_rms:
+                    result = ("board pose unreliable (blur, glare or too oblique)", None)
+                    break
+                result = ("ok", {"q": q.tolist(), "ids": det[0].tolist(), "px": det[1].tolist(),
+                                 "_info": f"{len(det[0])} corners, board {100 * np.linalg.norm(pose[0][:3, 3]):.0f} cm, "
+                                          f"rms {pose[1]:.2f} px"})
+            if result is None:
+                print(" no new frame, is the camera running?")
+            elif result[1] is None:
+                print(f" NOT saved: {result[0]}")
+            else:
+                info = result[1].pop("_info")
+                near = samples and min(np.abs(np.array(result[1]["q"]) - np.array(s["q"])).max() for s in samples)
+                samples.append(result[1])
+                print(f" saved sample {len(samples)}: {info}"
+                      + (" (similar to an earlier pose, vary it more)" if samples[:-1] and near < a.min_move else ""))
+    print()
     return samples
 
 
@@ -299,15 +406,19 @@ def main():
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument("arm", choices=["left", "right"])
     ap.add_argument("--samples", type=int, default=12)
-    ap.add_argument("--min-corners", type=int, default=15)
+    ap.add_argument("--min-corners", type=int, default=12)
+    ap.add_argument("--still-eps", type=float, default=0.007, help="rad, largest joint movement allowed around a frame")
+    ap.add_argument("--max-rms", type=float, default=1.5, help="px, PnP reprojection error a view may have")
     ap.add_argument("--min-move", type=float, default=0.12, help="rad, how far a new pose must differ from every saved one")
     ap.add_argument("--squares-x", type=int, default=11)
     ap.add_argument("--squares-y", type=int, default=8)
     ap.add_argument("--square-length", type=float, default=0.015)
     ap.add_argument("--marker-length", type=float, default=0.011)
     ap.add_argument("--dict", default="DICT_4X4_250")
-    ap.add_argument("--fit-only", type=pathlib.Path, help="refit a saved capture file, no robot motion")
+    ap.add_argument("--fit-only", type=pathlib.Path, nargs="+",
+                    help="refit saved capture file(s) from the same board position, no robot motion")
     ap.add_argument("--no-torque-cut", action="store_true", help="the arm is moved some other way")
+    ap.add_argument("--auto", action="store_true", help="take samples automatically instead of on a key press")
     ap.add_argument("--yes", action="store_true", help="no Enter prompt, 10 s countdown before torque is cut")
     a = ap.parse_args()
     # a background launch ignores SIGINT, and SIGTERM would skip the torque restore
@@ -321,36 +432,45 @@ def main():
     time.sleep(1.0)
 
     if a.fit_only:
-        data = json.loads(a.fit_only.read_text())
-        T_bb, samples = np.array(data["T_base_board"]), data["samples"]
+        runs = [json.loads(f.read_text()) for f in a.fit_only]
+        T_bb = np.array(runs[0]["T_base_board"])
+        samples = []
+        for f, d in zip(a.fit_only, runs):
+            moved = np.linalg.norm(np.array(d["T_base_board"])[:3, 3] - T_bb[:3, 3]) * 1000
+            if moved > 5:
+                print(f"warning: {f.name} measured the board {moved:.0f} mm from the first file, did it move?")
+            samples += d["samples"]
+        print(f"{len(samples)} samples from {len(runs)} file(s)")
     else:
-        if not cap.wait_for(lambda: "head" in cap.frames and a.arm in cap.frames):
+        if not cap.wait_for(lambda: "head" in cap.frames and a.arm in cap.frames, timeout=40):
             sys.exit("no camera frames")
         T_bb = head_board_in_base(cap, board, dic)
         torque_cut = [False]
+        bus = ARM_BUS[a.arm]
 
         def restore():
             if torque_cut[0]:
-                err = motion_recorder.set_torque_cut(cap.node, False)
+                err = motion_recorder.set_torque_cut(cap.node, False, buses=[bus])
                 print("torque restored" if not err else f"TORQUE NOT RESTORED ({err}), run tools/estop.py --release")
                 torque_cut[0] = False
         atexit.register(restore)
         if not a.no_torque_cut:
-            print(f"\nTorque will be cut on both servo buses (the {a.arm} arm and the head go limp, and "
-                  "bus 2 frees the wheels). HOLD THE ARM.")
+            extra = "the head" if a.arm == "left" else "the wheels"
+            print(f"\nTorque will be cut on the {a.arm} arm's servo bus ({bus}): the arm and {extra} go limp. "
+                  "HOLD THE ARM.")
             if a.yes:
                 for sec in range(10, 0, -1):
                     print(f"  cutting torque in {sec} s", flush=True)
                     time.sleep(1)
             else:
                 input("press Enter when you hold it... ")
-            err = motion_recorder.set_torque_cut(cap.node, True)
+            err = motion_recorder.set_torque_cut(cap.node, True, buses=[bus])
             if err:
-                motion_recorder.set_torque_cut(cap.node, False)
+                motion_recorder.set_torque_cut(cap.node, False, buses=[bus])
                 sys.exit(f"could not cut torque: {err}")
             torque_cut[0] = True
         try:
-            samples = collect(cap, a, board, dic, T_bb)
+            samples = collect(cap, a, board, dic, T_bb) if a.auto else collect_manual(cap, a, board, dic)
         except KeyboardInterrupt:
             samples = []
             print("\nstopped")
