@@ -32,6 +32,8 @@ JOINT_RATE = 20.0
 BASE_TOPIC_IN = "/cmd_vel_joy"
 BASE_TOPIC_OUT = "/cmd_vel_nav"
 MOVE_EPS = 0.03          # rad, a group that moved less than this in the recording is not replayed
+MAX_JOINT_VEL = 0.9      # rad/s, under the hardware cap of 1.25 x the 0.8 planning limit (robot_dimensions.yaml). The hardware
+                         # interface caps commands at 1.25x this, so a faster recording just lags and is clamped
 LEAD_SPEED = 0.4         # rad/s used to get from the current pose to the recording's first pose
 
 
@@ -134,6 +136,7 @@ class Player:
         self.pub = node.create_publisher(TwistStamped, BASE_TOPIC_OUT, QoSProfile(depth=1))
         self.clients = {}
         self.thread = None
+        self.slowdown, self.vmax = 1.0, 0.0
 
     def plan(self, name, current):
         """-> (parts, times, lead, base, moved) without sending anything."""
@@ -152,13 +155,29 @@ class Player:
                 parts.append((g, gj, traj, start_gap))
         lead = max([1.0] + [gap / LEAD_SPEED + 0.5 for *_, gap in parts])
         base = data.get("base") or []
+        # Hand-guided motions are quicker than the joint limits allow. Stretch the whole recording
+        # in time (arms, head and wheels together, wheel speed scaled down so the distance driven
+        # stays the same) instead of letting the controller clamp it and drift out of sync.
+        window = max(1, round(0.25 * JOINT_RATE))
+        vmax = 0.0
+        for _, _, traj, _ in parts:
+            for i in range(len(traj) - window):
+                dt = times[i + window] - times[i]
+                if dt > 0:
+                    vmax = max(vmax, max(abs(a - b) for a, b in zip(traj[i + window], traj[i])) / dt)
+        self.slowdown = max(1.0, vmax / MAX_JOINT_VEL)
+        self.vmax = vmax
+        times = [t * self.slowdown for t in times]
+        base = [{"t": b["t"] * self.slowdown, "v": [x / self.slowdown for x in b["v"]]} for b in base]
         return parts, times, lead, base, [p[0] for p in parts]
 
     def play(self, name, current, dry_run=False):
         parts, times, lead, base, moved = self.plan(name, current)
         duration = times[-1]
         self.log(f"'{name}': {duration:.1f} s, moves {', '.join(moved) or 'nothing'}, "
-                 f"{len(base)} base commands, lead-in {lead:.1f} s")
+                 f"{len(base)} base commands, lead-in {lead:.1f} s"
+                 + (f", peak {self.vmax:.1f} rad/s is over the {MAX_JOINT_VEL} limit so played {self.slowdown:.1f}x slower"
+                    if self.slowdown > 1 else ""))
         if dry_run:
             return
         self.cancel.clear()
