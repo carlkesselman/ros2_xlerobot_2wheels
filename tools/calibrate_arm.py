@@ -1,7 +1,10 @@
 #!/usr/bin/env python3
 """Calibrate one SO-101 arm, or the head pan/tilt, the way lerobot does, and save the result in lerobot's format.
 
-  status     read-only: positions, stored offsets and limits, and how they compare to the file
+  status     read-only: positions, stored offsets and limits, torque, and how they compare to the file
+  torque-off write torque_enable=0 to every servo of the part (--part all: both buses, arms, head and
+             wheels) and read it back. For after the stack was stopped: the ROS hardware interface
+             leaves the servos holding when its process is killed. The arms go limp, hold them.
   calibrate  middle-of-range pose, then a sweep of every joint (lerobot's `calibrate()` for
              so101_follower): writes Homing_Offset and the position limits into the servos and
              <calibration dir>/robots/so101_follower/<id>.json
@@ -19,6 +22,7 @@ so lerobot picks it up from the same place (HF_LEROBOT_HOME, default ~/.cache/hu
 
 Usage:
   python3 tools/calibrate_arm.py status    --arm left
+  python3 tools/calibrate_arm.py torque-off --part all
   python3 tools/calibrate_arm.py calibrate --arm left
   python3 tools/calibrate_arm.py calibrate --arm right --port /dev/xle-bus2
   python3 tools/calibrate_arm.py calibrate --arm head
@@ -51,6 +55,7 @@ PARTS = {
     "left": ("/dev/xle-bus1", SO101_JOINTS, "wrist_roll", "so101_follower"),
     "right": ("/dev/xle-bus2", SO101_JOINTS, "wrist_roll", "so101_follower"),
     "head": ("/dev/xle-bus1", {"head_pan": 7, "head_tilt": 8}, None, "xlerobot_head"),
+    "wheels": ("/dev/xle-bus2", {"left_wheel": 9, "right_wheel": 10}, None, "xlerobot_wheels"),
 }
 BAUD = 1_000_000
 MAX_RES = 4095  # STS3215, 12 bit
@@ -184,7 +189,7 @@ def cmd_status(args):
     bus = open_bus(args.port, args.joints)
     print(f"{args.port}, calibration file: {path} ({'found' if saved else 'not found'})")
     print(f"{'joint':<14}{'id':>3}{'pos':>6}{'deg':>8}{'offset':>8}{'min':>6}{'max':>6}"
-          f"{'V':>6}{'C':>4}   file")
+          f"{'V':>6}{'C':>4}{'torque':>7}   file")
     for name, i in args.joints.items():
         pos = bus.position(i)
         offset = bus.read(i, HOMING_OFFSET, sign_bit=11)
@@ -197,10 +202,27 @@ def cmd_status(args):
             c = saved.get(name, {})
             same = (c.get("homing_offset"), c.get("range_min"), c.get("range_max")) == (offset, lo, hi)
             match = "same as servo" if same else "DIFFERS from servo"
+        torque = "on" if bus.read(i, TORQUE_ENABLE) else "off"
         print(f"{name:<14}{i:>3}{pos:>6}{(pos - HALF_TURN) * 360 / 4096:>8.1f}{offset:>8}"
-              f"{lo:>6}{hi:>6}{volts:>6.1f}{temp:>4}   {match}")
+              f"{lo:>6}{hi:>6}{volts:>6.1f}{temp:>4}{torque:>7}   {match}")
     print("deg is relative to the calibrated middle (step 2047)")
     bus.close()
+
+
+def cmd_torque_off(args):
+    parts = list(PARTS) if args.part == "all" else [args.part]
+    failed = False
+    for part in parts:
+        port, joints = (args.port if args.part == part and args.port else PARTS[part][0]), PARTS[part][1]
+        bus = open_bus(port, joints)
+        for name, i in joints.items():
+            bus.write(i, TORQUE_ENABLE, 0)
+            state = bus.read(i, TORQUE_ENABLE)
+            failed |= state != 0
+            print(f"{part:<7}{name:<14}id {i:>2}  torque {'OFF' if state == 0 else 'STILL ON'}")
+        bus.close()
+    if failed:
+        sys.exit("some servos still hold torque")
 
 
 def wait_for_enter():
@@ -292,14 +314,18 @@ def cmd_calibrate(args):
 
 def main():
     parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
-    parser.add_argument("command", choices=["status", "calibrate"])
-    parser.add_argument("--part", "--arm", dest="part", choices=list(PARTS), required=True,
-                        help="left or right arm, or the head")
+    parser.add_argument("command", choices=["status", "calibrate", "torque-off"])
+    parser.add_argument("--part", "--arm", dest="part", choices=list(PARTS) + ["all"], required=True,
+                        help="left or right arm, the head, the wheels, or all (torque-off only)")
     parser.add_argument("--port", help="default: /dev/xle-bus1 for left arm and head, /dev/xle-bus2 for right")
     parser.add_argument("--id", help="lerobot robot id, the file name; default xlerobot_<part>_arm, xlerobot_head")
     parser.add_argument("--calibration-dir",
                         help="default: $HF_LEROBOT_HOME/calibration/robots/so101_follower (xlerobot_head for the head)")
     args = parser.parse_args()
+    if args.command == "torque-off":
+        return cmd_torque_off(args)
+    if args.part == "all":
+        sys.exit("--part all only works with torque-off")
     port, args.joints, args.full_turn, args.robot_type = PARTS[args.part]
     args.port = args.port or port
     args.id = args.id or ("xlerobot_head" if args.part == "head" else f"xlerobot_{args.part}_arm")

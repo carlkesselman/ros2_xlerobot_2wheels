@@ -19,7 +19,8 @@ joystick's wheel commands), y plays one back, z stops playback, m lists recordin
 joystick, so touching the stick or e-stop wins. The header line shows the Jetson's CPU, memory,
 GPU and temperature, read over the same ssh connection.
 
-Keys: s start stack, x stop stack (kill_ros --clean-shm), g presence guard on/off, e e-stop,
+Keys: s start stack, x stop stack (kill_ros --clean-shm), X stop and then cut torque on every servo, t cut
+torque only (stack must be stopped; the arms go limp and the head droops, hold them; it asks for "yes"), g presence guard on/off, e e-stop,
 u release e-stop, c clear octomap, v validate, p next profile, l show/hide log, q quit.
 Heavy topics (images, clouds) are never subscribed: a standing remote raw-image subscriber
 stalled the Gemini driver, so cameras are judged by their camera_info stream.
@@ -276,7 +277,8 @@ class TuiApp(App):
     CSS = "DataTable {height: 1fr;} RichLog {height: 12; border-top: solid $primary;} #stats {height: 1; padding: 0 1;} .hidden {display: none;}"
     TITLE = "XLeRobot stack"
     BINDINGS = [
-        Binding("s", "start", "start"), Binding("x", "stop", "stop"),
+        Binding("s", "start", "start"), Binding("x", "stop", "stop"), Binding("X", "stop_limp", "stop + limp"),
+        Binding("t", "limp", "torque off"),
         Binding("g", "presence", "presence"), Binding("e", "estop", "E-STOP"),
         Binding("u", "release", "release"), Binding("c", "clear_octomap", "clear octomap"),
         Binding("v", "validate", "validate"), Binding("p", "profile", "profile"),
@@ -396,6 +398,14 @@ class TuiApp(App):
     def action_stop(self):
         self.remote(self.prelude() + "python3 tools/kill_ros.py --yes --clean-shm | tail -3\n", "stop stack")
 
+    LIMP = "python3 tools/calibrate_arm.py torque-off --part all\n"
+
+    def action_stop_limp(self):
+        self.ask("stop_limp", 'type "yes": stop the stack AND cut servo torque, arms go limp, hold them')
+
+    def action_limp(self):
+        self.ask("limp", 'type "yes": cut servo torque, arms go limp, hold them (stack must be stopped)')
+
     def action_presence(self):
         up = "/mcp_presence_guard" in self.mon.nodes
         if up:
@@ -443,6 +453,16 @@ class TuiApp(App):
         name, mode = ev.value.strip(), self.prompt_mode
         self.close_prompt()
         if not name:
+            return
+        if mode in ("limp", "stop_limp"):
+            if name.lower() != "yes":
+                self.say("cancelled")
+                return
+            if mode == "limp":
+                self.remote(self.prelude() + self.LIMP, "torque off")
+            else:
+                self.remote(self.prelude() + "python3 tools/kill_ros.py --yes --clean-shm | tail -2\nsleep 2\n" + self.LIMP,
+                            "stop stack and cut torque")
             return
         if mode in ("record_hand", "record_drive"):
             threading.Thread(target=self.begin_recording, args=(name, mode == "record_hand"), daemon=True).start()
