@@ -23,6 +23,16 @@ and bus2 the wheels, so the base can roll) and restored at the end, also on Ctrl
 Board defaults match tools/calibrate_camera_charuco.py (11x8, 15 mm squares, 11 mm markers,
 DICT_4X4_250). The wrist camera sees 11 mm markers only within about 20 cm.
 """
+import os
+import sys
+
+# the system numpy 2 in ~/.local clashes with the system OpenCV; the MCP venv has a working set
+_venv = os.path.expanduser("~/venvs/xlerobot-mcp/bin/python")
+if os.path.exists(_venv) and os.path.realpath(sys.prefix) != os.path.realpath(os.path.dirname(os.path.dirname(_venv))):
+    os.execv(_venv, [_venv] + sys.argv)
+
+import cv2
+
 import argparse
 import atexit
 import json
@@ -30,14 +40,12 @@ import math
 import select
 import pathlib
 import signal
-import sys
 import termios
 import threading
 import time
 import tty
 import xml.etree.ElementTree as ET
 
-import cv2
 import cv2.aruco as aruco
 import numpy as np
 import rclpy
@@ -198,18 +206,30 @@ def camera_matrices(info):
 
 def head_board_in_base(cap, board, dic):
     frame_id = cap.info["head"].header.frame_id
-    K, D = camera_matrices(cap.info["head"])
-    poses = []
-    for _ in range(15):
+    K, _ = camera_matrices(cap.info["head"])
+    D = np.zeros(5)    # the Gemini reports an 8-term rational model with huge, cancelling terms; the colour image is close to rectified
+    poses, seen, end = [], None, time.time() + 20.0
+    while len(poses) < 14 and time.time() < end:
         t, m = cap.frames["head"]
-        det = detect(m, board, dic, K, D)
-        if det is not None:
-            p = board_pose(det[0], det[1], board, K, D, min_inliers=6)
-            if p is not None and p[1] < 1.5:
-                poses.append(p[0])
-        time.sleep(0.2)
-    if len(poses) < 4:
-        sys.exit("head camera does not see the board well enough (need it in view, well lit)")
+        if t != seen:                                   # each frame once
+            seen = t
+            det = detect(m, board, dic, K, D)
+            if det is not None and len(det[0]) >= 12:
+                p = board_pose(det[0], det[1], board, K, D, min_inliers=10)
+                if p is not None and p[1] < 1.0:
+                    poses.append(p[0])
+        time.sleep(0.05)
+    # planar pose estimates from small markers flip between two solutions, keep the views that agree
+    if len(poses) >= 4:
+        normals = np.array([p[:3, 2] for p in poses])
+        med = np.median(normals, axis=0)
+        med /= np.linalg.norm(med)
+        keep = [p for p, n in zip(poses, normals) if np.degrees(np.arccos(np.clip(n @ med, -1, 1))) < 3.0]
+        t_med = np.median([p[:3, 3] for p in keep], axis=0) if keep else None
+        poses = [p for p in keep if np.linalg.norm(p[:3, 3] - t_med) < 0.01]
+    if len(poses) < 6:
+        sys.exit("head camera does not give a consistent board pose (need 6 agreeing views). More light on the board, "
+                 "no glare, board a little closer to the head, then try again")
     rots = R.from_matrix([p[:3, :3] for p in poses]).mean().as_matrix()
     trans = np.mean([p[:3, 3] for p in poses], axis=0)
     spread = np.std([p[:3, 3] for p in poses], axis=0) * 1000
