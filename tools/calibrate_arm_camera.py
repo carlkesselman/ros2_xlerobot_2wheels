@@ -200,6 +200,32 @@ def board_pose(ids, px, board, K, D, min_inliers=8):
     return transform(cv2.Rodrigues(rv)[0], tv.ravel()), rms, len(i)
 
 
+def board_pose_markers(msg, board, dic, K, D, min_markers=6):
+    """Board pose from the detected ArUco marker corners (4 per marker). With small markers far away
+    this is steadier than the ChArUco corners, which need the neighbouring markers too."""
+    img = cv2.imdecode(np.frombuffer(msg.data, np.uint8), cv2.IMREAD_GRAYSCALE)
+    params = aruco.DetectorParameters_create()
+    params.cornerRefinementMethod = aruco.CORNER_REFINE_SUBPIX
+    mc, mi, _ = aruco.detectMarkers(img, dic, parameters=params)
+    if mi is None or len(mi) < min_markers:
+        return None
+    index = {int(i): k for k, i in enumerate(np.array(board.ids).ravel())}
+    keep = [k for k, i in enumerate(mi.ravel()) if int(i) in index]
+    if len(keep) < min_markers:
+        return None
+    mi, mc = mi[keep], [mc[k] for k in keep]
+    obj = np.concatenate([board.objPoints[index[int(i)]] for i in mi.ravel()]).astype(np.float32).reshape(-1, 3)
+    px = np.concatenate([c.reshape(-1, 2) for c in mc]).astype(np.float32)
+    n, rvs, tvs, errs = cv2.solvePnPGeneric(obj, px, K, D, flags=cv2.SOLVEPNP_IPPE)
+    if not n:
+        return None
+    best = int(np.argmin([float(e) for e in errs]))
+    rv, tv = cv2.solvePnPRefineLM(obj, px, K, D, rvs[best], tvs[best])
+    proj, _ = cv2.projectPoints(obj, rv, tv, K, D)
+    rms = float(np.sqrt(((proj.reshape(-1, 2) - px) ** 2).sum(1).mean()))
+    return transform(cv2.Rodrigues(rv)[0], tv.ravel()), rms, len(mi)
+
+
 def camera_matrices(info):
     return np.array(info.k).reshape(3, 3), np.array(info.d)
 
@@ -213,11 +239,9 @@ def head_board_in_base(cap, board, dic):
         t, m = cap.frames["head"]
         if t != seen:                                   # each frame once
             seen = t
-            det = detect(m, board, dic, K, D)
-            if det is not None and len(det[0]) >= 12:
-                p = board_pose(det[0], det[1], board, K, D, min_inliers=10)
-                if p is not None and p[1] < 1.0:
-                    poses.append(p[0])
+            p = board_pose_markers(m, board, dic, K, D)
+            if p is not None and p[1] < 4.0:
+                poses.append(p[0])
         time.sleep(0.05)
     # planar pose estimates from small markers flip between two solutions, keep the views that agree
     if len(poses) >= 4:
@@ -508,4 +532,18 @@ def main():
 
 
 if __name__ == "__main__":
-    main()
+    # leave without the interpreter tearing down rclpy's executor thread, which aborts with a core dump
+    code = 0
+    try:
+        main()
+    except SystemExit as e:
+        code = e.code if isinstance(e.code, int) else (1 if e.code else 0)
+        if isinstance(e.code, str):
+            print(e.code, file=sys.stderr)
+    except KeyboardInterrupt:
+        code = 130
+    import atexit as _atexit
+    _atexit._run_exitfuncs()
+    sys.stdout.flush()
+    sys.stderr.flush()
+    os._exit(code)
