@@ -98,9 +98,12 @@
            every per-stream optical frame itself, unlike usbcam/realsense which need the
            REP-103 remap done by hand below.
 
-           Pitch is -0.1606 rad (9.2 deg nose up), from the camera's own IMU: with the head
-           tilt at 0 and at -0.59 rad it read 9.2 deg higher than the joints predicted both
-           times, and a flat ChArUco board agrees to about 1.5 deg. Roll (about 1 deg) and
+           Pitch is -0.1296 rad (7.4 deg nose up) relative to base_link. The camera's own IMU
+           read 9.2 deg higher than the joints predicted, at head tilt 0 and at -0.59 rad, and a
+           flat ChArUco board agrees to about 1.5 deg; 1.8 deg of that is the base's own lean
+           (base.pitch_up in robot_dimensions.yaml). Position: the camera sits 45 mm further left
+           (+y) than the mount centre, found by panning the head over a fixed ChArUco board (board position
+           in the base frame scattered 8 mm before, 1.8 mm after). Roll (about 1 deg) and
            yaw are left at 0. -->
       <link name="head_camera_link">
         <visual>
@@ -118,7 +121,7 @@
       <joint name="head_camera_joint" type="fixed">
         <parent link="head_camera_mount"/>
         <child  link="head_camera_link"/>
-        <origin xyz="0 0 0" rpy="0 -0.1606 0"/>
+        <origin xyz="0.0052 0.0451 -0.0025" rpy="0 -0.1296 0"/>
       </joint>
       <link name="head_link"/>
       <joint name="head_link_joint" type="fixed">
