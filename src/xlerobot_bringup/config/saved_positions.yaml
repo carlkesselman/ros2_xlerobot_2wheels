@@ -1,17 +1,68 @@
 positions:
-  rest:
-    group: both_arms
+  aim_left_1:
+    group: left_arm
     joints:
-      left_arm_shoulder_pan_joint: 0.0
-      left_arm_shoulder_lift_joint: 2.6
-      left_arm_elbow_flex_joint: -3.0
-      left_arm_wrist_flex_joint: 0.0
-      left_arm_wrist_roll_joint: 1.5708
-      right_arm_shoulder_pan_joint: 0.0
-      right_arm_shoulder_lift_joint: 2.6
-      right_arm_elbow_flex_joint: -3.0
-      right_arm_wrist_flex_joint: 0.0
-      right_arm_wrist_roll_joint: 1.5708
+      left_arm_elbow_flex_joint: -1.7256
+      left_arm_shoulder_lift_joint: 1.616
+      left_arm_shoulder_pan_joint: -0.2599
+      left_arm_wrist_flex_joint: -0.5806
+      left_arm_wrist_roll_joint: 1.9566
+  aim_left_2:
+    group: left_arm
+    joints:
+      left_arm_elbow_flex_joint: -0.7846
+      left_arm_shoulder_lift_joint: 1.2395
+      left_arm_shoulder_pan_joint: -0.4633
+      left_arm_wrist_flex_joint: -1.3719
+      left_arm_wrist_roll_joint: 1.9382
+  aim_left_3:
+    group: left_arm
+    joints:
+      left_arm_elbow_flex_joint: -1.6874
+      left_arm_shoulder_lift_joint: 1.399
+      left_arm_shoulder_pan_joint: -0.2592
+      left_arm_wrist_flex_joint: -0.4607
+      left_arm_wrist_roll_joint: 1.9566
+  aim_left_4:
+    group: left_arm
+    joints:
+      left_arm_elbow_flex_joint: -0.9073
+      left_arm_shoulder_lift_joint: 1.2361
+      left_arm_shoulder_pan_joint: -0.2968
+      left_arm_wrist_flex_joint: -1.2479
+      left_arm_wrist_roll_joint: 1.5087
+  aim_right_1:
+    group: right_arm
+    joints:
+      right_arm_elbow_flex_joint: -2.8877
+      right_arm_shoulder_lift_joint: 2.6252
+      right_arm_shoulder_pan_joint: 0.3482
+      right_arm_wrist_flex_joint: -0.0997
+      right_arm_wrist_roll_joint: 1.7395
+  aim_right_2:
+    group: right_arm
+    joints:
+      right_arm_elbow_flex_joint: -2.7428
+      right_arm_shoulder_lift_joint: 2.4413
+      right_arm_shoulder_pan_joint: 0.349
+      right_arm_wrist_flex_joint: -0.0997
+      right_arm_wrist_roll_joint: 1.7395
+  aim_right_3:
+    group: right_arm
+    joints:
+      right_arm_elbow_flex_joint: -2.5035
+      right_arm_shoulder_lift_joint: 2.4114
+      right_arm_shoulder_pan_joint: 0.3482
+      right_arm_wrist_flex_joint: -0.3712
+      right_arm_wrist_roll_joint: 1.7403
+  aim_right_4:
+    group: right_arm
+    joints:
+      right_arm_elbow_flex_joint: -2.3746
+      right_arm_shoulder_lift_joint: 2.2511
+      right_arm_shoulder_pan_joint: 0.4433
+      right_arm_wrist_flex_joint: -0.372
+      right_arm_wrist_roll_joint: 1.7403
   head_forward:
     group: head
     joints:
@@ -22,3 +73,40 @@ positions:
     joints:
       head_pan_joint: 0.0
       head_tilt_joint: -0.6
+  left_parked:
+    group: left_arm
+    joints:
+      left_arm_elbow_flex_joint: -3.183
+      left_arm_shoulder_lift_joint: 3.24
+      left_arm_shoulder_pan_joint: 0.14
+      left_arm_wrist_flex_joint: 0.265
+      left_arm_wrist_roll_joint: 1.657
+  left_pose_a:
+    group: left_arm
+    joints:
+      left_arm_elbow_flex_joint: -1.853
+      left_arm_shoulder_lift_joint: 1.784
+      left_arm_shoulder_pan_joint: 0.0
+      left_arm_wrist_flex_joint: 0.039
+      left_arm_wrist_roll_joint: 1.657
+  left_pose_b:
+    group: left_arm
+    joints:
+      left_arm_elbow_flex_joint: -1.33
+      left_arm_shoulder_lift_joint: 1.26
+      left_arm_shoulder_pan_joint: 0.0
+      left_arm_wrist_flex_joint: 0.039
+      left_arm_wrist_roll_joint: 1.657
+  rest:
+    group: both_arms
+    joints:
+      left_arm_elbow_flex_joint: -3.0
+      left_arm_shoulder_lift_joint: 2.6
+      left_arm_shoulder_pan_joint: 0.0
+      left_arm_wrist_flex_joint: 0.0
+      left_arm_wrist_roll_joint: 1.5708
+      right_arm_elbow_flex_joint: -3.0
+      right_arm_shoulder_lift_joint: 2.6
+      right_arm_shoulder_pan_joint: 0.0
+      right_arm_wrist_flex_joint: 0.0
+      right_arm_wrist_roll_joint: 1.5708
