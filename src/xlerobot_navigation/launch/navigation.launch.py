@@ -122,7 +122,7 @@ def launch_setup(context):
         Node(
             package="nav2_lifecycle_manager", executable="lifecycle_manager",
             name="lifecycle_manager_navigation",
-            parameters=[{"autostart": True, "node_names": lifecycle_nodes}],
+            parameters=[{"autostart": True, "node_names": lifecycle_nodes, "bond_timeout": 10.0}],
         ),
     ]
 

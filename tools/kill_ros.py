@@ -23,7 +23,7 @@ SIGTERM first, give it a few seconds, SIGKILL anything still alive after that - 
 this session used by hand every time, because a few of these (ros2_control_node especially) don't
 always die cleanly on the first signal.
 
---clean-shm removes this user's /dev/shm/fastrtps_* and sem.fastrtps_* files, which accumulate
+--clean-shm also closes rviz2 (see CLEAN_SHM_EXTRA) and removes this user's /dev/shm/fastrtps_* and sem.fastrtps_* files, which accumulate
 when processes are killed and can break FastDDS's shared-memory transport (symptom:
 "RTPS_TRANSPORT_SHM Error ... open_and_lock_file failed"). It only runs once nothing from this
 stack is left, and anything else on the machine still using ROS 2 (rviz, a ros2 CLI command)
@@ -69,8 +69,15 @@ PATTERNS = [
     "xlerobot_teleop/mcp_presence_guard",
 ]
 
+# Deleting the shared-memory files under a ROS process that stays alive breaks that process's
+# transport (RTPS_TRANSPORT_SHM errors, nodes that cannot find each other), and the next start then
+# fails in odd ways. So --clean-shm also closes viewers like RViz that this script otherwise leaves.
+CLEAN_SHM_EXTRA = ["rviz2"]
+CLEAN_SHM_EXTRA_ON = False
+
 
 def find_matches():
+    patterns = PATTERNS + (CLEAN_SHM_EXTRA if CLEAN_SHM_EXTRA_ON else [])
     out = subprocess.run(["ps", "-eo", "pid,args"], capture_output=True, text=True, check=True).stdout
     my_pid = os.getpid()
     matches = []
@@ -90,7 +97,7 @@ def find_matches():
             # not the local process itself - confirmed false-positive testing this script:
             # matched this script's own `ssh ... "ros2 launch ..."` call on the machine running
             # the ssh command, not on the machine actually running ros2 launch.
-        if any(p in cmd for p in PATTERNS):
+        if any(p in cmd for p in patterns):
             matches.append((pid, cmd))
     return matches
 
@@ -161,6 +168,8 @@ def main():
     parser.add_argument("--usb-reset", nargs="*", metavar="VID:PID",
                         help=f"after killing, usbreset these devices (default {DEFAULT_USB_RESET})")
     args = parser.parse_args()
+    global CLEAN_SHM_EXTRA_ON
+    CLEAN_SHM_EXTRA_ON = args.clean_shm
     usb_devices = None if args.usb_reset is None else (args.usb_reset or [DEFAULT_USB_RESET])
 
     matches = find_matches()

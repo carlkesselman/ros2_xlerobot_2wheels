@@ -388,12 +388,40 @@ class TuiApp(App):
     def prelude(self):
         return f"cd ~/{REPO_ON_JETSON}\nsource /opt/ros/jazzy/setup.bash\nsource install/setup.bash\n"
 
-    def action_start(self):
+    def start_script(self):
         args = PROFILES[self.profile][1]
-        self.remote(self.prelude() + "python3 tools/kill_ros.py --yes --clean-shm | tail -1\n"
-                    f"setsid nohup ros2 launch xlerobot_bringup full_stack.launch.py {args} "
-                    "> /tmp/full_stack.log 2>&1 &\necho started, log /tmp/full_stack.log on the Jetson\n",
-                    f"start {self.profile}")
+        controllers = ["joint_state_broadcaster", "diff_drive_controller"]
+        if "arms" in PROFILES[self.profile][0]:
+            controllers += ["left_arm_controller", "right_arm_controller", "left_gripper_controller",
+                            "right_gripper_controller", "head_controller"]
+        return self.prelude() + f"""python3 tools/kill_ros.py --yes --clean-shm | tail -2
+setsid nohup ros2 launch xlerobot_bringup full_stack.launch.py {args} > /tmp/full_stack.log 2>&1 &
+echo "launched, log /tmp/full_stack.log"
+# On a loaded Jetson the controller spawners and Nav2's heartbeat can time out while everything starts.
+# Look at the result and repair what did not come up instead of leaving it half started.
+for attempt in 1 2 3 4 5 6; do
+  sleep 12
+  out=$(timeout 25 ros2 control list_controllers 2>/dev/null)
+  missing=""
+  for c in {" ".join(controllers)}; do echo "$out" | grep -q "^$c .* active" || missing="$missing $c"; done
+  if [ -z "$missing" ]; then echo "controllers: all active"; break; fi
+  echo "controllers not active yet:$missing (check $attempt)"
+  if [ $attempt -ge 3 ]; then
+    for c in $missing; do timeout 70 ros2 run controller_manager spawner $c --controller-manager-timeout 50 2>&1 | grep -E "activated|ERROR" | tail -1; done
+  fi
+done
+for attempt in 1 2 3; do
+  r=$(timeout 15 ros2 service call /lifecycle_manager_navigation/is_active std_srvs/srv/Trigger 2>&1 | grep -o "success=[A-Za-z]*")
+  if [ "$r" = "success=True" ]; then echo "navigation: active"; break; fi
+  echo "navigation not active ($r), restarting its lifecycle (try $attempt)"
+  timeout 40 ros2 service call /lifecycle_manager_navigation/manage_nodes nav2_msgs/srv/ManageLifecycleNodes "{{command: 3}}" >/dev/null 2>&1
+  timeout 60 ros2 service call /lifecycle_manager_navigation/manage_nodes nav2_msgs/srv/ManageLifecycleNodes "{{command: 0}}" >/dev/null 2>&1
+done
+echo "start finished"
+"""
+
+    def action_start(self):
+        self.remote(self.start_script(), f"start {self.profile}")
 
     def action_stop(self):
         self.remote(self.prelude() + "python3 tools/kill_ros.py --yes --clean-shm | tail -3\n", "stop stack")
