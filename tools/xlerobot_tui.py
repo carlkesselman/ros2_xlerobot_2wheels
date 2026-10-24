@@ -26,6 +26,14 @@ u release e-stop, c clear octomap, v validate, p next profile, l show/hide log, 
 Heavy topics (images, clouds) are never subscribed: a standing remote raw-image subscriber
 stalled the Gemini driver, so cameras are judged by their camera_info stream.
 """
+import os
+import sys
+
+# the system python has an old textual (and, on the laptop, a numpy that clashes); the venv has the right set
+_venv = os.path.expanduser("~/venvs/xlerobot-mcp/bin/python")
+if os.path.exists(_venv) and os.path.realpath(sys.prefix) != os.path.realpath(os.path.dirname(os.path.dirname(_venv))):
+    os.execv(_venv, [_venv] + sys.argv)
+
 import argparse
 import collections
 import socket
