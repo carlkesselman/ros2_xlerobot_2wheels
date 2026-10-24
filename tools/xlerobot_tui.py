@@ -4,7 +4,8 @@
   python3 tools/xlerobot_tui.py                  # watch + control the Jetson stack
   python3 tools/xlerobot_tui.py --host jetson --profile sensing
 
-Run it in a shell where ROS 2 Jazzy is sourced (the same shell you run the other tools from).
+Run it on the robot (ssh -t jetson, then this script): ROS 2 stays on the Jetson, see tools/ros_env.sh.
+It needs ROS 2 Jazzy sourced and `textual`; the Jetson venv ~/venvs/xlerobot-mcp has them.
 Needs `textual` (pip install textual); the venv at ~/venvs/xlerobot-mcp has it.
 
 The table shows every component the chosen profile should have running, with its topic rate,
@@ -27,6 +28,7 @@ stalled the Gemini driver, so cameras are judged by their camera_info stream.
 """
 import argparse
 import collections
+import socket
 import subprocess
 import sys
 import threading
@@ -235,6 +237,15 @@ done
 """
 
 
+def is_local(host):
+    return host in ("local", "localhost", "127.0.0.1") or host == socket.gethostname()
+
+
+def shell_cmd(host, extra_ssh=()):
+    """`bash -s` on this machine when the TUI runs on the robot, over ssh otherwise."""
+    return ["bash", "-s"] if is_local(host) else ["ssh", *extra_ssh, host, "bash -s"]
+
+
 class Stats:
     """Jetson load over one long-lived ssh: CPU %, memory, GPU %, hottest thermal zone."""
 
@@ -246,7 +257,7 @@ class Stats:
     def _run(self):
         while True:
             try:
-                p = subprocess.Popen(["ssh", "-o", "ServerAliveInterval=5", self.host, "bash -s"],
+                p = subprocess.Popen(shell_cmd(self.host, ("-o", "ServerAliveInterval=5")),
                                      stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.DEVNULL, text=True)
                 p.stdin.write(STATS_SCRIPT)
                 p.stdin.close()
@@ -371,7 +382,7 @@ class TuiApp(App):
 
         def run():
             try:
-                p = subprocess.Popen(["ssh", self.host, "bash -s"], stdin=subprocess.PIPE,
+                p = subprocess.Popen(shell_cmd(self.host), stdin=subprocess.PIPE,
                                      stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True)
                 p.stdin.write(script)
                 p.stdin.close()
@@ -386,7 +397,7 @@ class TuiApp(App):
         threading.Thread(target=run, daemon=True).start()
 
     def prelude(self):
-        return f"cd ~/{REPO_ON_JETSON}\nsource /opt/ros/jazzy/setup.bash\nsource install/setup.bash\n"
+        return f"cd ~/{REPO_ON_JETSON}\nsource /opt/ros/jazzy/setup.bash\nsource install/setup.bash\nsource tools/ros_env.sh\n"
 
     def start_script(self):
         args = PROFILES[self.profile][1]
@@ -630,7 +641,8 @@ echo "start finished"
 
 def main():
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
-    ap.add_argument("--host", default="jetson", help="ssh host that runs the stack")
+    ap.add_argument("--host", default="local" if socket.gethostname().startswith("jetson") else "jetson",
+                    help="ssh host that runs the stack; 'local' (default on the Jetson) runs the commands here")
     ap.add_argument("--profile", default="sensing", choices=list(PROFILES))
     a = ap.parse_args()
     TuiApp(a.host, a.profile).run()

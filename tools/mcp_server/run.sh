@@ -6,5 +6,6 @@
 set -e
 source /opt/ros/jazzy/setup.bash
 source "$(dirname "$0")/../../install/setup.bash" 2>/dev/null || true
+source "$(dirname "$0")/../ros_env.sh"
 source ~/venvs/xlerobot-mcp/bin/activate
 exec python3 "$(dirname "$0")/server.py"
