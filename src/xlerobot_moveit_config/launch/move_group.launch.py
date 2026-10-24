@@ -76,6 +76,7 @@ def launch_setup(context):
                     "max_range": 1.2,
                 },
             ],
+            condition=IfCondition(LaunchConfiguration("move_group")),
         ),
         Node(
             package="rviz2",
@@ -107,6 +108,8 @@ def generate_launch_description():
     return LaunchDescription([
         DeclareLaunchArgument("use_sim_time", default_value="false"),
         DeclareLaunchArgument("rviz", default_value="false"),
+        # false runs only RViz, for a machine that is not the one running move_group
+        DeclareLaunchArgument("move_group", default_value="true"),
         DeclareLaunchArgument("rviz_qt_platform", default_value="xcb"),
         DeclareLaunchArgument("rviz_qt_scale_1x", default_value="true"),
         # false starts without the self-collision matrix, only for generating it
