@@ -101,7 +101,7 @@
     <joint name="base_footprint_joint" type="fixed">
       <parent link="base_footprint"/>
       <child  link="base_link"/>
-      <origin xyz="0 0 0" rpy="0 0 0"/>
+      <origin xyz="0 0 0" rpy="0 ${-b['pitch_up']} 0"/>
     </joint>
 
     <!-- base_link origin is on the floor, between the drive wheels, x points to

@@ -21,7 +21,7 @@
   wrist_camera:=false leaves out the camera links.
 -->
 <robot xmlns:xacro="http://www.ros.org/wiki/xacro">
-  <xacro:macro name="so101_arm" params="prefix parent xyz rpy joints margin wrist_camera:=true">
+  <xacro:macro name="so101_arm" params="prefix parent xyz rpy joints margin side wrist_camera:=true cam_xyz:='0 0 0' cam_rpy:='-0.012363 -1.548297 2.709993'">
 
     <!-- joint direction, see arms.joints in robot_dimensions.yaml: m is -1 to reverse the
          axis (and mirror the limits) where the servo step goes the same way as the joint
@@ -285,7 +285,7 @@
     <joint name="${prefix}_shoulder_pan_joint" type="revolute">
       <parent link="${prefix}_base_link"/>
       <child link="${prefix}_shoulder_link"/>
-      <origin xyz="0 -0.0452 0.0165" rpy="1.5708 0 0"/>
+      <origin xyz="0 -0.0452 0.0165" rpy="1.5708 0 ${-1 * m_pan * joints['shoulder_pan']['model_offset'][side]}"/>
       <axis xyz="0 ${-1 * m_pan} 0"/>
       <limit lower="${lo_pan}" upper="${hi_pan}" effort="3.35" velocity="${joints['shoulder_pan']['max_velocity']}"/>
       <dynamics damping="0.6" friction="0.052"/>
@@ -293,7 +293,7 @@
     <joint name="${prefix}_shoulder_lift_joint" type="revolute">
       <parent link="${prefix}_shoulder_link"/>
       <child link="${prefix}_upper_arm_link"/>
-      <origin xyz="0 0.1025 0.0306" rpy="1.5708 0 0"/>
+      <origin xyz="0 0.1025 0.0306" rpy="${1.5708 + (-1 * m_lift) * joints['shoulder_lift']['model_offset'][side]} 0 0"/>
       <axis xyz="${-1 * m_lift} 0 0"/>
       <limit lower="${lo_lift}" upper="${hi_lift}" effort="3.35" velocity="${joints['shoulder_lift']['max_velocity']}"/>
       <dynamics damping="0.6" friction="0.052"/>
@@ -301,7 +301,7 @@
     <joint name="${prefix}_elbow_flex_joint" type="revolute">
       <parent link="${prefix}_upper_arm_link"/>
       <child link="${prefix}_lower_arm_link"/>
-      <origin xyz="0 0.11257 0.028" rpy="-1.5708 0 0"/>
+      <origin xyz="0 0.11257 0.028" rpy="${-1.5708 + m_elbow * joints['elbow_flex']['model_offset'][side]} 0 0"/>
       <axis xyz="${m_elbow} 0 0"/>
       <limit lower="${lo_elbow}" upper="${hi_elbow}" effort="3.35" velocity="${joints['elbow_flex']['max_velocity']}"/>
       <dynamics damping="0.6" friction="0.052"/>
@@ -309,7 +309,7 @@
     <joint name="${prefix}_wrist_flex_joint" type="revolute">
       <parent link="${prefix}_lower_arm_link"/>
       <child link="${prefix}_wrist_link"/>
-      <origin xyz="0 0.0052 0.1349" rpy="-1.5708 0 0"/>
+      <origin xyz="0 0.0052 0.1349" rpy="${-1.5708 + m_wflex * joints['wrist_flex']['model_offset'][side]} 0 0"/>
       <axis xyz="${m_wflex} 0 0"/>
       <limit lower="${lo_wflex}" upper="${hi_wflex}" effort="3.35" velocity="${joints['wrist_flex']['max_velocity']}"/>
       <dynamics damping="0.6" friction="0.052"/>
@@ -317,7 +317,7 @@
     <joint name="${prefix}_wrist_roll_joint" type="revolute">
       <parent link="${prefix}_wrist_link"/>
       <child link="${prefix}_gripper_link"/>
-      <origin xyz="0 -0.0601 0" rpy="0 1.5707927 0"/>
+      <origin xyz="0 -0.0601 0" rpy="0 ${1.5707927 + (-1 * m_roll) * joints['wrist_roll']['model_offset'][side]} 0"/>
       <axis xyz="0 ${-1 * m_roll} 0"/>
       <limit lower="${lo_roll}" upper="${hi_roll}" effort="3.35" velocity="${joints['wrist_roll']['max_velocity']}"/>
       <dynamics damping="0.6" friction="0.052"/>
@@ -365,14 +365,13 @@
         <child link="${prefix}_wrist_camera_link"/>
         <origin xyz="0 -0.022 0.05" rpy="1.5707963 0.0000037 -1.5708"/>
       </joint>
-      <!-- REP-103 optical frame, z forward. The rotation is the nominal (-pi/2, 0, -pi/2) turned by the
-           measured mount error (camera-frame rotation vector about -19, 21, -89 deg, mean of both
-           arms within 2.3 deg, ChArUco board seen from 20 poses per arm). Position is not corrected. -->
+      <!-- REP-103 optical frame, z forward, pose from the ChArUco calibration (wrist_camera in robot_dimensions.yaml; the
+           nominal rotation was (-pi/2, 0, -pi/2) and the measured mount differs from it by about (-19, 21, -89) deg). -->
       <link name="${prefix}_wrist_camera_optical_frame"/>
       <joint name="${prefix}_wrist_camera_optical_joint" type="fixed">
         <parent link="${prefix}_wrist_camera_link"/>
         <child link="${prefix}_wrist_camera_optical_frame"/>
-        <origin xyz="0 0 0" rpy="-0.012363 -1.548297 2.709993"/>
+        <origin xyz="${cam_xyz}" rpy="${cam_rpy}"/>
       </joint>
     </xacro:if>
   </xacro:macro>

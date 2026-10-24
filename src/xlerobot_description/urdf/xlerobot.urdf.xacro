@@ -67,10 +67,16 @@
          directions, so the yaws are a build choice. -->
     <xacro:property name="a" value="${dims['arms']}"/>
     <xacro:property name="pan_off" value="0.0452"/>
-    <xacro:so101_arm prefix="left_arm"  parent="body_link" joints="${a['joints']}" margin="${a['limit_margin']}"
+    <link name="arms_frame"/>
+    <joint name="arms_frame_joint" type="fixed">
+      <parent link="body_link"/>
+      <child link="arms_frame"/>
+      <origin xyz="${a['frame_correction']['xyz']}" rpy="${a['frame_correction']['rpy']}"/>
+    </joint>
+    <xacro:so101_arm prefix="left_arm"  parent="arms_frame" side="left" cam_xyz="${a['wrist_camera']['left']['xyz']}" cam_rpy="${a['wrist_camera']['left']['rpy']}" joints="${a['joints']}" margin="${a['limit_margin']}"
         xyz="${a['mount_x'] - pan_off * sin(a['left_yaw'])} ${-a['mount_y'] + pan_off * cos(a['left_yaw'])} ${a['mount_z']}"
         rpy="0 0 ${a['left_yaw']}"/>
-    <xacro:so101_arm prefix="right_arm" parent="body_link" joints="${a['joints']}" margin="${a['limit_margin']}"
+    <xacro:so101_arm prefix="right_arm" parent="arms_frame" side="right" cam_xyz="${a['wrist_camera']['right']['xyz']}" cam_rpy="${a['wrist_camera']['right']['rpy']}" joints="${a['joints']}" margin="${a['limit_margin']}"
         xyz="${a['mount_x'] - pan_off * sin(a['right_yaw'])}  ${a['mount_y'] + pan_off * cos(a['right_yaw'])} ${a['mount_z']}"
         rpy="0 0 ${a['right_yaw']}"/>
   </xacro:if>

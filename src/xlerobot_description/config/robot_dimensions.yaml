@@ -10,6 +10,12 @@ xlerobot:
     # Measured directly off the drive wheel: 125mm outer diameter.
     wheel_radius: 0.0625
 
+    # Nose-up lean of the whole base, rad. The rear casters sit lower than the drive wheels'
+    # level, so the front deck is 9 mm higher over 290 mm (ruler, symmetric cart) = 1.78 deg.
+    # Applied as a pitch on base_footprint_joint about the axle, so the arms and the head see
+    # gravity correctly. Re-measure after changing wheels or casters.
+    pitch_up: 0.031
+
     # Distance between the two wheel contact patches. diff_drive_controller calls
     # it wheel_separation. Measured 550mm - wider than the cart body itself
     # (405-459mm across upstream's own chassis collision boxes) and wider than
@@ -116,6 +122,9 @@ xlerobot:
     # increases with the joint angle, -1 if it decreases (what the driver reports natively,
     # see the arms below). Checked by moving the head by hand in Rerun.
     pan_zero_step: 2047
+    # rad, rotation of the head about the vertical at pan 0: the camera points 8.9 deg left of
+    # the model's forward there (far wall: depth cloud against the lidar, 3 stretches 8.8-9.3 deg).
+    pan_zero_yaw: 0.155
     pan_direction: -1
     tilt_zero_step: 2047
     tilt_direction: -1
@@ -183,12 +192,22 @@ xlerobot:
     #   the elbow at its stop). MoveIt must take it as a start state, the self-collision matrix
     #   is generated so that nothing this pose touches counts as a collision.
     folded_pose: {shoulder_pan: 0.15, shoulder_lift: 2.75, elbow_flex: -3.17, wrist_flex: 0.0, wrist_roll: 0.0, gripper: 0.37}
+    # Calibration against a fixed ChArUco board (tools/calibrate_arm_camera.py, 20 poses per arm, head camera
+    # as the reference). model_offset: rad, added to the reported joint angle in the model so that the
+    # model's pose is the real pose (the servo zero steps and every saved position stay as they are).
+    # frame_correction: the arms' frame relative to the body (equal-and-opposite to the head-vs-arm
+    # difference, the data cannot say which of the two is off). wrist_camera: the optical frame's
+    # position and rotation as measured.
+    frame_correction: {xyz: "-0.014401 0.038884 -0.006135", rpy: "0.048874 -0.019044 0.004160"}
+    wrist_camera:
+      left:  {xyz: "-0.015770 0.015190 0.003387", rpy: "0.376871 -1.549444 2.303024"}
+      right: {xyz: "0.004451 0.026293 0.013168", rpy: "-0.319586 -1.544162 3.034952"}
     joints:
-      shoulder_pan:  {zero_step: {left: 2057, right: 2075}, direction:  1, max_velocity: 0.8, lower: -2.16,      upper: 2.16}
-      shoulder_lift: {zero_step: {left: 3197, right: 3070}, direction: -1, max_velocity: 0.8, lower: -0.22,      upper: 3.37}
-      elbow_flex:    {zero_step: {left:  989, right: 1056}, direction:  1, max_velocity: 0.8, lower: -0.22,      upper: 3.14}
-      wrist_flex:    {zero_step: {left: 1978, right: 1991}, direction:  1, max_velocity: 0.8, lower: -1.6580628, upper: 1.6580627}
-      wrist_roll:    {zero_step: {left: 2079, right: 2018}, direction: -1, max_velocity: 0.8, lower: -2.7438473, upper: 2.8412063}
+      shoulder_pan:  {zero_step: {left: 2057, right: 2075}, direction:  1, max_velocity: 0.8, lower: -2.16,      upper: 2.16, model_offset: {left: -0.05780, right: -0.03181}}
+      shoulder_lift: {zero_step: {left: 3197, right: 3070}, direction: -1, max_velocity: 0.8, lower: -0.22,      upper: 3.37, model_offset: {left: -0.05564, right: 0.04402}}
+      elbow_flex:    {zero_step: {left:  989, right: 1056}, direction:  1, max_velocity: 0.8, lower: -0.22,      upper: 3.14, model_offset: {left: -0.01166, right: 0.04683}}
+      wrist_flex:    {zero_step: {left: 1978, right: 1991}, direction:  1, max_velocity: 0.8, lower: -1.6580628, upper: 1.6580627, model_offset: {left: 0.06606, right: -0.28337}}
+      wrist_roll:    {zero_step: {left: 2079, right: 2018}, direction: -1, max_velocity: 0.8, lower: -2.7438473, upper: 2.8412063, model_offset: {left: -0.00000, right: -0.00000}}
       gripper:       {zero_step: {left: 1802, right: 1766}, direction:  1, max_velocity: 0.8, lower: -0.374533,  upper: 1.7453292}
 
   # --- LD19 2D lidar, upside down under the second basket ---

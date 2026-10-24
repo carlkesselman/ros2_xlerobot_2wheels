@@ -114,7 +114,7 @@
     <joint name="head_pan_joint" type="revolute">
       <parent link="top_base_link"/>
       <child link="head_pan_link"/>
-      <origin xyz="-0.103 0 ${pan_dz}" rpy="0 0 0"/>
+      <origin xyz="-0.103 0 ${pan_dz}" rpy="0 0 ${h['pan_zero_yaw']}"/>
       <axis xyz="0 0 ${-h['pan_direction']}"/>
       <limit lower="${min(-h['pan_direction'] * h['pan_limit_lower'], -h['pan_direction'] * h['pan_limit_upper'])}" upper="${max(-h['pan_direction'] * h['pan_limit_lower'], -h['pan_direction'] * h['pan_limit_upper'])}" effort="2.0" velocity="${h['max_velocity']}"/>
     </joint>
