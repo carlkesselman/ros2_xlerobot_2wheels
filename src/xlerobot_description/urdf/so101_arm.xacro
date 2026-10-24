@@ -340,6 +340,12 @@
           </geometry>
           <material name="xle_part"/>
         </visual>
+        <collision>
+          <origin xyz="-0.015 -0.026 0" rpy="0 0 0"/>
+          <geometry>
+            <mesh filename="package://xlerobot_description/meshes/upstream/XLeRobot_camera1.stl" scale="0.001 0.001 0.001"/>
+          </geometry>
+        </collision>
         <visual>
           <origin xyz="-0.015 -0.026 0" rpy="0 0 0"/>
           <geometry>
@@ -347,18 +353,26 @@
           </geometry>
           <material name="xle_motor"/>
         </visual>
+        <collision>
+          <origin xyz="-0.015 -0.026 0" rpy="0 0 0"/>
+          <geometry>
+            <mesh filename="package://xlerobot_description/meshes/upstream/XLeRobot_camera2.stl" scale="0.001 0.001 0.001"/>
+          </geometry>
+        </collision>
       </link>
       <joint name="${prefix}_wrist_camera_joint" type="fixed">
         <parent link="${prefix}_gripper_link"/>
         <child link="${prefix}_wrist_camera_link"/>
         <origin xyz="0 -0.022 0.05" rpy="1.5707963 0.0000037 -1.5708"/>
       </joint>
-      <!-- REP-103 optical frame, z forward: the camera link's x axis looks along the jaw -->
+      <!-- REP-103 optical frame, z forward. The rotation is the nominal (-pi/2, 0, -pi/2) turned by the
+           measured mount error (camera-frame rotation vector about -19, 21, -89 deg, mean of both
+           arms within 2.3 deg, ChArUco board seen from 20 poses per arm). Position is not corrected. -->
       <link name="${prefix}_wrist_camera_optical_frame"/>
       <joint name="${prefix}_wrist_camera_optical_joint" type="fixed">
         <parent link="${prefix}_wrist_camera_link"/>
         <child link="${prefix}_wrist_camera_optical_frame"/>
-        <origin xyz="0 0 0" rpy="${-pi/2} 0 ${-pi/2}"/>
+        <origin xyz="0 0 0" rpy="-0.012363 -1.548297 2.709993"/>
       </joint>
     </xacro:if>
   </xacro:macro>
