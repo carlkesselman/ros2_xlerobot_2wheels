@@ -121,10 +121,12 @@ xlerobot:
     # and level is step 2047, and that is the model's zero. direction: +1 if the servo step
     # increases with the joint angle, -1 if it decreases (what the driver reports natively,
     # see the arms below). Checked by moving the head by hand in Rerun.
-    pan_zero_step: 2047
-    # rad, rotation of the head about the vertical at pan 0: the camera points 8.9 deg left of
-    # the model's forward there (far wall: depth cloud against the lidar, 3 stretches 8.8-9.3 deg).
-    pan_zero_yaw: 0.155
+    # 2148 = step 2047 + 101: with the head looking straight ahead (pan -0.155 rad of the old zero) the servo
+    # reads step 2148, so that is the model's zero and the camera points forward at pan 0. The camera
+    # was found 8.9 deg left of forward at step 2047 (far wall, depth cloud against the lidar, 3
+    # stretches 8.8-9.3 deg). No servo writes, the servo calibration file is unchanged.
+    pan_zero_step: 2148
+    pan_zero_yaw: 0.0
     pan_direction: -1
     tilt_zero_step: 2047
     tilt_direction: -1
