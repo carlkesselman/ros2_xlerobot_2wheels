@@ -79,6 +79,10 @@ def _camera_nodes(context, *args, **kwargs):
                         # The driver's own cloud is 1280x720 (about 920k points) and costs most of
                         # a core; MoveIt's octomap gets the decimated one below instead.
                         "enable_point_cloud": "false",
+                        # Stamp frames with the host clock. The default, "global", maps the
+                        # device clock to the host's and had drifted 160 s behind, which made
+                        # MoveIt drop every cloud as older than its TF buffer.
+                        "time_domain": "system",
                     }.items(),
                 ),
                 # depth/points_low: the depth image shrunk 4x (nearest, so no depth blending at
