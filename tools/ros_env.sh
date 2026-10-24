@@ -1,6 +1,8 @@
-# Keep all ROS 2 traffic on one machine (ROS_LOCALHOST_ONLY is deprecated in Jazzy and overrides the range, so it is not set). Source this after /opt/ros/jazzy/setup.bash (that file
-# sets ROS_AUTOMATIC_DISCOVERY_RANGE=SUBNET when it is not already set, and SUBNET lets nodes find
-# each other over Wi-Fi: slow discovery, lost image frames, late joystick/presence messages).
-# The whole stack, the TUI, the MCP server and the calibration tools run on the Jetson; the laptop
-# only talks to it over ssh (MCP, terminals) and gRPC (Rerun).
-export ROS_AUTOMATIC_DISCOVERY_RANGE=LOCALHOST
+# ROS 2 discovery for the robot (source after /opt/ros/jazzy/setup.bash). The whole stack, the TUI,
+# the MCP server and the calibration tools run on the Jetson, the laptop only talks to it over ssh
+# (MCP, terminals) and gRPC (Rerun), so the laptop sets ROS_AUTOMATIC_DISCOVERY_RANGE=LOCALHOST
+# (~/.zshenv) and never sees the Jetson's DDS traffic.
+# On the Jetson the range must stay SUBNET: with LOCALHOST only about 20 participants are found
+# (21 of ~41 nodes visible, Nav2's lifecycle manager never saw its servers). Not
+# ROS_LOCALHOST_ONLY, it is deprecated and overrides the range.
+export ROS_AUTOMATIC_DISCOVERY_RANGE=SUBNET
