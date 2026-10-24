@@ -410,12 +410,16 @@ for attempt in 1 2 3 4 5 6; do
     for c in $missing; do timeout 70 ros2 run controller_manager spawner $c --controller-manager-timeout 50 2>&1 | grep -E "activated|ERROR" | tail -1; done
   fi
 done
-for attempt in 1 2 3; do
+# move_group and Nav2 start 40 s after the base. Give them time, only then reset a lifecycle that is stuck.
+for attempt in 1 2 3 4 5 6 7 8 9 10; do
+  sleep 8
   r=$(timeout 15 ros2 service call /lifecycle_manager_navigation/is_active std_srvs/srv/Trigger 2>&1 | grep -o "success=[A-Za-z]*")
   if [ "$r" = "success=True" ]; then echo "navigation: active"; break; fi
-  echo "navigation not active ($r), restarting its lifecycle (try $attempt)"
-  timeout 40 ros2 service call /lifecycle_manager_navigation/manage_nodes nav2_msgs/srv/ManageLifecycleNodes "{{command: 3}}" >/dev/null 2>&1
-  timeout 60 ros2 service call /lifecycle_manager_navigation/manage_nodes nav2_msgs/srv/ManageLifecycleNodes "{{command: 0}}" >/dev/null 2>&1
+  if [ $attempt -ge 8 ]; then
+    echo "navigation not active ($r), resetting its lifecycle"
+    timeout 40 ros2 service call /lifecycle_manager_navigation/manage_nodes nav2_msgs/srv/ManageLifecycleNodes "{{command: 3}}" >/dev/null 2>&1
+    timeout 60 ros2 service call /lifecycle_manager_navigation/manage_nodes nav2_msgs/srv/ManageLifecycleNodes "{{command: 0}}" >/dev/null 2>&1
+  fi
 done
 echo "start finished"
 """

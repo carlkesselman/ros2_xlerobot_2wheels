@@ -11,8 +11,9 @@ bringup.launch.py itself already folds in teleop/cameras/lidar.
 Add sensor:=gemini for an Orbbec Gemini 2 head camera, arm_teleop:=true for the dual-stick arm
 teleop (needs with_arms:=true and torque_off:=false, the default).
 
-move_group and navigation start a few seconds after bringup, not simultaneously with it - lidar
-and the controllers need a moment to come up first. Starting navigation before the lidar is
+move_group and navigation start 40 s after bringup, not simultaneously with it - lidar
+and the controllers need to be up first (on the loaded Jetson the controllers take 25-40 s; Nav2's
+costmaps block their configure step on the odom transform and the lifecycle manager then hangs). Starting navigation before the lidar is
 actually publishing scans is a real failure mode, not a hypothetical one: Nav2's own lifecycle
 bringup times out waiting for the map transform and tears the whole navigation launch back down
 again, which then also looks like slam_toolbox "crashed" even though it exited cleanly as a side
@@ -105,7 +106,7 @@ def generate_launch_description():
         # why starting navigation concurrently with (rather than after) the lidar is a real
         # failure mode, not just tidiness.
         TimerAction(
-            period=5.0,
+            period=40.0,
             actions=[
                 IncludeLaunchDescription(
                     PythonLaunchDescriptionSource(move_group_launch_file),
