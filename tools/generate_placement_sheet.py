@@ -4,7 +4,8 @@ sheet's pose, and footprints of a cube and of a 2x4 brick are drawn at known pos
 
   python3 tools/generate_placement_sheet.py [--out ~/placement_sheet]
 
-Writes <out>.png, 262 x 197 mm at 300 dpi: print it with the width set to 262 mm (or at 100%), no fit to page and <out>.json with the marker
+Writes <out>.png (262 x 197 mm at 300 dpi) and <out>.pdf (the same, centred on a Letter or A4 page at exactly 100%:
+print the PDF with "actual size", not "fit to page") and <out>.json with the marker
 corners and the footprints in the sheet frame (millimetres, origin at the image centre, x right,
 y up as printed, yaw counter-clockwise from +x in degrees). After printing, measure the distance
 between two far markers with a ruler and give it to the evaluation as the sheet scale.
@@ -64,6 +65,7 @@ def footprints():
 def main():
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument("--out", default=os.path.expanduser("~/placement_sheet"))
+    ap.add_argument("--page", choices=["letter", "a4"], default="letter", help="page of the PDF")
     a = ap.parse_args()
     w_mm, h_mm = SIZE_MM
     W, H = int(round(w_mm * PX_PER_MM)), int(round(h_mm * PX_PER_MM))
@@ -100,10 +102,17 @@ def main():
         cv2.line(img, to_px(*p0), to_px(*p1), 0, 3, cv2.LINE_AA)
         cv2.putText(img, f["id"], to_px(cx - 17, cy - 27), cv2.FONT_HERSHEY_SIMPLEX, 0.9, 0, 2, cv2.LINE_AA)
     cv2.imwrite(a.out + ".png", img, [cv2.IMWRITE_PNG_COMPRESSION, 9])
+    pw, ph = {"letter": (279.4, 215.9), "a4": (297.0, 210.0)}[a.page]
+    PW, PH = int(round(pw * PX_PER_MM)), int(round(ph * PX_PER_MM))
+    page = np.full((PH, PW), 255, np.uint8)
+    y0, x0 = (PH - H) // 2, (PW - W) // 2
+    page[y0:y0 + H, x0:x0 + W] = img
+    from PIL import Image
+    Image.fromarray(page).save(a.out + ".pdf", "PDF", resolution=DPI)     # page size = pixels / dpi = the real page
     with open(a.out + ".json", "w") as f:
         json.dump({"size_mm": [w_mm, h_mm], "marker_mm": MARKER_MM, "dictionary": "DICT_4X4_50",
                    "markers": markers, "footprints": fps}, f, indent=1)
-    print(f"{a.out}.png and .json: {w_mm:g} x {h_mm:g} mm, {len(markers)} markers of {MARKER_MM:g} mm, "
+    print(f"{a.out}.png, .pdf ({a.page}) and .json: {w_mm:g} x {h_mm:g} mm, {len(markers)} markers of {MARKER_MM:g} mm, "
           f"{sum(f['kind'] == 'cube' for f in fps)} cube and {sum(f['kind'] == 'brick' for f in fps)} brick footprints")
 
 
