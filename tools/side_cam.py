@@ -33,7 +33,28 @@ import numpy as np  # noqa: E402
 import yaml  # noqa: E402
 
 CALIB = pathlib.Path.home() / ".ros" / "side_cam.yaml"
-BOARD = dict(squares_x=7, squares_y=5, square_length=0.03386, marker_length=0.02562)   # the board printed for the arm calibration
+# The two ChArUco boards in use (DICT_4X4_250): the 7x5 printed for the arm calibration (square measured on the
+# print) and the older 11x8 one. Which one is in front of the camera is told from the marker IDs it shows.
+BOARDS = {"7x5": dict(squares_x=7, squares_y=5, square_length=0.03386, marker_length=0.02562),
+          "11x8": dict(squares_x=11, squares_y=8, square_length=0.015, marker_length=0.011)}
+BOARD = BOARDS["7x5"]
+
+
+def make_board(name):
+    b = BOARDS[name]
+    return aruco.CharucoBoard_create(b["squares_x"], b["squares_y"], b["square_length"], b["marker_length"],
+                                     aruco.getPredefinedDictionary(aruco.DICT_4X4_250))
+
+
+def pick_board(frames):
+    """7x5 if no marker ID above 16 shows up, otherwise 11x8."""
+    dic = aruco.getPredefinedDictionary(aruco.DICT_4X4_250)
+    top = 0
+    for f in frames:
+        _, mi, _ = aruco.detectMarkers(cv2.cvtColor(f, cv2.COLOR_BGR2GRAY), dic)
+        if mi is not None and len(mi):
+            top = max(top, int(mi.max()))
+    return "7x5" if top <= 16 else "11x8"
 
 
 def open_camera(dev, lock=True):
@@ -114,9 +135,12 @@ def charuco_frame(f, dic, board):
 
 def cmd_calibrate_offline(a):
     dic = aruco.getPredefinedDictionary(aruco.DICT_4X4_250)
-    board = aruco.CharucoBoard_create(BOARD["squares_x"], BOARD["squares_y"], BOARD["square_length"],
-                                      BOARD["marker_length"], dic)
     files = sorted(pathlib.Path(a.from_dir).expanduser().glob("*.jpg"))
+    global BOARD
+    bname = pick_board([cv2.imread(str(fp)) for fp in files[::max(1, len(files) // 25)]])
+    BOARD = BOARDS[bname]
+    board = make_board(bname)
+    print(f"board in the frames: {bname} ({BOARD['squares_x']}x{BOARD['squares_y']}, square {BOARD['square_length'] * 1000:g} mm)")
     found = []
     for fp in files:
         f = cv2.imread(str(fp))
