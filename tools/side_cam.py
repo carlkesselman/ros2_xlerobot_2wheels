@@ -122,15 +122,30 @@ def cmd_record(a):
 
 
 def charuco_frame(f, dic, board):
+    """ChArUco corners of the board in the frame, or None. Other markers in view that use the same dictionary
+    (the placement sheet, for one) are removed: the detected markers are fitted to where the board says they
+    belong with a homography (RANSAC), and only the ones that agree are used."""
     g = cv2.cvtColor(f, cv2.COLOR_BGR2GRAY)
     mc, mi, _ = aruco.detectMarkers(g, dic)
-    if mi is None or len(mi) == 0:
+    if mi is None or len(mi) < 6:
         return None
-    n, cc, ci = aruco.interpolateCornersCharuco(mc, mi, g, board)
+    ids = [int(i) for i in np.array(board.ids).ravel()]
+    centre = {i: np.array(board.objPoints[k], dtype=np.float32).reshape(-1, 3).mean(0)[:2] for k, i in enumerate(ids)}
+    keep = [k for k, i in enumerate(mi.ravel()) if int(i) in centre]
+    if len(keep) < 6:
+        return None
+    src = np.array([centre[int(mi[k][0])] for k in keep], dtype=np.float32)
+    dst = np.array([mc[k].reshape(-1, 2).mean(0) for k in keep], dtype=np.float32)
+    side = float(np.mean([np.linalg.norm(mc[k][0][0] - mc[k][0][1]) for k in keep]))
+    H, mask = cv2.findHomography(src, dst, cv2.RANSAC, 0.25 * side)
+    if H is None or int(mask.sum()) < 6:
+        return None
+    good = [keep[k] for k in range(len(keep)) if mask[k]]
+    mc2, mi2 = [mc[k] for k in good], mi[good]
+    n, cc, ci = aruco.interpolateCornersCharuco(mc2, mi2, g, board)
     if n is None or n < 12:
         return None
-    sharp = cv2.Laplacian(g, cv2.CV_64F).var()
-    return cc, ci, sharp
+    return cc, ci, cv2.Laplacian(g, cv2.CV_64F).var()
 
 
 def cmd_calibrate_offline(a):
@@ -175,7 +190,8 @@ def cmd_calibrate_offline(a):
                 print(f"  {name}, f0 {f0:.0f}: failed ({e.code})")
                 continue
             print(f"  {name}, start f {f0:.0f}: rms {rms:.2f} px, fx {K[0, 0]:.0f}, cx {K[0, 2]:.0f}, cy {K[1, 2]:.0f}")
-            if best is None or rms < best[0]:
+            centred = abs(K[0, 2] - size[0] / 2) < 60 and abs(K[1, 2] - size[1] / 2) < 60   # a principal point far from the centre is overfitting
+            if centred and (best is None or rms < best[0]):
                 best = (rms, K, D, name)
     rms, K, D, name = best
     CALIB.parent.mkdir(parents=True, exist_ok=True)
