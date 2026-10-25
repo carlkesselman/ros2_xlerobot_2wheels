@@ -6,6 +6,8 @@ heights and gaps off the image and as ground truth for the perception tests (ADR
   python3 tools/side_cam.py calibrate               lens calibration with the 7x5 ChArUco board; hold the board
                                                     in front of the camera at many angles, Space takes a view,
                                                     q finishes and fits
+  python3 tools/side_cam.py record [--seconds 30]   save a burst of frames while you move the board (no key presses)
+  python3 tools/side_cam.py calibrate --from DIR    fit the lens from recorded frames (sharp, varied views only)
   python3 tools/side_cam.py info                    what the camera reports
 
 Frames are 1920x1080 MJPG. Exposure, focus and white balance are switched to manual at the values the
@@ -84,7 +86,83 @@ def cmd_snap(a):
     print(path)
 
 
+def cmd_record(a):
+    cap = open_camera(a.dev)
+    out = pathlib.Path(a.out).expanduser() / time.strftime("calib_%Y%m%d_%H%M%S")
+    out.mkdir(parents=True, exist_ok=True)
+    print(f"recording {a.seconds:g} s to {out}: move the board slowly through many angles and distances, hold each pose a moment")
+    t0, n = time.time(), 0
+    while time.time() - t0 < a.seconds:
+        f = grab(cap, 1)
+        cv2.imwrite(str(out / f"{n:04d}.jpg"), f, [cv2.IMWRITE_JPEG_QUALITY, 95])
+        n += 1
+        time.sleep(0.25)
+    print(f"{n} frames in {out}")
+
+
+def charuco_frame(f, dic, board):
+    g = cv2.cvtColor(f, cv2.COLOR_BGR2GRAY)
+    mc, mi, _ = aruco.detectMarkers(g, dic)
+    if mi is None or len(mi) == 0:
+        return None
+    n, cc, ci = aruco.interpolateCornersCharuco(mc, mi, g, board)
+    if n is None or n < 12:
+        return None
+    sharp = cv2.Laplacian(g, cv2.CV_64F).var()
+    return cc, ci, sharp
+
+
+def cmd_calibrate_offline(a):
+    dic = aruco.getPredefinedDictionary(aruco.DICT_4X4_250)
+    board = aruco.CharucoBoard_create(BOARD["squares_x"], BOARD["squares_y"], BOARD["square_length"],
+                                      BOARD["marker_length"], dic)
+    files = sorted(pathlib.Path(a.from_dir).expanduser().glob("*.jpg"))
+    found = []
+    for fp in files:
+        f = cv2.imread(str(fp))
+        r = charuco_frame(f, dic, board)
+        if r:
+            found.append((fp.name, *r))
+    print(f"{len(found)} of {len(files)} frames have the board with 12 or more corners")
+    if len(found) < 8:
+        sys.exit("not enough usable frames")
+    size = (f.shape[1], f.shape[0])
+    sharp_min = np.percentile([x[3] for x in found], 30)
+    found = [x for x in found if x[3] >= sharp_min]
+    # pick varied views: farthest-point sampling on (centre x, centre y, spread)
+    feats = np.array([[x[1].reshape(-1, 2)[:, 0].mean() / size[0], x[1].reshape(-1, 2)[:, 1].mean() / size[1],
+                       np.ptp(x[1].reshape(-1, 2), axis=0).mean() / size[0], len(x[2]) / 24.0] for x in found])
+    order = [0]
+    while len(order) < min(a.views, len(found)):
+        d = np.min(np.linalg.norm(feats[:, None] - feats[order][None], axis=2), axis=1)
+        order.append(int(np.argmax(d)))
+    views = [(found[i][1], found[i][2]) for i in order]
+    print(f"using {len(views)} varied sharp views")
+    best = None
+    for name, flags in (("simple", cv2.CALIB_USE_INTRINSIC_GUESS | cv2.CALIB_FIX_ASPECT_RATIO | cv2.CALIB_FIX_K3 | cv2.CALIB_ZERO_TANGENT_DIST),
+                        ("with k3", cv2.CALIB_USE_INTRINSIC_GUESS | cv2.CALIB_FIX_ASPECT_RATIO | cv2.CALIB_ZERO_TANGENT_DIST),
+                        ("rational", cv2.CALIB_USE_INTRINSIC_GUESS | cv2.CALIB_RATIONAL_MODEL | cv2.CALIB_FIX_ASPECT_RATIO)):
+        for f0 in (0.45 * size[0], 0.62 * size[0], 0.9 * size[0]):
+            K0 = np.array([[f0, 0, size[0] / 2], [0, f0, size[1] / 2], [0, 0, 1.0]])
+            try:
+                rms, K, D, rv, tv = aruco.calibrateCameraCharuco([v[0] for v in views], [v[1] for v in views], board, size,
+                                                                 K0, np.zeros(8 if "rational" in name else 5), flags=flags)
+            except cv2.error as e:
+                print(f"  {name}, f0 {f0:.0f}: failed ({e.code})")
+                continue
+            print(f"  {name}, start f {f0:.0f}: rms {rms:.2f} px, fx {K[0, 0]:.0f}, cx {K[0, 2]:.0f}, cy {K[1, 2]:.0f}")
+            if best is None or rms < best[0]:
+                best = (rms, K, D, name)
+    rms, K, D, name = best
+    CALIB.parent.mkdir(parents=True, exist_ok=True)
+    CALIB.write_text(yaml.safe_dump({"image_size": list(size), "camera_matrix": K.tolist(), "distortion": D.ravel().tolist(),
+                                     "rms_px": float(rms), "views": len(views), "model": name, "board": BOARD}))
+    print(f"best: {name}, rms {rms:.2f} px, fx {K[0, 0]:.1f}, cx {K[0, 2]:.1f}, cy {K[1, 2]:.1f}, saved to {CALIB}")
+
+
 def cmd_calibrate(a):
+    if a.from_dir:
+        return cmd_calibrate_offline(a)
     dic = aruco.getPredefinedDictionary(aruco.DICT_4X4_250)
     board = aruco.CharucoBoard_create(BOARD["squares_x"], BOARD["squares_y"], BOARD["square_length"],
                                       BOARD["marker_length"], dic)
@@ -148,11 +226,14 @@ def cmd_calibrate(a):
 
 def main():
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
-    ap.add_argument("command", choices=["snap", "calibrate", "info"])
+    ap.add_argument("command", choices=["snap", "calibrate", "record", "info"])
+    ap.add_argument("--seconds", type=float, default=30.0)
+    ap.add_argument("--from", dest="from_dir", help="directory of recorded frames for calibrate")
+    ap.add_argument("--views", type=int, default=30)
     ap.add_argument("--dev", type=int, default=0, help="N of /dev/videoN")
     ap.add_argument("--out", default="~/side_cam")
     a = ap.parse_args()
-    {"snap": cmd_snap, "calibrate": cmd_calibrate, "info": cmd_info}[a.command](a)
+    {"snap": cmd_snap, "calibrate": cmd_calibrate, "record": cmd_record, "info": cmd_info}[a.command](a)
 
 
 if __name__ == "__main__":
