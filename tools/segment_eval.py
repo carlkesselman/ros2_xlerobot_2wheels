@@ -55,6 +55,46 @@ class Detector:
         return sorted(boxes, reverse=True)
 
 
+class YoloWorld:
+    """YOLO-World (CNN, open vocabulary), the lightweight candidate."""
+
+    def __init__(self, prompt, weights="yolov8s-worldv2.pt"):
+        from ultralytics import YOLOWorld
+        self.model = YOLOWorld(os.path.expanduser(f"~/.cache/xlerobot/{weights}"))
+        self.model.set_classes([prompt])
+
+    def __call__(self, img, region=None, thr=0.05):
+        x0, y0, x1, y1 = region if region else (0, 0, img.shape[1], img.shape[0])
+        r = self.model.predict(img[y0:y1, x0:x1], imgsz=1280, conf=thr, verbose=False)[0]
+        return sorted(((float(c), b[0] + x0, b[1] + y0, b[2] + x0, b[3] + y0)
+                       for c, b in zip(r.boxes.conf.cpu().numpy(), r.boxes.xyxy.cpu().numpy())), reverse=True)
+
+
+class GroundingDino:
+    """Grounding DINO tiny, the offline reference."""
+
+    def __init__(self, prompt, model="IDEA-Research/grounding-dino-tiny"):
+        import torch
+        from transformers import AutoModelForZeroShotObjectDetection, AutoProcessor
+        self.torch, self.prompt = torch, prompt.rstrip(".") + "."
+        self.proc = AutoProcessor.from_pretrained(model)
+        self.model = AutoModelForZeroShotObjectDetection.from_pretrained(model).cuda().eval()
+
+    def __call__(self, img, region=None, thr=0.1):
+        x0, y0, x1, y1 = region if region else (0, 0, img.shape[1], img.shape[0])
+        crop = cv2.cvtColor(img[y0:y1, x0:x1], cv2.COLOR_BGR2RGB)
+        inp = self.proc(images=crop, text=self.prompt, return_tensors="pt").to("cuda")
+        with self.torch.no_grad():
+            out = self.model(**inp)
+        res = self.proc.post_process_grounded_object_detection(out, inp.input_ids, threshold=thr, text_threshold=thr,
+                                                               target_sizes=[crop.shape[:2]])[0]
+        return sorted(((float(s), float(b[0]) + x0, float(b[1]) + y0, float(b[2]) + x0, float(b[3]) + y0)
+                       for s, b in zip(res["scores"].cpu(), res["boxes"].cpu())), reverse=True)
+
+
+DETECTORS = {"owlv2": Detector, "yoloworld": YoloWorld, "gdino": GroundingDino}
+
+
 class Segmenter:
     """SAM 2 mask prompted by a box on an upscaled crop (the model's masks are low resolution)."""
 
@@ -104,9 +144,11 @@ def main():
     ap.add_argument("session")
     ap.add_argument("--step", type=int, default=4, help="score every Nth saved frame")
     ap.add_argument("--prompt", default="a cube")
+    ap.add_argument("--detector", choices=sorted(DETECTORS), default="owlv2")
     ap.add_argument("--table-crop", action="store_true", help="run the detector on the sheet's region instead of the whole frame")
     a = ap.parse_args()
-    det, seg = Detector(a.prompt), Segmenter()
+    det, seg = DETECTORS[a.detector](a.prompt), Segmenter()
+    name = f"{a.detector}+sam2"
     rows = {}
     for meta, fr, img in session_frames(a.session, a.step):
         fp, K, T = meta["footprint"], np.array(meta["K"]), np.array(fr["T_camera_from_sheet"])
@@ -122,7 +164,7 @@ def main():
         t0 = time.time()
         boxes = det(img, region)
         t_det = time.time() - t0
-        row = rows.setdefault(fp["id"], {"frames": 0, "found": 0, "extra": 0, "est": {"yellow": [], "owlv2+sam2": []}, "t": []})
+        row = rows.setdefault(fp["id"], {"frames": 0, "found": 0, "extra": 0, "est": {"yellow": [], name: []}, "t": []})
         row["frames"] += 1
         # baseline on the same frame
         ym = cpe.yellow_mask(img)
@@ -142,14 +184,14 @@ def main():
         row["t"].append((t_det, time.time() - t0))
         r = cpe.fit_cube(m, T, K, truth, D)
         if r:
-            row["est"]["owlv2+sam2"].append(r)
-    print(f"{'footprint':9s} {'recall':>7s} {'extra':>5s} | " + " | ".join(f"{k:^30s}" for k in ("yellow", "owlv2+sam2")))
-    allr = {"yellow": [], "owlv2+sam2": []}
+            row["est"][name].append(r)
+    print(f"{'footprint':9s} {'recall':>7s} {'extra':>5s} | " + " | ".join(f"{k:^30s}" for k in ("yellow", name)))
+    allr = {"yellow": [], name: []}
     for fid, row in sorted(rows.items()):
         mt = json.load(open(os.path.join(a.session, fid, "meta.json")))
         truth, scale, yaw0 = np.array(mt["footprint"]["center_mm"]), mt["scale"], mt["footprint"]["yaw_deg"]
         cells = []
-        for k in ("yellow", "owlv2+sam2"):
+        for k in ("yellow", name):
             e = np.array(row["est"][k])
             if len(e) == 0:
                 cells.append(f"{'-':^30s}")
