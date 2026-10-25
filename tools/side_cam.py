@@ -121,11 +121,27 @@ def cmd_calibrate(a):
         termios.tcsetattr(fd, termios.TCSADRAIN, old)
     if len(views) < 8:
         sys.exit(f"\nneed at least 8 views, got {len(views)}")
-    rms, K, D, _, _ = aruco.calibrateCameraCharuco([v[0] for v in views], [v[1] for v in views], board, size, None, None)
-    CALIB.parent.mkdir(parents=True, exist_ok=True)
-    CALIB.write_text(yaml.safe_dump({"image_size": list(size), "camera_matrix": K.tolist(),
-                                     "distortion": D.ravel().tolist(), "rms_px": float(rms), "views": len(views),
-                                     "board": BOARD}))
+    # Start from a plain webcam guess and keep the model simple (square pixels, no third distortion term):
+    # with free parameters and a few poor views the fit runs away to nonsense focal lengths.
+    f0 = 0.62 * size[0]
+    flags = (cv2.CALIB_USE_INTRINSIC_GUESS | cv2.CALIB_FIX_ASPECT_RATIO | cv2.CALIB_FIX_K3 | cv2.CALIB_ZERO_TANGENT_DIST)
+    K0 = np.array([[f0, 0, size[0] / 2], [0, f0, size[1] / 2], [0, 0, 1.0]])
+    keep = list(range(len(views)))
+    while True:
+        rms, K, D, rvecs, tvecs = aruco.calibrateCameraCharuco(
+            [views[i][0] for i in keep], [views[i][1] for i in keep], board, size, K0.copy(), np.zeros(5), flags=flags)
+        errs = []
+        for i, rv, tv in zip(keep, rvecs, tvecs):
+            obj = board.chessboardCorners[views[i][1].ravel()]
+            pr, _ = cv2.projectPoints(obj, rv, tv, K, D)
+            errs.append(float(np.sqrt(((pr.reshape(-1, 2) - views[i][0].reshape(-1, 2)) ** 2).sum(1).mean())))
+        worst = int(np.argmax(errs))
+        if errs[worst] < max(1.0, 2.5 * rms) or len(keep) <= 8:
+            break
+        print(f"dropping view {keep[worst] + 1} (error {errs[worst]:.1f} px)")
+        del keep[worst]
+    print("per-view error (px):", [round(e, 2) for e in errs])
+    views = [views[i] for i in keep]
     print(f"\nfx {K[0, 0]:.1f} fy {K[1, 1]:.1f} cx {K[0, 2]:.1f} cy {K[1, 2]:.1f}, reprojection error {rms:.2f} px "
           f"over {len(views)} views, saved to {CALIB}")
 
