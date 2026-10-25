@@ -10,7 +10,9 @@ measure in: its markers are fitted with a pose, scaled by the measured print sca
 put the cube on, the yellow mask is cut out of the colour image and the outline of a 28 mm cube on that plane
 (its silhouette, the convex hull of the 8 corners) is fitted to it by position and yaw. The result is
 compared with where the footprint is. Every frame is a separate estimate, so the spread over the frames is the
-repeatability and the difference to the footprint is the error. A CSV of every frame goes to ~/pose_eval/.
+repeatability and the difference to the footprint is the error. A CSV of every frame goes to ~/pose_eval/, and
+the frames themselves are saved next to it (colour, the nearest depth frame, the sheet pose, the camera
+intrinsics and the truth) so any other model can be scored on the same data later: --no-save turns that off.
 
 Keys at the prompt: Enter = measure the footprint shown, s = skip it, q = stop and print the summary.
 """
@@ -50,17 +52,23 @@ def sheet_pose(img, sheet, scale, K):
         return None, 0
     src = np.array([by_id[int(mi[k][0])].mean(0) for k in keep], np.float32)
     dst = np.array([mc[k].reshape(-1, 2).mean(0) for k in keep], np.float32)
-    side = float(np.mean([np.linalg.norm(mc[k][0][0] - mc[k][0][1]) for k in keep]))
-    H, mask = cv2.findHomography(src, dst, cv2.RANSAC, 0.3 * side)       # drops duplicates of the same ids elsewhere
-    if H is None or int(mask.sum()) < 4:
-        return None, 0
-    good = [keep[k] for k in range(len(keep)) if mask[k]]
+    good = keep
+    ids_seen = [int(mi[k][0]) for k in keep]
+    if len(set(ids_seen)) < len(ids_seen):          # the same id twice: another sheet or board is in view, keep what fits
+        side = float(np.mean([np.linalg.norm(mc[k][0][0] - mc[k][0][1]) for k in keep]))
+        H, mask = cv2.findHomography(src, dst, cv2.RANSAC, 0.3 * side)
+        if H is None or int(mask.sum()) < 4:
+            return None, 0
+        good = [keep[k] for k in range(len(keep)) if mask[k]]
     obj = np.concatenate([np.c_[by_id[int(mi[k][0])], np.zeros(4)] for k in good]).astype(np.float32)
     px = np.concatenate([mc[k].reshape(-1, 2) for k in good]).astype(np.float32)
     n, rvs, tvs, errs = cv2.solvePnPGeneric(obj, px, K, np.zeros(5), flags=cv2.SOLVEPNP_IPPE)
     if not n:
         return None, 0
-    b = int(np.argmin([float(e) for e in errs]))
+    span = np.ptp(obj[:, :2], axis=0)
+    if span[0] < 100 or span[1] < 60:                # a sheet seen only along one edge gives a poor plane
+        return None, 0
+    b = int(np.argmin([float(np.ravel(e)[0]) for e in errs]))
     rv, tv = cv2.solvePnPRefineLM(obj, px, K, np.zeros(5), rvs[b], tvs[b])
     T = np.eye(4)
     T[:3, :3] = cv2.Rodrigues(rv)[0]
@@ -124,8 +132,9 @@ class Cam:
     def __init__(self):
         rclpy.init()
         self.node = rclpy.create_node("cube_pose_eval")
-        self.frames, self.K = [], None
+        self.frames, self.K, self.depths = [], None, []
         self.node.create_subscription(Image, "/cameras/head/image_raw", self._img, qos_profile_sensor_data)
+        self.node.create_subscription(Image, "/cameras/head/depth/image_raw", self._depth, qos_profile_sensor_data)
         self.node.create_subscription(CameraInfo, "/cameras/head/camera_info", self._info, qos_profile_sensor_data)
 
     def _info(self, m):
@@ -136,13 +145,24 @@ class Cam:
         self.frames.append((m.header.stamp.sec + m.header.stamp.nanosec * 1e-9, a[:, :, ::-1].copy() if m.encoding == "rgb8" else a.copy()))
         del self.frames[:-3]
 
+    def _depth(self, m):
+        a = np.frombuffer(m.data, np.uint16 if m.encoding == "16UC1" else np.float32).reshape(m.height, m.width)
+        self.depths.append((m.header.stamp.sec + m.header.stamp.nanosec * 1e-9, a.copy(), m.encoding))
+        del self.depths[:-6]
+
+    def nearest_depth(self, stamp):
+        if not self.depths:
+            return None
+        d = min(self.depths, key=lambda x: abs(x[0] - stamp))
+        return d if abs(d[0] - stamp) < 0.08 else None
+
     def next_frames(self, n, timeout=30.0):
         out, last, t0 = [], 0.0, time.time()
         while len(out) < n and time.time() - t0 < timeout:
             rclpy.spin_once(self.node, timeout_sec=0.1)
             if self.frames and self.frames[-1][0] > last + 0.05 and self.K is not None:
                 last = self.frames[-1][0]
-                out.append(self.frames[-1][1])
+                out.append(self.frames[-1])
         return out
 
 
@@ -152,6 +172,7 @@ def main():
     ap.add_argument("--scale", type=float, default=1.0, help="measured print scale of the sheet")
     ap.add_argument("--frames", type=int, default=20)
     ap.add_argument("--ids", nargs="*", help="footprint ids to measure, default every cube footprint")
+    ap.add_argument("--no-save", dest="save", action="store_false", help="do not keep the frames")
     a = ap.parse_args()
     sheet = json.load(open(a.sheet))
     prints = {f["id"]: f for f in sheet["footprints"] if f["kind"] == "cube"}
@@ -159,7 +180,9 @@ def main():
     cam = Cam()
     out_dir = os.path.expanduser("~/pose_eval")
     os.makedirs(out_dir, exist_ok=True)
-    path = os.path.join(out_dir, time.strftime("cube_%Y%m%d_%H%M%S.csv"))
+    stamp_s = time.strftime("%Y%m%d_%H%M%S")
+    path = os.path.join(out_dir, f"cube_{stamp_s}.csv")
+    sess_dir = os.path.join(out_dir, f"cube_{stamp_s}")
     rows, summary = [], []
     with open(path, "w", newline="") as fh:
         w = csv.writer(fh)
@@ -177,7 +200,12 @@ def main():
                 print("  no frames from /cameras/head/image_raw (is the head camera running?)")
                 continue
             res = []
-            for i, img in enumerate(frames):
+            keep_dir = None
+            if a.save:
+                keep_dir = os.path.join(sess_dir, fid)
+                os.makedirs(keep_dir, exist_ok=True)
+            meta_frames = []
+            for i, (stamp, img) in enumerate(frames):
                 T, nm = sheet_pose(img, sheet, a.scale, cam.K)
                 m = yellow_mask(img)
                 if T is None or m is None:
@@ -192,10 +220,21 @@ def main():
                 if r is None:
                     continue
                 x, y, yaw, iou = r
+                if keep_dir:
+                    cv2.imwrite(os.path.join(keep_dir, f"color_{i:02d}.png"), img)
+                    d = cam.nearest_depth(stamp)
+                    if d is not None:
+                        cv2.imwrite(os.path.join(keep_dir, f"depth_{i:02d}.png"), d[1] if d[2] == "16UC1" else (d[1] * 1000).astype(np.uint16))
+                    meta_frames.append({"index": i, "stamp": stamp, "depth_dt": None if d is None else d[0] - stamp,
+                                        "T_camera_from_sheet": T.tolist(), "markers": nm, "fit": [x, y, math.degrees(yaw), iou]})
                 dyaw = math.degrees((yaw - math.radians(fp["yaw_deg"]) + math.pi / 4) % (math.pi / 2) - math.pi / 4)
                 res.append((x, y, math.degrees(yaw), iou, x - truth[0], y - truth[1], dyaw, nm))
                 w.writerow([fid, i, f"{x:.2f}", f"{y:.2f}", f"{math.degrees(yaw):.2f}", f"{iou:.3f}", f"{x - truth[0]:.2f}",
                             f"{y - truth[1]:.2f}", f"{dyaw:.2f}", nm])
+            if keep_dir:
+                with open(os.path.join(keep_dir, "meta.json"), "w") as mf:
+                    json.dump({"footprint": fp, "scale": a.scale, "K": cam.K.tolist(), "sheet_file": a.sheet,
+                               "cube_mm": CUBE_MM, "frames": meta_frames}, mf, indent=1)
             if not res:
                 print("  no usable frame (sheet markers or the cube not found)")
                 continue
