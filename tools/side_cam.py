@@ -187,65 +187,37 @@ def cmd_calibrate_offline(a):
 def cmd_calibrate(a):
     if a.from_dir:
         return cmd_calibrate_offline(a)
+    # Interactive: every frame taken with Space is saved, then the same offline fit runs on the folder, so
+    # a bad fit can be repeated or tuned later without taking the views again.
     dic = aruco.getPredefinedDictionary(aruco.DICT_4X4_250)
-    board = aruco.CharucoBoard_create(BOARD["squares_x"], BOARD["squares_y"], BOARD["square_length"],
-                                      BOARD["marker_length"], dic)
     cap = open_camera(a.dev)
-    views, size = [], None
+    out = pathlib.Path(a.out).expanduser() / time.strftime("calib_%Y%m%d_%H%M%S")
+    out.mkdir(parents=True, exist_ok=True)
     if not sys.stdin.isatty():
-        sys.exit("needs a terminal")
+        sys.exit("needs a terminal (or use: record, then calibrate --from DIR)")
     fd = sys.stdin.fileno()
     old = termios.tcgetattr(fd)
     tty.setcbreak(fd)
-    print("hold the board in view at many angles and distances (also tilted, also near the corners); "
-          "Space takes a view, q finishes")
+    taken = 0
+    print(f"hold the board in view at many angles and distances; Space saves a frame to {out}, q finishes and fits")
     try:
         while True:
             f = grab(cap, 1)
-            size = f.shape[1::-1]
             g = cv2.cvtColor(f, cv2.COLOR_BGR2GRAY)
-            mc, mi, _ = aruco.detectMarkers(g, dic)
-            n = 0
-            if mi is not None and len(mi) > 0:
-                n, cc, ci = aruco.interpolateCornersCharuco(mc, mi, g, board)
-                n = 0 if n is None else n
-            print(f"\rcorners in view: {n:3d}  views taken: {len(views):2d}   ", end="", flush=True)
+            _, mi, _ = aruco.detectMarkers(g, dic)
+            print(f"\rmarkers in view: {0 if mi is None else len(mi):3d}  frames saved: {taken:2d}   ", end="", flush=True)
             if select.select([sys.stdin], [], [], 0.15)[0]:
                 k = sys.stdin.read(1)
                 if k in ("q", "Q"):
                     break
-                if k == " " and n >= 12:
-                    views.append((cc, ci))
-                    print(f"\nview {len(views)} saved ({n} corners)")
-                elif k == " ":
-                    print("\nnot enough corners in view, move the board closer or turn it towards the camera")
+                if k == " ":
+                    cv2.imwrite(str(out / f"{taken:04d}.jpg"), f, [cv2.IMWRITE_JPEG_QUALITY, 95])
+                    taken += 1
     finally:
         termios.tcsetattr(fd, termios.TCSADRAIN, old)
-    if len(views) < 8:
-        sys.exit(f"\nneed at least 8 views, got {len(views)}")
-    # Start from a plain webcam guess and keep the model simple (square pixels, no third distortion term):
-    # with free parameters and a few poor views the fit runs away to nonsense focal lengths.
-    f0 = 0.62 * size[0]
-    flags = (cv2.CALIB_USE_INTRINSIC_GUESS | cv2.CALIB_FIX_ASPECT_RATIO | cv2.CALIB_FIX_K3 | cv2.CALIB_ZERO_TANGENT_DIST)
-    K0 = np.array([[f0, 0, size[0] / 2], [0, f0, size[1] / 2], [0, 0, 1.0]])
-    keep = list(range(len(views)))
-    while True:
-        rms, K, D, rvecs, tvecs = aruco.calibrateCameraCharuco(
-            [views[i][0] for i in keep], [views[i][1] for i in keep], board, size, K0.copy(), np.zeros(5), flags=flags)
-        errs = []
-        for i, rv, tv in zip(keep, rvecs, tvecs):
-            obj = board.chessboardCorners[views[i][1].ravel()]
-            pr, _ = cv2.projectPoints(obj, rv, tv, K, D)
-            errs.append(float(np.sqrt(((pr.reshape(-1, 2) - views[i][0].reshape(-1, 2)) ** 2).sum(1).mean())))
-        worst = int(np.argmax(errs))
-        if errs[worst] < max(1.0, 2.5 * rms) or len(keep) <= 8:
-            break
-        print(f"dropping view {keep[worst] + 1} (error {errs[worst]:.1f} px)")
-        del keep[worst]
-    print("per-view error (px):", [round(e, 2) for e in errs])
-    views = [views[i] for i in keep]
-    print(f"\nfx {K[0, 0]:.1f} fy {K[1, 1]:.1f} cx {K[0, 2]:.1f} cy {K[1, 2]:.1f}, reprojection error {rms:.2f} px "
-          f"over {len(views)} views, saved to {CALIB}")
+    print()
+    a.from_dir = str(out)
+    return cmd_calibrate_offline(a)
 
 
 def main():
