@@ -108,7 +108,18 @@ class OwlVit(Detector):
         self.model = OwlViTForObjectDetection.from_pretrained("google/owlvit-base-patch32").cuda().half().eval()
 
 
-DETECTORS = {"owlvit": OwlVit, "owlv2": Detector, "yoloworld": YoloWorld, "gdino": GroundingDino}
+class TrtDetector:
+    """OWLv2 on the TensorRT engine (tools/perception, runs on the Jetson)."""
+
+    def __init__(self, prompt):
+        from perception.pipeline import TrtOwlv2
+        self.d = TrtOwlv2(prompt)
+
+    def __call__(self, img, region=None, thr=0.1):
+        return self.d(img, region, thr)
+
+
+DETECTORS = {"trt-owlv2": TrtDetector, "owlvit": OwlVit, "owlv2": Detector, "yoloworld": YoloWorld, "gdino": GroundingDino}
 
 
 class Segmenter:
@@ -174,7 +185,18 @@ class EfficientVitSam(Segmenter):
         return m[0]
 
 
+class TrtSam(Segmenter):
+    def __init__(self, variant):
+        from perception.pipeline import TrtEvitSam
+        self.m = TrtEvitSam(variant)
+
+    def _mask(self, big, box):
+        return self.m.mask(big, box)
+
+
 SEGMENTERS = {
+    "trt-evit-l0": lambda: TrtSam("l0"),
+    "trt-evit-l1": lambda: TrtSam("l1"),
     "sam2-small": lambda: HfSam2("facebook/sam2.1-hiera-small"),
     "sam2-tiny": lambda: HfSam2("facebook/sam2.1-hiera-tiny"),
     "sam2-base+": lambda: HfSam2("facebook/sam2.1-hiera-base-plus"),
