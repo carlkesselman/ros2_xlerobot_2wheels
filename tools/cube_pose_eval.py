@@ -25,16 +25,20 @@ import sys
 import time
 
 _venv = os.path.expanduser("~/venvs/xlerobot-mcp/bin/python")
-if os.path.exists(_venv) and os.path.realpath(sys.prefix) != os.path.realpath(os.path.dirname(os.path.dirname(_venv))):
+if __name__ == "__main__" and os.path.exists(_venv) and os.path.realpath(sys.prefix) != os.path.realpath(os.path.dirname(os.path.dirname(_venv))):
     os.execv(_venv, [_venv] + sys.argv)
 
 import cv2  # noqa: E402
 import cv2.aruco as aruco  # noqa: E402
 import numpy as np  # noqa: E402
-import rclpy  # noqa: E402
-from rclpy.qos import qos_profile_sensor_data  # noqa: E402
 from scipy.optimize import minimize  # noqa: E402
-from sensor_msgs.msg import CameraInfo, Image  # noqa: E402
+
+try:                                    # the ROS side is only needed to record; scoring saved frames works without it
+    import rclpy  # noqa: E402
+    from rclpy.qos import qos_profile_sensor_data  # noqa: E402
+    from sensor_msgs.msg import CameraInfo, Image  # noqa: E402
+except ImportError:
+    rclpy = None
 
 CUBE_MM = 28.0
 YELLOW_LO, YELLOW_HI = (20, 90, 90), (40, 255, 255)
@@ -291,7 +295,7 @@ def main():
                             f"{y - truth[1]:.2f}", f"{dyaw:.2f}", nm])
             if keep_dir:
                 with open(os.path.join(keep_dir, "meta.json"), "w") as mf:
-                    json.dump({"footprint": fp, "scale": a.scale, "K": cam.K.tolist(), "sheet_file": a.sheet,
+                    json.dump({"footprint": fp, "scale": a.scale, "K": cam.K.tolist(), "D": None if not a.distortion or cam.D is None else list(map(float, cam.D)), "sheet_file": a.sheet,
                                "cube_mm": CUBE_MM, "frames": meta_frames}, mf, indent=1)
             if not res:
                 print("  no usable frame (sheet markers or the cube not found)")
