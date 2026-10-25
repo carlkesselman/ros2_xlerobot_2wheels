@@ -33,6 +33,9 @@ import cv2.aruco as aruco  # noqa: E402
 import numpy as np  # noqa: E402
 from scipy.optimize import minimize  # noqa: E402
 
+sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "src", "xlerobot_object_perception"))
+from objperc.cube_fit import cube_corners as _cube_corners, fit_cube as _fit_cube, project  # noqa: E402
+
 try:                                    # the ROS side is only needed to record; scoring saved frames works without it
     import rclpy  # noqa: E402
     from rclpy.qos import qos_profile_sensor_data  # noqa: E402
@@ -84,49 +87,12 @@ def sheet_pose(img, sheet, scale, K, D=None):
     return T, len(good)
 
 
-def project(T, K, pts, D=None):
-    p = (T[:3, :3] @ np.asarray(pts, float).T).T + T[:3, 3]
-    if D is None or not np.any(D):
-        uv = (K @ p.T).T
-        return uv[:, :2] / uv[:, 2:3]
-    uv, _ = cv2.projectPoints(p.reshape(-1, 1, 3), np.zeros(3), np.zeros(3), K, np.asarray(D, float))
-    return uv.reshape(-1, 2)
-
-
 def cube_corners(x, y, yaw):
-    c, s = math.cos(yaw), math.sin(yaw)
-    h = CUBE_MM / 2
-    sq = [(-h, -h), (h, -h), (h, h), (-h, h)]
-    pts = [(x + c * a - s * b, y + s * a + c * b, z) for z in (0.0, CUBE_MM) for a, b in sq]
-    return np.array(pts)
+    return _cube_corners(x, y, yaw, CUBE_MM)
 
 
 def fit_cube(mask, T, K, guess_xy, D=None):
-    """x, y (sheet mm) and yaw (rad, modulo 90 degrees) of the cube whose silhouette best covers the mask."""
-    ys, xs = np.nonzero(mask)
-    if len(xs) < 80:
-        return None
-    x0, x1, y0, y1 = max(xs.min() - 12, 0), xs.max() + 12, max(ys.min() - 12, 0), ys.max() + 12
-    S = 4                                                     # sub-pixel by rasterising 4x finer
-    roi = cv2.resize(mask[y0:y1, x0:x1].astype(np.uint8), None, fx=S, fy=S, interpolation=cv2.INTER_NEAREST) > 0
-
-    def cost(p):
-        uv = (project(T, K, cube_corners(p[0], p[1], p[2]), D) - [x0, y0]) * S
-        hull = cv2.convexHull(uv.astype(np.float32)).astype(np.int32)
-        r = np.zeros_like(roi, np.uint8)
-        cv2.fillConvexPoly(r, hull, 1)
-        inter = np.logical_and(r > 0, roi).sum()
-        return 1.0 - inter / max(1, np.logical_or(r > 0, roi).sum())
-
-    best = None
-    for yaw0 in np.radians((0, 22.5, 45, 67.5)):
-        res = minimize(cost, [guess_xy[0], guess_xy[1], yaw0], method="Nelder-Mead",
-                       options={"initial_simplex": np.array([[guess_xy[0], guess_xy[1], yaw0], [guess_xy[0] + 6, guess_xy[1], yaw0],
-                                                             [guess_xy[0], guess_xy[1] + 6, yaw0], [guess_xy[0], guess_xy[1], yaw0 + 0.2]]),
-                                "xatol": 0.02, "fatol": 1e-5, "maxiter": 400})
-        if best is None or res.fun < best.fun:
-            best = res
-    return best.x[0], best.x[1], (best.x[2] + math.pi / 4) % (math.pi / 2) - math.pi / 4, 1.0 - best.fun
+    return _fit_cube(mask, T, K, guess_xy, D, CUBE_MM)
 
 
 def yellow_map(img, mask):
@@ -202,6 +168,7 @@ class Cam:
         self.D = np.array(m.d, float)
 
     def _img(self, m):
+        self.frame_id = m.header.frame_id
         a = np.frombuffer(m.data, np.uint8).reshape(m.height, m.width, 3)
         self.frames.append((m.header.stamp.sec + m.header.stamp.nanosec * 1e-9, a[:, :, ::-1].copy() if m.encoding == "rgb8" else a.copy()))
         del self.frames[:-3]

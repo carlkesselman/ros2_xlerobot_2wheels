@@ -1,0 +1,15 @@
+# Find objects matching a text prompt on the table in front of the head camera and return their poses.
+# The node takes a few colour+depth frames, runs the detector, mask model and pose fit on each, merges the frames, and replies.
+# Nothing runs between calls.
+
+string prompt                 # what to look for, one of the prompts embedded with tools/perception/export_models.py, e.g. "a cube"
+string label                  # class name in the result; empty = the prompt
+float32 size_mm               # edge length of the cube-shaped object; 0 = 28
+uint8 frames                  # frames to merge; 0 = the node's default
+float32 min_score             # detector score threshold; 0 = the node's default
+---
+bool success                  # at least one object found
+string[] codes                # NO_FRAMES, NO_DET, NO_MASK, FEW_DEPTH, SIZE_OOR, STALE_TF, BAD_PROMPT, with the object id where it applies
+vision_msgs/Detection3DArray detections   # in base_footprint; bbox.center = pose of the object centre, bbox.size in metres
+float32[] heights_m           # per detection: height of the top face above the table from the depth, for checking the size
+float32 latency_ms

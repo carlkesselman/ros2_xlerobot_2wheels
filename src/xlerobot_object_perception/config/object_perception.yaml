@@ -1,0 +1,14 @@
+object_perception:
+  ros__parameters:
+    image_topic: /cameras/head/image_raw
+    depth_topic: /cameras/head/depth/image_raw
+    camera_info_topic: /cameras/head/camera_info
+    target_frame: base_footprint
+    frames: 3                 # frames merged per call
+    min_score: 0.15           # OWLv2 score threshold
+    max_objects: 6
+    table_search_m: 0.12      # ring around an object used to read the table height from the depth
+    engines_dir: ""           # empty = ~/.cache/xlerobot/engines
+    prompts_file: ""          # empty = ~/.cache/xlerobot/prompts.npz
+    sam_variant: l0
+    table_z_offset_m: 0.0047    # added to the table height read from the depth (the Gemini 2 reads the table low by a few mm)

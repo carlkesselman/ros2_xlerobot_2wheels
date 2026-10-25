@@ -12,7 +12,7 @@ import numpy as np
 from .trt_runner import TrtEngine
 
 ENGINES = os.path.expanduser("~/.cache/xlerobot/engines")
-PROMPTS = os.path.expanduser("~/onnx/prompts.npz")
+PROMPTS = os.path.expanduser("~/.cache/xlerobot/prompts.npz")
 _CLIP_MEAN = np.array([0.48145466, 0.4578275, 0.40821073], np.float32)
 _CLIP_STD = np.array([0.26862954, 0.26130258, 0.27577711], np.float32)
 
@@ -24,12 +24,17 @@ def _sigmoid(x):
 class TrtOwlv2:
     SIZE = 960
 
-    def __init__(self, prompt, engine=None, prompts=None):
+    def __init__(self, prompt=None, engine=None, prompts=None):
         self.eng = TrtEngine(engine or os.path.join(ENGINES, "owlv2_det.engine"))
-        emb = np.load(prompts or PROMPTS)
-        if prompt not in emb.files:
-            raise KeyError(f"no text embedding for {prompt!r}; export it on the laptop with export_models.py --prompts (have {emb.files})")
-        self.query = emb[prompt].astype(np.float32)
+        self.emb = np.load(prompts or PROMPTS)
+        self.query = None
+        if prompt:
+            self.set_prompt(prompt)
+
+    def set_prompt(self, prompt):
+        if prompt not in self.emb.files:
+            raise KeyError(f"no text embedding for {prompt!r}; export it on the laptop with export_models.py --prompts (have {self.emb.files})")
+        self.query = self.emb[prompt].astype(np.float32)
 
     def __call__(self, img, region=None, thr=0.1):
         x0, y0, x1, y1 = region if region else (0, 0, img.shape[1], img.shape[0])
@@ -54,9 +59,9 @@ class TrtOwlv2:
 class TrtEvitSam:
     SIZE = 512                                                          # L0/L1/L2 encoder input; the decoder works in a 1024 frame
 
-    def __init__(self, variant="l0"):
-        self.enc = TrtEngine(os.path.join(ENGINES, f"evit_{variant}_encoder.engine"))
-        self.dec = TrtEngine(os.path.join(ENGINES, f"evit_{variant}_decoder.engine"))
+    def __init__(self, variant="l0", engines=None):
+        self.enc = TrtEngine(os.path.join(engines or ENGINES, f"evit_{variant}_encoder.engine"))
+        self.dec = TrtEngine(os.path.join(engines or ENGINES, f"evit_{variant}_decoder.engine"))
 
     def mask(self, big_rgb, box):
         """Boolean mask for a box on a SIZE x SIZE RGB crop."""
@@ -68,3 +73,22 @@ class TrtEvitSam:
         low = out["masks"].reshape(256, 256)
         up = cv2.resize(low, (1024, 1024), interpolation=cv2.INTER_LINEAR)
         return cv2.resize(up, (big_rgb.shape[1], big_rgb.shape[0]), interpolation=cv2.INTER_LINEAR) > 0
+
+    def __call__(self, img, box, ctx=3.0, up=512):
+        """Full-frame boolean mask for a box (x0, y0, x1, y1): the masks are low resolution, so the model sees an upscaled crop
+        about `ctx` times the box and the result is averaged back to the native pixels."""
+        bx0, by0, bx1, by1 = box
+        cx, cy, side = (bx0 + bx1) / 2, (by0 + by1) / 2, max(bx1 - bx0, by1 - by0, 24) * ctx
+        x0, y0 = int(round(cx - side / 2)), int(round(cy - side / 2))
+        n = int(round(side))
+        pad = cv2.copyMakeBorder(img, n, n, n, n, cv2.BORDER_REPLICATE)
+        crop = pad[y0 + n:y0 + n + n, x0 + n:x0 + n + n]
+        big = cv2.cvtColor(cv2.resize(crop, (up, up), interpolation=cv2.INTER_CUBIC), cv2.COLOR_BGR2RGB)
+        k = up / n
+        m = self.mask(big, [(bx0 - x0) * k, (by0 - y0) * k, (bx1 - x0) * k, (by1 - y0) * k]).astype(np.float32)
+        small = cv2.resize(m, (n, n), interpolation=cv2.INTER_AREA)
+        full = np.zeros(img.shape[:2], np.float32)
+        ys, xs = max(y0, 0), max(x0, 0)
+        ye, xe = min(y0 + n, img.shape[0]), min(x0 + n, img.shape[1])
+        full[ys:ye, xs:xe] = small[ys - y0:ye - y0, xs - x0:xe - x0]
+        return full > 0.5

@@ -112,7 +112,7 @@ class TrtDetector:
     """OWLv2 on the TensorRT engine (tools/perception, runs on the Jetson)."""
 
     def __init__(self, prompt):
-        from perception.pipeline import TrtOwlv2
+        from objperc.pipeline import TrtOwlv2
         self.d = TrtOwlv2(prompt)
 
     def __call__(self, img, region=None, thr=0.1):
@@ -187,7 +187,7 @@ class EfficientVitSam(Segmenter):
 
 class TrtSam(Segmenter):
     def __init__(self, variant):
-        from perception.pipeline import TrtEvitSam
+        from objperc.pipeline import TrtEvitSam
         self.m = TrtEvitSam(variant)
 
     def _mask(self, big, box):
