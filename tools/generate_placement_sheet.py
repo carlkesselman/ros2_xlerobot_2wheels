@@ -27,9 +27,14 @@ DPI = 300
 PX_PER_MM = DPI / 25.4
 SIZE_MM = (262.0, 197.0)       # the image itself, small enough for the printable area of a Letter or A4 page
 MARKER_MM = 24.0
-CUBE_MM = 30.0                 # footprint of a 28 mm cube, 1 mm clearance on each side
-BRICK_MM = (32.0, 16.0)        # 2x4 Lego brick
-COLUMNS = (-70.0, 0.0, 70.0)
+CUBE_OBJ_MM = 28.0
+BRICK_OBJ_MM = (31.8, 15.8)    # 2x4 Lego brick
+# The brackets are drawn outside the object with room to spare, because printers rarely keep the scale
+# (the first print came out at 92.5%) and an object that covers its outline cannot be lined up by eye.
+CUBE_MM = 34.0
+BRICK_MM = (36.0, 20.0)
+CUBE_COLS, CUBE_ROWS = (-80.0, -20.0), (44.0, -8.0, -60.0)      # cubes on the left half
+BRICK_COLS, BRICK_ROWS = (28.0, 78.0), (44.0, -4.0, -52.0)      # bricks on the right half
 
 
 def marker_layout(w, h):
@@ -43,16 +48,16 @@ def footprints():
     """Six cube footprints (yaw in 15 degree steps, a cube repeats every 90) and six 2x4 brick footprints
     (30 degree steps, a brick repeats every 180)."""
     out = []
-    for r, y in enumerate((45.0, 5.0)):
-        for c, x in enumerate(COLUMNS):
-            k = r * 3 + c
+    for r, y in enumerate(CUBE_ROWS):
+        for c, x in enumerate(CUBE_COLS):
+            k = r * 2 + c
             out.append({"id": f"cube{k}", "kind": "cube", "center_mm": [x, y], "yaw_deg": k * 15.0,
-                        "size_mm": [CUBE_MM, CUBE_MM]})
-    for r, y in enumerate((-33.0, -69.0)):
-        for c, x in enumerate(COLUMNS):
-            k = r * 3 + c
+                        "size_mm": [CUBE_MM, CUBE_MM], "object_mm": [CUBE_OBJ_MM, CUBE_OBJ_MM]})
+    for r, y in enumerate(BRICK_ROWS):
+        for c, x in enumerate(BRICK_COLS):
+            k = r * 2 + c
             out.append({"id": f"brick{k}", "kind": "brick", "center_mm": [x, y], "yaw_deg": k * 30.0,
-                        "size_mm": list(BRICK_MM)})
+                        "size_mm": list(BRICK_MM), "object_mm": list(BRICK_OBJ_MM)})
     return out
 
 
@@ -83,11 +88,17 @@ def main():
         loc = np.array([[-sx / 2, -sy / 2], [sx / 2, -sy / 2], [sx / 2, sy / 2], [-sx / 2, sy / 2]])
         rot = np.array([[math.cos(t), -math.sin(t)], [math.sin(t), math.cos(t)]])
         pts = (rot @ loc.T).T + np.array([cx, cy])
-        cv2.polylines(img, [np.array([to_px(*p) for p in pts], np.int32)], True, 0, 3, cv2.LINE_AA)
-        # a tick on the +x edge of the footprint marks its yaw direction
-        p0, p1 = (rot @ np.array([sx / 2, 0])) + [cx, cy], (rot @ np.array([sx / 2 + 4, 0])) + [cx, cy]
+        # corner brackets (an L at each corner of the footprint), a centre cross, and a yaw line on the +x side
+        for k in range(4):
+            a_, b_, c_ = pts[k], pts[(k + 1) % 4], pts[(k - 1) % 4]
+            for q in (b_, c_):
+                d_ = (q - a_) / np.linalg.norm(q - a_) * 7.0
+                cv2.line(img, to_px(*a_), to_px(*(a_ + d_)), 0, 4, cv2.LINE_AA)
+        for d_ in ((rot @ np.array([4.0, 0])), (rot @ np.array([0, 4.0]))):
+            cv2.line(img, to_px(*([cx, cy] - d_)), to_px(*([cx, cy] + d_)), 0, 2, cv2.LINE_AA)
+        p0, p1 = (rot @ np.array([sx / 2 + 1.0, 0])) + [cx, cy], (rot @ np.array([sx / 2 + 6.0, 0])) + [cx, cy]
         cv2.line(img, to_px(*p0), to_px(*p1), 0, 3, cv2.LINE_AA)
-        cv2.putText(img, f["id"], to_px(cx - 34, cy - 1), cv2.FONT_HERSHEY_SIMPLEX, 0.9, 0, 2, cv2.LINE_AA)
+        cv2.putText(img, f["id"], to_px(cx - 17, cy - 27), cv2.FONT_HERSHEY_SIMPLEX, 0.9, 0, 2, cv2.LINE_AA)
     cv2.imwrite(a.out + ".png", img, [cv2.IMWRITE_PNG_COMPRESSION, 9])
     with open(a.out + ".json", "w") as f:
         json.dump({"size_mm": [w_mm, h_mm], "marker_mm": MARKER_MM, "dictionary": "DICT_4X4_50",
