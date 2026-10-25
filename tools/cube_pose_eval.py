@@ -40,7 +40,7 @@ CUBE_MM = 28.0
 YELLOW_LO, YELLOW_HI = (20, 90, 90), (40, 255, 255)
 
 
-def sheet_pose(img, sheet, scale, K):
+def sheet_pose(img, sheet, scale, K, D=None):
     """Pose of the sheet in the camera (4x4, millimetres), from its markers; None if too few agree."""
     dic = aruco.getPredefinedDictionary(aruco.DICT_4X4_50)
     mc, mi, _ = aruco.detectMarkers(cv2.cvtColor(img, cv2.COLOR_BGR2GRAY), dic)
@@ -62,24 +62,31 @@ def sheet_pose(img, sheet, scale, K):
         good = [keep[k] for k in range(len(keep)) if mask[k]]
     obj = np.concatenate([np.c_[by_id[int(mi[k][0])], np.zeros(4)] for k in good]).astype(np.float32)
     px = np.concatenate([mc[k].reshape(-1, 2) for k in good]).astype(np.float32)
-    n, rvs, tvs, errs = cv2.solvePnPGeneric(obj, px, K, np.zeros(5), flags=cv2.SOLVEPNP_IPPE)
+    D = np.zeros(5) if D is None else np.asarray(D, float)
+    n, rvs, tvs, errs = cv2.solvePnPGeneric(obj, px, K, D, flags=cv2.SOLVEPNP_IPPE)
     if not n:
         return None, 0
     span = np.ptp(obj[:, :2], axis=0)
     if span[0] < 100 or span[1] < 60:                # a sheet seen only along one edge gives a poor plane
         return None, 0
+    if len(good) < len(sheet["markers"]) and not getattr(sheet_pose, "warned", False):
+        print(f"  warning: only {len(good)} of {len(sheet['markers'])} sheet markers are visible; the sheet's tilt is poorly determined and positions away from the visible markers can be off by 1-3 mm (move the sheet or tilt the head so all of them are in view)")
+        sheet_pose.warned = True
     b = int(np.argmin([float(np.ravel(e)[0]) for e in errs]))
-    rv, tv = cv2.solvePnPRefineLM(obj, px, K, np.zeros(5), rvs[b], tvs[b])
+    rv, tv = cv2.solvePnPRefineLM(obj, px, K, D, rvs[b], tvs[b])
     T = np.eye(4)
     T[:3, :3] = cv2.Rodrigues(rv)[0]
     T[:3, 3] = tv.ravel()
     return T, len(good)
 
 
-def project(T, K, pts):
-    p = (T[:3, :3] @ np.asarray(pts).T).T + T[:3, 3]
-    uv = (K @ p.T).T
-    return uv[:, :2] / uv[:, 2:3]
+def project(T, K, pts, D=None):
+    p = (T[:3, :3] @ np.asarray(pts, float).T).T + T[:3, 3]
+    if D is None or not np.any(D):
+        uv = (K @ p.T).T
+        return uv[:, :2] / uv[:, 2:3]
+    uv, _ = cv2.projectPoints(p.reshape(-1, 1, 3), np.zeros(3), np.zeros(3), K, np.asarray(D, float))
+    return uv.reshape(-1, 2)
 
 
 def cube_corners(x, y, yaw):
@@ -90,7 +97,7 @@ def cube_corners(x, y, yaw):
     return np.array(pts)
 
 
-def fit_cube(mask, T, K, guess_xy):
+def fit_cube(mask, T, K, guess_xy, D=None):
     """x, y (sheet mm) and yaw (rad, modulo 90 degrees) of the cube whose silhouette best covers the mask."""
     ys, xs = np.nonzero(mask)
     if len(xs) < 80:
@@ -100,7 +107,7 @@ def fit_cube(mask, T, K, guess_xy):
     roi = cv2.resize(mask[y0:y1, x0:x1].astype(np.uint8), None, fx=S, fy=S, interpolation=cv2.INTER_NEAREST) > 0
 
     def cost(p):
-        uv = (project(T, K, cube_corners(p[0], p[1], p[2])) - [x0, y0]) * S
+        uv = (project(T, K, cube_corners(p[0], p[1], p[2]), D) - [x0, y0]) * S
         hull = cv2.convexHull(uv.astype(np.float32)).astype(np.int32)
         r = np.zeros_like(roi, np.uint8)
         cv2.fillConvexPoly(r, hull, 1)
@@ -135,7 +142,7 @@ def yellow_map(img, mask):
     return np.clip((y - lo) / (hi - lo), 0.0, 1.0)
 
 
-def fit_cube_soft(img, mask, T, K, guess_xy):
+def fit_cube_soft(img, mask, T, K, guess_xy, D=None):
     """Like fit_cube, but scores the outline against the graded yellow map (anti-aliased rendering)."""
     ys, xs = np.nonzero(mask)
     if len(xs) < 80:
@@ -149,7 +156,7 @@ def fit_cube_soft(img, mask, T, K, guess_xy):
     h, w = roi.shape
 
     def cost(p):
-        uv = (project(T, K, cube_corners(p[0], p[1], p[2])) - [x0, y0]) * S
+        uv = (project(T, K, cube_corners(p[0], p[1], p[2]), D) - [x0, y0]) * S
         hull = cv2.convexHull(uv.astype(np.float32)).astype(np.int32)
         r = np.zeros((h * S, w * S), np.uint8)
         cv2.fillConvexPoly(r, hull, 1)
@@ -181,13 +188,14 @@ class Cam:
     def __init__(self):
         rclpy.init()
         self.node = rclpy.create_node("cube_pose_eval")
-        self.frames, self.K, self.depths = [], None, []
+        self.frames, self.K, self.D, self.depths = [], None, np.zeros(5), []
         self.node.create_subscription(Image, "/cameras/head/image_raw", self._img, qos_profile_sensor_data)
         self.node.create_subscription(Image, "/cameras/head/depth/image_raw", self._depth, qos_profile_sensor_data)
         self.node.create_subscription(CameraInfo, "/cameras/head/camera_info", self._info, qos_profile_sensor_data)
 
     def _info(self, m):
         self.K = np.array(m.k).reshape(3, 3)
+        self.D = np.array(m.d, float)
 
     def _img(self, m):
         a = np.frombuffer(m.data, np.uint8).reshape(m.height, m.width, 3)
@@ -221,6 +229,7 @@ def main():
     ap.add_argument("--scale", type=float, default=1.0, help="measured print scale of the sheet")
     ap.add_argument("--frames", type=int, default=20)
     ap.add_argument("--ids", nargs="*", help="footprint ids to measure, default every cube footprint")
+    ap.add_argument("--no-distortion", dest="distortion", action="store_false", help="ignore the lens distortion the camera reports")
     ap.add_argument("--no-save", dest="save", action="store_false", help="do not keep the frames")
     a = ap.parse_args()
     sheet = json.load(open(a.sheet))
@@ -255,17 +264,17 @@ def main():
                 os.makedirs(keep_dir, exist_ok=True)
             meta_frames = []
             for i, (stamp, img) in enumerate(frames):
-                T, nm = sheet_pose(img, sheet, a.scale, cam.K)
+                T, nm = sheet_pose(img, sheet, a.scale, cam.K, cam.D if a.distortion else None)
                 m = yellow_mask(img)
                 if T is None or m is None:
                     continue
                 truth = np.array(fp["center_mm"]) * a.scale
-                z = project(T, cam.K, [(truth[0], truth[1], CUBE_MM / 2)])[0]
+                z = project(T, cam.K, [(truth[0], truth[1], CUBE_MM / 2)], cam.D if a.distortion else None)[0]
                 near = np.zeros_like(m)
                 r = 90
                 near[int(max(z[1] - r, 0)):int(z[1] + r), int(max(z[0] - r, 0)):int(z[0] + r)] = True
                 mm = m & near
-                r = fit_cube(mm, T, cam.K, truth)
+                r = fit_cube(mm, T, cam.K, truth, cam.D if a.distortion else None)
                 if r is None:
                     continue
                 x, y, yaw, iou = r
