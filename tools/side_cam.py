@@ -32,7 +32,7 @@ import cv2.aruco as aruco  # noqa: E402
 import numpy as np  # noqa: E402
 import yaml  # noqa: E402
 
-CALIB = pathlib.Path.home() / ".ros" / "side_cam.yaml"
+CALIB = pathlib.Path.home() / ".ros" / "side_cam.yaml"          # --name NAME writes ~/.ros/NAME.yaml instead
 # The two ChArUco boards in use (DICT_4X4_250): the 7x5 printed for the arm calibration (square measured on the
 # print) and the older 11x8 one. Which one is in front of the camera is told from the marker IDs it shows.
 BOARDS = {"7x5": dict(squares_x=7, squares_y=5, square_length=0.03386, marker_length=0.02562),
@@ -150,7 +150,7 @@ def charuco_frame(f, dic, board):
 
 def cmd_calibrate_offline(a):
     dic = aruco.getPredefinedDictionary(aruco.DICT_4X4_250)
-    files = sorted(pathlib.Path(a.from_dir).expanduser().glob("*.jpg"))
+    files = sorted(list(pathlib.Path(a.from_dir).expanduser().glob("*.jpg")) + list(pathlib.Path(a.from_dir).expanduser().glob("*.png")))
     global BOARD
     bname = pick_board([cv2.imread(str(fp)) for fp in files[::max(1, len(files) // 25)]])
     BOARD = BOARDS[bname]
@@ -242,9 +242,13 @@ def main():
     ap.add_argument("--seconds", type=float, default=30.0)
     ap.add_argument("--from", dest="from_dir", help="directory of recorded frames for calibrate")
     ap.add_argument("--views", type=int, default=30)
+    ap.add_argument("--name", help="calibration name: ~/.ros/NAME.yaml, default side_cam")
     ap.add_argument("--dev", type=int, default=0, help="N of /dev/videoN")
     ap.add_argument("--out", default="~/side_cam")
     a = ap.parse_args()
+    global CALIB
+    if a.name:
+        CALIB = pathlib.Path.home() / ".ros" / f"{a.name}.yaml"
     {"snap": cmd_snap, "calibrate": cmd_calibrate, "record": cmd_record, "info": cmd_info}[a.command](a)
 
 

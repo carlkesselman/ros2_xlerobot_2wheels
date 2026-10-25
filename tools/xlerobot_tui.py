@@ -20,7 +20,7 @@ joystick's wheel commands), y plays one back, z stops playback, m lists recordin
 joystick, so touching the stick or e-stop wins. The header line shows the Jetson's CPU, memory,
 GPU and temperature, read over the same ssh connection.
 
-Keys: s start stack, x stop stack (kill_ros --clean-shm), X stop and then cut torque on every servo, t cut
+Keys: d development mode (MCP motion does not wait for Y, resets when the guard restarts), s start stack, x stop stack (kill_ros --clean-shm), X stop and then cut torque on every servo, t cut
 torque only (stack must be stopped; the arms go limp and the head droops, hold them; it asks for "yes"), g presence guard on/off, e e-stop,
 u release e-stop, c clear octomap, v validate, p next profile, l show/hide log, q quit.
 Heavy topics (images, clouds) are never subscribed: a standing remote raw-image subscriber
@@ -142,6 +142,8 @@ class Monitor:
             for t in c.topics:
                 self._subscribe(t)
         self.node.create_subscription(Bool, "/e_stop", lambda m: self.value.__setitem__("/e_stop", m.data), 10)
+        latched = QoSProfile(depth=1, durability=DurabilityPolicy.TRANSIENT_LOCAL, reliability=ReliabilityPolicy.RELIABLE)
+        self.node.create_subscription(Bool, "/mcp_presence_bypass", lambda m: self.value.__setitem__("/mcp_presence_bypass", m.data), latched)
         self.node.create_subscription(Log, "/rosout", self._on_rosout, QoSProfile(depth=50))
         from controller_manager_msgs.srv import ListControllers
         self.list_ctrl = self.node.create_client(ListControllers, "/controller_manager/list_controllers")
@@ -297,7 +299,7 @@ class TuiApp(App):
     TITLE = "XLeRobot stack"
     BINDINGS = [
         Binding("s", "start", "start"), Binding("x", "stop", "stop"), Binding("X", "stop_limp", "stop + limp"),
-        Binding("t", "limp", "torque off"),
+        Binding("t", "limp", "torque off"), Binding("d", "dev_mode", "dev: no Y"),
         Binding("g", "presence", "presence"), Binding("e", "estop", "E-STOP"),
         Binding("u", "release", "release"), Binding("c", "clear_octomap", "clear octomap"),
         Binding("v", "validate", "validate"), Binding("p", "profile", "profile"),
@@ -371,6 +373,8 @@ class TuiApp(App):
             t.add_row(c.name, c.group, f"[{STYLE[state]}]{state}[/]", hz_s, detail)
         if self.mon.value.get("/e_stop") is True:
             self.sub_title = "E-STOP ACTIVE"
+        elif self.mon.value.get("/mcp_presence_bypass") is True:
+            self.sub_title = "DEV MODE: motion does not wait for Y (d to switch back)"
         elif self.recorder is not None:
             self.sub_title = f"RECORDING {self.recorder.name}" + (" (torque off)" if self.recorder.hand_guided else "")
         else:
@@ -456,6 +460,12 @@ echo "start finished"
 
     def action_limp(self):
         self.ask("limp", 'type "yes": cut servo torque, arms go limp, hold them (stack must be stopped)')
+
+    def action_dev_mode(self):
+        on = self.mon.value.get("/mcp_presence_bypass") is True
+        self.remote(self.prelude() + "ros2 param set /mcp_presence_guard presence_required "
+                    + ("true" if on else "false") + "\n",
+                    "Y required again" if on else "development mode: MCP motion does not wait for Y")
 
     def action_presence(self):
         up = "/mcp_presence_guard" in self.mon.nodes

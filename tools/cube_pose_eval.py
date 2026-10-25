@@ -118,6 +118,55 @@ def fit_cube(mask, T, K, guess_xy):
     return best.x[0], best.x[1], (best.x[2] + math.pi / 4) % (math.pi / 2) - math.pi / 4, 1.0 - best.fun
 
 
+def yellow_map(img, mask):
+    """How yellow each pixel is, 0 (paper or mat) to 1 (the cube), scaled with the cube's own colour and the
+    colour just around it, so the cube's edge sits where the colour is half way between the two."""
+    hsv = cv2.cvtColor(img, cv2.COLOR_BGR2HSV)
+    hue_ok = ((hsv[:, :, 0] >= 18) & (hsv[:, :, 0] <= 45)).astype(np.float32)
+    y = hsv[:, :, 1].astype(np.float32) * hue_ok / 255.0
+    m8 = mask.astype(np.uint8)
+    core = cv2.erode(m8, np.ones((7, 7), np.uint8)) > 0
+    ring = (cv2.dilate(m8, np.ones((25, 25), np.uint8)) > 0) & ~(cv2.dilate(m8, np.ones((9, 9), np.uint8)) > 0)
+    if core.sum() < 20 or ring.sum() < 50:
+        return None
+    hi, lo = float(np.median(y[core])), float(np.median(y[ring]))
+    if hi - lo < 0.2:
+        return None
+    return np.clip((y - lo) / (hi - lo), 0.0, 1.0)
+
+
+def fit_cube_soft(img, mask, T, K, guess_xy):
+    """Like fit_cube, but scores the outline against the graded yellow map (anti-aliased rendering)."""
+    ys, xs = np.nonzero(mask)
+    if len(xs) < 80:
+        return None
+    pmap = yellow_map(img, mask)
+    if pmap is None:
+        return None
+    x0, x1, y0, y1 = max(xs.min() - 12, 0), xs.max() + 12, max(ys.min() - 12, 0), ys.max() + 12
+    S = 4
+    roi = pmap[y0:y1, x0:x1]
+    h, w = roi.shape
+
+    def cost(p):
+        uv = (project(T, K, cube_corners(p[0], p[1], p[2])) - [x0, y0]) * S
+        hull = cv2.convexHull(uv.astype(np.float32)).astype(np.int32)
+        r = np.zeros((h * S, w * S), np.uint8)
+        cv2.fillConvexPoly(r, hull, 1)
+        cov = r.reshape(h, S, w, S).mean(axis=(1, 3))
+        return float(((cov - roi) ** 2).mean())
+
+    best = None
+    for yaw0 in np.radians((0, 22.5, 45, 67.5)):
+        res = minimize(cost, [guess_xy[0], guess_xy[1], yaw0], method="Nelder-Mead",
+                       options={"initial_simplex": np.array([[guess_xy[0], guess_xy[1], yaw0], [guess_xy[0] + 6, guess_xy[1], yaw0],
+                                                             [guess_xy[0], guess_xy[1] + 6, yaw0], [guess_xy[0], guess_xy[1], yaw0 + 0.2]]),
+                                "xatol": 0.02, "fatol": 1e-9, "maxiter": 400})
+        if best is None or res.fun < best.fun:
+            best = res
+    return best.x[0], best.x[1], (best.x[2] + math.pi / 4) % (math.pi / 2) - math.pi / 4, 1.0 - best.fun
+
+
 def yellow_mask(img):
     m = cv2.inRange(cv2.cvtColor(img, cv2.COLOR_BGR2HSV), YELLOW_LO, YELLOW_HI)
     m = cv2.morphologyEx(m, cv2.MORPH_OPEN, np.ones((3, 3), np.uint8))
