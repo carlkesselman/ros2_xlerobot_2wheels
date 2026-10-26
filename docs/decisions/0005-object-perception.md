@@ -1,6 +1,6 @@
 # ADR-0005: Object pose perception for manipulation
 
-- Status: Proposed
+- Status: Accepted for M1 (cube poses implemented; other objects and the learned-detector benchmark on cluttered scenes pending)
 - Date: 2026-10-25
 
 ## Context
@@ -93,6 +93,26 @@ contour method on the placement sheet; repeatability under 1 mm and 1 degree ove
 (2) offline recall of the detector candidates on about 200 labelled recorded frames, full frame
 against table crop; (3) the Jetson port of the winner plus crop-based segmentation, poses within
 1 mm of the laptop's on the same frames.
+
+## Measured so far
+
+Placement sheet, cube on six footprints, head tilted so all seven sheet markers are visible, 0.57 m:
+
+- Colour threshold baseline: mean error 1.2 mm in x and -1.7 mm in y, repeatability 0.13 mm, yaw within 3 degrees.
+- Detector plus mask through the same silhouette fit: the same pose to within 0.6 mm (dx +1.1, dy -1.1 mm, yaw within 3.2
+  degrees). All mask models tried (SAM 2 tiny to base+, MobileSAM, SAM, EfficientViT-SAM L0 to XL1) give the same pose, so the mask
+  model is chosen on speed.
+- Detectors on the same frames, top-scoring box on the cube out of 60: OWLv2 60 (full frame and table crop), Grounding DINO tiny 60
+  (more spurious boxes, about 150 ms on the laptop GPU), OWL-ViT v1 (NanoOWL's model) 20 on the full frame and 60 on a table crop at
+  a 0.02 threshold, YOLO-World 0 unless the prompt names the colour.
+- On the Orin NX in fp16 TensorRT: OWLv2 encoder 122 ms, EfficientViT-SAM L0 encoder 10.8 ms plus decoder 2.4 ms (L1 14.2 ms, L2
+  17.7 ms, XL0 45 ms, XL1 83 ms), OWL-ViT v1 encoder 13 ms.
+- The service (`xlerobot_object_perception`) answers in about 1.7 s for three frames and lands within 1.5 to 1.8 mm of the footprint
+  with the depth-derived table height shifted by the depth bias below.
+
+Known gap: the depth reads about 1% farther than the plane the sheet markers give (5 to 6 mm at 0.55 m). Either the depth scale or the
+head colour camera's focal length (still the factory value) is off; a ChArUco calibration of the head colour lens decides which.
+Until then the pose is about 4 mm off along the viewing ray and the depth-measured cube height reads 26 mm for a 28 mm cube.
 
 ## Out of scope for this ADR
 
