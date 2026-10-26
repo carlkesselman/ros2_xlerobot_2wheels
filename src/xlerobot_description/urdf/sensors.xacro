@@ -101,7 +101,8 @@
            Pitch is -0.1296 rad (7.4 deg nose up) relative to base_link. The camera's own IMU
            read 9.2 deg higher than the joints predicted, at head tilt 0 and at -0.59 rad, and a
            flat ChArUco board agrees to about 1.5 deg; 1.8 deg of that is the base's own lean
-           (base.pitch_up in robot_dimensions.yaml). Position: the camera sits 45 mm further left
+           (base.pitch_up in robot_dimensions.yaml). The roll and pitch (2.5 and 1.5 deg about the base axes at pan 0) make the
+           table plane in the depth cloud level, the table measured level with a leveler. Position: the camera sits 45 mm further left
            (+y) than the mount centre, found by panning the head over a fixed ChArUco board (board position
            in the base frame scattered 8 mm before, 1.8 mm after). Roll (about 1 deg) and
            yaw are left at 0. -->
@@ -121,7 +122,7 @@
       <joint name="head_camera_joint" type="fixed">
         <parent link="head_camera_mount"/>
         <child  link="head_camera_link"/>
-        <origin xyz="0.0052 0.0451 -0.0025" rpy="0 -0.1296 0"/>
+        <origin xyz="0.0052 0.0451 -0.0025" rpy="0.036680 -0.104329 0.019016"/>
       </joint>
       <link name="head_link"/>
       <joint name="head_link_joint" type="fixed">

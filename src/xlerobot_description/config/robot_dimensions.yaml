@@ -200,7 +200,7 @@ xlerobot:
     # frame_correction: the arms' frame relative to the body (equal-and-opposite to the head-vs-arm
     # difference, the data cannot say which of the two is off). wrist_camera: the optical frame's
     # position and rotation as measured.
-    frame_correction: {xyz: "-0.014401 0.038884 -0.006135", rpy: "0.048874 -0.019044 0.004160"}
+    frame_correction: {xyz: "0.023183 -0.006399 -0.008623", rpy: "0.010156 -0.050829 0.004562"}
     wrist_camera:
       left:  {xyz: "-0.015770 0.015190 0.003387", rpy: "0.376871 -1.549444 2.303024"}
       right: {xyz: "0.004451 0.026293 0.013168", rpy: "-0.319586 -1.544162 3.034952"}
