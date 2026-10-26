@@ -17,7 +17,9 @@ that node since this watches operator attention, not servo health, and is only r
 something is actually driving the robot via MCP.
 """
 import rclpy
+from rcl_interfaces.msg import SetParametersResult
 from rclpy.node import Node
+from rclpy.qos import DurabilityPolicy, QoSProfile, ReliabilityPolicy
 from sensor_msgs.msg import Joy
 from std_msgs.msg import Bool
 
@@ -27,10 +29,18 @@ class McpPresenceGuard(Node):
         super().__init__("mcp_presence_guard")
         self.declare_parameter("presence_button", 5)
         self.declare_parameter("timeout_sec", 5.0)
+        # Development switch: False means MCP motion does not wait for the button. It is False only
+        # until this node restarts (the default is True), so it cannot stay off by accident.
+        # ros2 param set /mcp_presence_guard presence_required false
+        self.declare_parameter("presence_required", True)
         self.button = self.get_parameter("presence_button").value
         self.timeout = self.get_parameter("timeout_sec").value
 
         self.presence_pub = self.create_publisher(Bool, "/mcp_presence_ok", 10)
+        latched = QoSProfile(depth=1, durability=DurabilityPolicy.TRANSIENT_LOCAL, reliability=ReliabilityPolicy.RELIABLE)
+        self.bypass_pub = self.create_publisher(Bool, "/mcp_presence_bypass", latched)
+        self.bypass_pub.publish(Bool(data=False))
+        self.add_on_set_parameters_callback(self.on_params)
         self.create_subscription(Joy, "/joy", self.on_joy, 10)
         self.last_press_time = None
         self.ok_latched = False
@@ -38,12 +48,24 @@ class McpPresenceGuard(Node):
         self.get_logger().info(
             f"mcp presence guard up, button {self.button}, timeout {self.timeout:.1f}s")
 
+    def on_params(self, params):
+        for p in params:
+            if p.name == "presence_required":
+                self.bypass_pub.publish(Bool(data=not p.value))
+                if p.value:
+                    self.get_logger().info("presence required again")
+                else:
+                    self.get_logger().warning("DEVELOPMENT MODE: MCP motion does not wait for the presence button")
+        return SetParametersResult(successful=True)
+
     def on_joy(self, msg: Joy):
         if self.button < len(msg.buttons) and msg.buttons[self.button]:
             self.last_press_time = self.get_clock().now()
 
     def check_watchdog(self):
-        if self.last_press_time is None:
+        if not self.get_parameter("presence_required").value:
+            fresh = True
+        elif self.last_press_time is None:
             fresh = False
         else:
             age = (self.get_clock().now() - self.last_press_time).nanoseconds / 1e9
