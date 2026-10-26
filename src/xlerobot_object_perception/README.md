@@ -26,5 +26,5 @@ depth, status codes (`NO_DET`, `NO_MASK`, `FEW_DEPTH`, `SIZE_OOR`, `STALE_TF`, `
 ## Check against the placement sheet
 
 `tools/perception_check.py` calls the service while looking at the sheet and prints the error to the nearest footprint.
-`table_z_offset_m` in `config/object_perception.yaml` corrects the Gemini 2 depth reading the table about 5 mm low (found with the sheet at 0.57 m;
-the effect is a shift along the viewing ray, so it needs checking at other distances).
+`table_z_offset_m` in `config/object_perception.yaml` stays 0. On the saved sheet frames the depth reads 5-6 mm (about 1%) farther than the plane the sheet markers give;
+whether the depth scale or the head colour camera's focal length is off is settled by calibrating the colour lens (`tools/head_record.py`).
