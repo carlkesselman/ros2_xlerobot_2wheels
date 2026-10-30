@@ -57,7 +57,7 @@ class ObjectPerception(Node):
         self.engines_dir = P("engines_dir", "").value or ENGINES
         self.prompts_file = P("prompts_file", "").value or PROMPTS
         self.sam_variant = P("sam_variant", "l0").value
-        self.table_offset = float(P("table_z_offset_m", 0.0).value)   # depth reads the table low by a few mm; calibrated against the sheet
+        self.depth_scale = float(P("depth_scale", 1.0).value)          # measured with tools/depth_scale.py
         self.prof = {}
         self.det = self.sam = None
         self.table_z = None                                # last good table height, base_footprint, metres
@@ -86,7 +86,7 @@ class ObjectPerception(Node):
 
         def on_depth(m):
             a = np.frombuffer(m.data, np.uint16 if m.encoding == "16UC1" else np.float32).reshape(m.height, m.width)
-            scale = 0.001 if m.encoding == "16UC1" else 1.0
+            scale = (0.001 if m.encoding == "16UC1" else 1.0) * self.depth_scale
             depths.append((_stamp(m), a.astype(np.float32) * scale))
             del depths[:-8]
 
@@ -159,7 +159,7 @@ class ObjectPerception(Node):
             if depth is not None:
                 pr = self._points(depth, ring, K, D)
                 if len(pr) > 200:
-                    z_tab = float(np.median((T_base_cam[:3, :3] @ pr.T).T[:, 2] + T_base_cam[2, 3])) + self.table_offset
+                    z_tab = float(np.median((T_base_cam[:3, :3] @ pr.T).T[:, 2] + T_base_cam[2, 3]))
                     self.table_z = z_tab
             if z_tab is None:
                 codes.append("FEW_DEPTH")
@@ -168,7 +168,7 @@ class ObjectPerception(Node):
             if depth is not None:
                 pt = self._points(depth, cv2.erode(m8, np.ones((5, 5), np.uint8)) > 0, K, D)
                 if len(pt) > 20:
-                    height = float(np.median((T_base_cam[:3, :3] @ pt.T).T[:, 2] + T_base_cam[2, 3]) + self.table_offset - z_tab)
+                    height = float(np.median((T_base_cam[:3, :3] @ pt.T).T[:, 2] + T_base_cam[2, 3]) - z_tab)
             # plane frame = base_footprint axes with the origin on the table; millimetres
             T_cam_base = np.linalg.inv(T_base_cam)
             T_cam_plane = T_cam_base.copy()

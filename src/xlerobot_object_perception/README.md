@@ -27,5 +27,5 @@ depth, status codes (`NO_DET`, `NO_MASK`, `FEW_DEPTH`, `SIZE_OOR`, `STALE_TF`, `
 ## Check against the placement sheet
 
 `tools/perception_check.py` calls the service while looking at the sheet and prints the error to the nearest footprint.
-`table_z_offset_m` in `config/object_perception.yaml` stays 0. On the saved sheet frames the depth reads 5-6 mm (about 1%) farther than the plane the sheet markers give;
-whether the depth scale or the head colour camera's focal length is off is settled by calibrating the colour lens (`tools/head_record.py`).
+`depth_scale` in `config/object_perception.yaml` corrects the depth camera's scale (it reads 0.8% too far); it is
+measured with `tools/depth_scale.py`, see [docs/setup.md](../../docs/setup.md#9-head-depth-scale).

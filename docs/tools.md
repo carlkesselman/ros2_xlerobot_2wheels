@@ -45,6 +45,13 @@ Downloaded model weights, exported ONNX files and TensorRT engines live in `~/.c
 |---|---|
 | `xlerobot_setup_usb_modules.py` | Pins `/dev/xle-bus1`/`xle-bus2` and camera/microphone device names via udev rules, matched by USB physical port and serial - run once per machine. See the main [README's bus layout section](../README.md#bus-layout). |
 
+## Running the robot
+
+| Tool | What it does |
+|---|---|
+| `xlerobot_tui.py` | Console UI on the robot: starts and stops the stack, shows every component's state, topic rates, CPU, memory and GPU, toggles the presence guard and e-stop, records and plays back motions. |
+| `motion_recorder.py` | The TUI's motion record and playback (hand-guided with torque off, or driven by teleop); playback slows to safe joint speeds and sends the wheels through twist_mux below the joystick. |
+
 ## Process management
 
 | Tool | What it does |
@@ -53,6 +60,8 @@ Downloaded model weights, exported ONNX files and TensorRT engines live in `~/.c
 | `isaac_sim_sleep_guard.sh` | Masks systemd's sleep targets for the duration of an Isaac Sim session - suspending while the Isaac Sim process is up can hard-hang the machine, see the script's own header for why. `disable` before starting Isaac Sim, `enable` after. |
 
 ## Servo bus and calibration
+
+The order to run the calibrations in, and where each result goes, is in [setup.md](setup.md).
 
 | Tool | What it does |
 |---|---|
@@ -101,7 +110,23 @@ Downloaded model weights, exported ONNX files and TensorRT engines live in `~/.c
 |---|---|
 | `capture_image.py` | Grabs a single frame from a camera's `image_raw` topic and saves it as a PNG under `captures/` (gitignored). |
 | `calibrate_camera_charuco.py` | Live ChArUco calibration against a camera's real-time feed - move the board in front of the camera while it collects samples. Can watch a camera over the network from another machine, since it's just a ROS 2 subscription. |
+| `calibrate_arm_camera.py` | Calibrates an arm against a fixed ChArUco board with the head camera as the reference: fits the arm's joint zero offsets, its wrist camera's mount and the arms' frame. See [setup.md](setup.md#8-arms-against-the-head-camera). |
+| `calibrate_head_pose.py` | Fits the floor plane in the head depth cloud and prints the head camera mount height, pitch and roll that make the model agree. |
+| `head_record.py` | Saves head camera frames (with `--depth` also the matching depth frames) while you move a board, for a lens calibration or a depth check. |
+| `depth_scale.py` | The head depth camera's scale against the 7x5 board, per distance, from a `head_record.py --depth` folder. See [setup.md](setup.md#9-head-depth-scale). |
+| `side_cam.py` | A plain USB webcam beside the robot as an independent measurement: locked exposure capture and ChArUco lens calibration (`calibrate --from` also fits any recorded folder, e.g. the head camera's). |
+| `generate_charuco.py` | Writes a ChArUco board PNG to print at actual size. |
 | `calibrate_from_bag.py` | Same calibration math as above, but reading images from a recorded rosbag instead of a live feed, so the dataset is fixed once and the math can be iterated on without re-recording. |
+
+## Object perception
+
+| Tool | What it does |
+|---|---|
+| `generate_placement_sheet.py` | A printable sheet (PDF at actual size) with markers around the edge and cube and brick footprints at known positions and yaws: ground truth for object poses. |
+| `cube_pose_eval.py` | Measures the head camera's cube pose on the placement sheet with a colour threshold (no learned model), and saves every frame for comparing models later. |
+| `segment_eval.py` | Scores detectors and mask models (OWLv2, OWL-ViT, Grounding DINO, YOLO-World; SAM 2, MobileSAM, EfficientViT-SAM, also on TensorRT) on saved frames through the same pose fit. Needs `perception/requirements.txt`. |
+| `perception_check.py` | Calls the object pose service while the head camera sees the placement sheet and prints the error to the nearest footprint. |
+| `perception/export_models.py`, `perception/build_engines.sh` | Export the models to ONNX (with torch) and build TensorRT engines on the robot, see [the package README](../src/xlerobot_object_perception/README.md). |
 
 ## Spatial memory
 

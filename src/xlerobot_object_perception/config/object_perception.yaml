@@ -11,4 +11,6 @@ object_perception:
     engines_dir: ""           # empty = ~/.cache/xlerobot/engines
     prompts_file: ""          # empty = ~/.cache/xlerobot/prompts.npz
     sam_variant: l0
-    table_z_offset_m: 0.0     # keep 0: the depth and the colour camera disagree by ~1% of the distance, to be settled by a head colour lens calibration
+    # Multiplies the head depth camera's readings. This Gemini 2 reads 0.8% too far, the same from 0.35 to 0.8 m
+    # (tools/depth_scale.py against the 7x5 ChArUco board, 91 frames, 2026-10-30; docs/setup.md#9-head-depth-scale).
+    depth_scale: 0.992
