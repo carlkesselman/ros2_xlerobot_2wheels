@@ -27,7 +27,13 @@ Heavy topics (images, clouds) are never subscribed: a standing remote raw-image 
 stalled the Gemini driver, so cameras are judged by their camera_info stream.
 """
 import os
+import re
 import sys
+
+# the robot's RMW and discovery settings (tools/ros_env.sh), unless the shell already set them
+with open(os.path.join(os.path.dirname(os.path.abspath(__file__)), "ros_env.sh")) as _f:
+    for _k, _v in re.findall(r"^export (\w+)=(\S+)", _f.read(), re.M):
+        os.environ.setdefault(_k, _v)
 
 # the system python has an old textual (and, on the laptop, a numpy that clashes); the venv has the right set
 _venv = os.path.expanduser("~/venvs/xlerobot-mcp/bin/python")
@@ -356,7 +362,7 @@ class TuiApp(App):
         self.query_one(RichLog).write(f"[dim]{time.strftime('%H:%M:%S')}[/dim] {text}")
 
     def refresh_table(self):
-        self.query_one("#stats", Static).update(self.stats.text)
+        self.query_one("#stats", Static).update(f"{self.stats.text}   ROS nodes seen {len(self.mon.nodes)}")
         expected = PROFILES[self.profile][0]
         t = self.query_one(DataTable)
         t.clear()
