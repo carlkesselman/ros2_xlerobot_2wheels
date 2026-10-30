@@ -7,6 +7,9 @@ Move the 7x5 ChArUco board slowly through many poses while it records: near and 
 tilted, and above all across the whole image, including the bottom and the corners (where the lens
 distortion is largest and where objects are measured). Frames go to ~/head_calib/calib_<time>/. Fit them on
 the laptop with: python3 tools/side_cam.py calibrate --from <folder> --name head_color
+
+--depth also saves the depth frame closest in time to each colour frame (depth_NNNN.png, 16-bit millimetres), for
+checking the depth scale against the board: hold the board flat and still at several distances, 35-80 cm.
 """
 import argparse
 import os
@@ -24,6 +27,7 @@ def main():
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument("--seconds", type=float, default=40.0)
     ap.add_argument("--every", type=float, default=0.3)
+    ap.add_argument("--depth", action="store_true", help="also save the matching depth frame")
     a = ap.parse_args()
     out = os.path.expanduser(time.strftime("~/head_calib/calib_%Y%m%d_%H%M%S"))
     os.makedirs(out, exist_ok=True)
@@ -31,12 +35,24 @@ def main():
     node = rclpy.create_node("head_record")
     last = [None]
     node.create_subscription(Image, "/cameras/head/image_raw", lambda m: last.__setitem__(0, m), qos_profile_sensor_data)
+    depths = []
+    stamp = lambda m: m.header.stamp.sec + m.header.stamp.nanosec * 1e-9  # noqa: E731
+    if a.depth:
+        def on_depth(m):
+            depths.append(m)
+            del depths[:-6]
+        node.create_subscription(Image, "/cameras/head/depth/image_raw", on_depth, qos_profile_sensor_data)
     print(f"recording {a.seconds:g} s to {out}: move the board through the whole image, including the bottom and the corners")
     t0, n, t_next = time.time(), 0, 0.0
     while time.time() - t0 < a.seconds:
         rclpy.spin_once(node, timeout_sec=0.05)
         m = last[0]
         if m is not None and time.time() >= t_next:
+            if a.depth:
+                d = min(depths, key=lambda x: abs(stamp(x) - stamp(m))) if depths else None
+                if d is None or abs(stamp(d) - stamp(m)) > 0.03 or d.encoding != "16UC1":
+                    continue
+                cv2.imwrite(os.path.join(out, f"depth_{n:04d}.png"), np.frombuffer(d.data, np.uint16).reshape(d.height, d.width))
             img = np.frombuffer(m.data, np.uint8).reshape(m.height, m.width, 3)
             cv2.imwrite(os.path.join(out, f"{n:04d}.png"), img[:, :, ::-1] if m.encoding == "rgb8" else img)
             n += 1
