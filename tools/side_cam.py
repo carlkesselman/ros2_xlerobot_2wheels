@@ -43,14 +43,20 @@ def make_board(name):
 
 
 def pick_board(frames):
-    """7x5 if no marker ID above 16 shows up, otherwise 11x8."""
+    """The board whose marker IDs dominate: the 7x5 has IDs 0-16, the 11x8 0-43. A single stray or misread ID above 16
+    must not switch to the 11x8, so count frames where most markers are above 16."""
     dic = aruco.getPredefinedDictionary(aruco.DICT_4X4_250)
-    top = 0
+    big = small = 0
     for f in frames:
         _, mi, _ = aruco.detectMarkers(cv2.cvtColor(f, cv2.COLOR_BGR2GRAY), dic)
-        if mi is not None and len(mi):
-            top = max(top, int(mi.max()))
-    return "7x5" if top <= 16 else "11x8"
+        if mi is None or len(mi) < 4:
+            continue
+        hi = int((mi > 16).sum())
+        if hi * 2 > len(mi) or len(mi) > 22:
+            big += 1
+        else:
+            small += 1
+    return "11x8" if big > small else "7x5"
 
 
 def open_camera(dev, lock=True):
