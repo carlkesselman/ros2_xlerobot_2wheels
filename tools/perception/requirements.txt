@@ -1,0 +1,17 @@
+# Exporting and benchmarking the perception models (tools/perception/export_models.py, tools/segment_eval.py) on a machine
+# with an NVIDIA GPU and CUDA. Use a venv of its own: torch and opencv-python want NumPy 2, the ROS tools want 1.x.
+# The robot itself needs only tools/requirements.txt plus the exported ONNX files.
+torch
+torchvision
+transformers
+huggingface_hub
+onnx
+onnxscript
+numpy
+scipy
+opencv-python
+ultralytics                                   # YOLO-World, MobileSAM and SAM in the benchmark
+git+https://github.com/ultralytics/CLIP.git   # YOLO-World's text encoder
+segment-anything                              # EfficientViT-SAM's prompt encoder
+timm
+einops

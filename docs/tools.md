@@ -4,6 +4,41 @@ Every script in `tools/`, grouped by what it's for. Each one also has its own us
 docstring (`--help` where it takes args) - this is the index, not a replacement for reading
 the script itself.
 
+## Python environment
+
+The tools are plain Python scripts on top of ROS 2 Jazzy. ROS's own Python packages (`rclpy`, `cv_bridge`, the message
+types), OpenCV, SciPy and, on a Jetson, TensorRT come from the system; the few packages Ubuntu does not ship (or ships too
+old) go into a venv that also sees the system packages. Ubuntu 24.04 refuses `pip install` into the system Python, and
+forcing it can replace the NumPy that ROS was built against.
+
+On the robot (and on any machine that runs the TUI, the MCP server or the calibration tools):
+
+```bash
+source /opt/ros/jazzy/setup.bash
+python3 -m venv --system-site-packages ~/venvs/xlerobot
+source ~/venvs/xlerobot/bin/activate
+pip install -r tools/requirements.txt
+```
+
+Then run tools with that venv active, for example:
+
+```bash
+source /opt/ros/jazzy/setup.bash && source install/setup.bash && source ~/venvs/xlerobot/bin/activate
+python3 tools/xlerobot_tui.py
+```
+
+The MCP server's `run.sh` and the object perception launch file activate the venv themselves; they look for it in
+`$XLEROBOT_VENV` and fall back to `~/venvs/xlerobot`, so set that variable if you keep it elsewhere.
+
+Two tools need a venv of their own because their packages want NumPy 2, which breaks `cv_bridge`:
+
+| Venv | Requirements | For |
+|---|---|---|
+| `~/venvs/xlerobot-rerun` (no `--system-site-packages`) | `tools/requirements-rerun.txt` | `rerun_bridge.py`; keep `rerun-sdk` at the viewer's version |
+| `~/venvs/xlerobot-models` (no `--system-site-packages`) | `tools/perception/requirements.txt` | exporting and benchmarking the perception models (`tools/perception/export_models.py`, `segment_eval.py`), on a machine with an NVIDIA GPU |
+
+Downloaded model weights, exported ONNX files and TensorRT engines live in `~/.cache/xlerobot`.
+
 ## Setup
 
 | Tool | What it does |

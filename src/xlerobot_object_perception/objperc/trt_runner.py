@@ -2,7 +2,11 @@
 system Python. Inputs and outputs are numpy arrays; shapes may be dynamic (set per call)."""
 import numpy as np
 import tensorrt as trt
-from cuda.bindings import runtime as cudart
+
+try:
+    from cuda.bindings import runtime as cudart
+except ImportError as e:
+    raise ImportError("cuda-python is missing: activate the tools venv, or pip install -r tools/requirements.txt") from e
 
 _LOGGER = trt.Logger(trt.Logger.WARNING)
 

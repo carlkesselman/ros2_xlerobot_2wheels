@@ -1,9 +1,10 @@
 #!/usr/bin/env python3
 """Experiment 2/3 of ADR-0005: the cube pose from a learned detector and mask instead of the yellow threshold.
 
-Scores saved frames of tools/cube_pose_eval.py (laptop, GPU, no ROS):
+Scores saved frames of tools/cube_pose_eval.py on a machine with an NVIDIA GPU, no ROS needed (packages:
+tools/perception/requirements.txt; downloaded weights go to ~/.cache/xlerobot):
 
-  ~/venvs/xlerobot-perception/bin/python tools/segment_eval.py ~/pose_eval/cube_<time> [--step 4] [--prompt "a cube"]
+  python3 tools/segment_eval.py ~/pose_eval/cube_<time> [--step 4] [--prompt "a cube"]
 
 Only the mask source changes. The sheet pose, the camera model and the silhouette fit are the ones of
 cube_pose_eval, so the numbers compare directly with its table. Backends: `yellow` (the baseline) and

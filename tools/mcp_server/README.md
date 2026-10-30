@@ -10,24 +10,8 @@ plane-assumption or multi-observation triangulation, see `spatial_memory_math.py
 
 ## Setup
 
-Needs ROS sourced (for `rclpy`, `cv_bridge`, `moveit_msgs`, `nav2_msgs`) plus the `mcp` pip
-package. A `--system-site-packages` venv gets both without touching system Python:
-
-```bash
-source /opt/ros/jazzy/setup.bash && source install/setup.bash   # from the workspace root
-sudo apt install ros-jazzy-cv-bridge ros-jazzy-vision-opencv     # if not already present
-python3 -m venv --system-site-packages ~/venvs/xlerobot-mcp
-source ~/venvs/xlerobot-mcp/bin/activate
-pip install -r tools/mcp_server/requirements.txt
-```
-
-If `import cv2` fails with a NumPy ABI error ("compiled using NumPy 1.x cannot be run in NumPy
-2.x") - confirmed to happen when a newer numpy is already installed in `~/.local` or similar,
-which `--system-site-packages` inherits and takes priority over the apt-installed cv2's expected
-ABI: `pip install "numpy<2"` inside this venv (shadows the inherited one with a venv-local
-version, doesn't touch anything outside it). Ignore any `pip` dependency-conflict warning this
-prints about unrelated packages elsewhere on the system (e.g. `rerun-sdk`) - those aren't used
-here.
+Needs ROS sourced (for `rclpy`, `cv_bridge`, `moveit_msgs`, `nav2_msgs`) plus the `mcp` pip package, which the tools venv
+has; see [docs/tools.md](../../docs/tools.md#python-environment).
 
 Register in `.mcp.json` at the repo root (gitignored - it only ever holds a machine-specific
 absolute path):
@@ -45,8 +29,8 @@ absolute path):
 `run.sh` sources ROS and the venv itself before running `server.py` - confirmed by testing, MCP
 stdio clients only pass an allow-listed subset of environment variables to the server process
 (`PATH`, `HOME`, ... not `PYTHONPATH`/`AMENT_PREFIX_PATH`/`LD_LIBRARY_PATH`), so `rclpy` is not
-visible otherwise, regardless of what's sourced in the shell that started Claude Code. Edit the
-two `source` lines in `run.sh` to match your ROS install and venv location, and make sure
+visible otherwise, regardless of what's sourced in the shell that started Claude Code. It activates
+`$XLEROBOT_VENV` (`~/venvs/xlerobot` by default); edit the ROS `source` line if ROS is installed elsewhere, and make sure
 `ROS_DOMAIN_ID` (if you use one) matches the rest of the bringup - add an `export` for it in
 `run.sh` alongside the other `source` lines if so.
 

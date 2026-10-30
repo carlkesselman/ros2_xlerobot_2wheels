@@ -5,8 +5,7 @@
   python3 tools/xlerobot_tui.py --host jetson --profile sensing
 
 Run it on the robot (ssh -t jetson, then this script): ROS 2 stays on the Jetson, see tools/ros_env.sh.
-It needs ROS 2 Jazzy sourced and `textual`; the Jetson venv ~/venvs/xlerobot-mcp has them.
-Needs `textual` (pip install textual); the venv at ~/venvs/xlerobot-mcp has it.
+Needs ROS 2 Jazzy sourced and the tools venv active (docs/tools.md#python-environment).
 
 The table shows every component the chosen profile should have running, with its topic rate,
 message age and stamp skew (camera stamps 160 s behind the clock emptied the octomap once), the
@@ -35,11 +34,6 @@ with open(os.path.join(os.path.dirname(os.path.abspath(__file__)), "ros_env.sh")
     for _k, _v in re.findall(r"^export (\w+)=(\S+)", _f.read(), re.M):
         os.environ.setdefault(_k, _v)
 
-# the system python has an old textual (and, on the laptop, a numpy that clashes); the venv has the right set
-_venv = os.path.expanduser("~/venvs/xlerobot-mcp/bin/python")
-if os.path.exists(_venv) and os.path.realpath(sys.prefix) != os.path.realpath(os.path.dirname(os.path.dirname(_venv))):
-    os.execv(_venv, [_venv] + sys.argv)
-
 import argparse
 import collections
 import socket
@@ -56,9 +50,12 @@ from rclpy.executors import SingleThreadedExecutor
 from rclpy.qos import QoSProfile, ReliabilityPolicy, DurabilityPolicy, HistoryPolicy
 from rosidl_runtime_py.utilities import get_message
 from std_msgs.msg import Bool
-from textual.app import App, ComposeResult
-from textual.binding import Binding
-from textual.widgets import DataTable, Footer, Header, Input, RichLog, Static
+try:
+    from textual.app import App, ComposeResult
+    from textual.binding import Binding
+    from textual.widgets import DataTable, Footer, Header, Input, RichLog, Static
+except ImportError:
+    sys.exit("textual is missing: activate the tools venv, or pip install -r tools/requirements.txt (docs/tools.md#python-environment)")
 
 import motion_recorder
 

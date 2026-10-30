@@ -24,10 +24,6 @@ import os
 import sys
 import time
 
-_venv = os.path.expanduser("~/venvs/xlerobot-mcp/bin/python")
-if __name__ == "__main__" and os.path.exists(_venv) and os.path.realpath(sys.prefix) != os.path.realpath(os.path.dirname(os.path.dirname(_venv))):
-    os.execv(_venv, [_venv] + sys.argv)
-
 import cv2  # noqa: E402
 import cv2.aruco as aruco  # noqa: E402
 import numpy as np  # noqa: E402

@@ -16,12 +16,13 @@ depth, status codes (`NO_DET`, `NO_MASK`, `FEW_DEPTH`, `SIZE_OOR`, `STALE_TF`, `
 
 ## Setup
 
-1. Laptop: `~/venvs/xlerobot-perception/bin/python tools/perception/export_models.py` (needs torch) writes the ONNX files and the
-   text embeddings of the prompts. Copy `owlv2_det.onnx` and the EfficientViT-SAM `evit_l0_*.onnx` to `~/onnx/` on the Jetson and
-   `prompts.npz` to `~/.cache/xlerobot/`. A new prompt means exporting again, since the text encoder is not on the Jetson.
-2. Jetson: `tools/perception/build_engines.sh` builds the TensorRT engines (`~/.cache/xlerobot/engines`).
-3. Jetson: a venv with the system packages plus `cuda-python`: `python3 -m venv --system-site-packages ~/venvs/xlerobot-perception && ~/venvs/xlerobot-perception/bin/pip install cuda-python`.
-   The launch file runs the node with it (`python:=` or `XLEROBOT_PERCEPTION_PYTHON` to change).
+1. On a machine with an NVIDIA GPU and torch (`tools/perception/requirements.txt`, see [docs/tools.md](../../docs/tools.md#python-environment)):
+   `python3 tools/perception/export_models.py` writes the ONNX files and the text embeddings of the prompts to
+   `~/.cache/xlerobot/onnx`. Copy `owlv2_det.onnx` and `evit_l0_*.onnx` to `~/onnx/` on the robot and `prompts.npz` to
+   `~/.cache/xlerobot/`. A new prompt means exporting again, since the text encoder does not run on the robot.
+2. On the robot: `tools/perception/build_engines.sh` builds the TensorRT engines into `~/.cache/xlerobot/engines`.
+3. The node runs with the tools venv's Python (`$XLEROBOT_VENV`, `~/venvs/xlerobot` by default), which has `cuda-python`;
+   TensorRT itself comes from JetPack. `python:=` on the launch file overrides it.
 
 ## Check against the placement sheet
 

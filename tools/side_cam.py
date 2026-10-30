@@ -23,10 +23,6 @@ import termios
 import time
 import tty
 
-_venv = os.path.expanduser("~/venvs/xlerobot-mcp/bin/python")
-if os.path.exists(_venv) and os.path.realpath(sys.prefix) != os.path.realpath(os.path.dirname(os.path.dirname(_venv))):
-    os.execv(_venv, [_venv] + sys.argv)
-
 import cv2  # noqa: E402
 import cv2.aruco as aruco  # noqa: E402
 import numpy as np  # noqa: E402

@@ -107,6 +107,9 @@ colcon build --symlink-install
 source install/setup.bash
 ```
 
+The Python tools in `tools/` (the TUI, calibration, the MCP server) need a venv on top of this; see
+[docs/tools.md](docs/tools.md#python-environment).
+
 View the model with no hardware attached:
 
 ```bash

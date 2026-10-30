@@ -1,0 +1,6 @@
+# tools/rerun_bridge.py. A venv of its own (without --system-site-packages): rerun-sdk needs NumPy 2, which breaks
+# cv_bridge in the main tools venv. rclpy still comes from the sourced ROS install (PYTHONPATH).
+# Keep the version equal to the Rerun viewer you connect to.
+rerun-sdk==0.38.1
+numpy
+pyyaml

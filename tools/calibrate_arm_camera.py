@@ -26,11 +26,6 @@ DICT_4X4_250). The wrist camera sees 11 mm markers only within about 20 cm.
 import os
 import sys
 
-# the system numpy 2 in ~/.local clashes with the system OpenCV; the MCP venv has a working set
-_venv = os.path.expanduser("~/venvs/xlerobot-mcp/bin/python")
-if os.path.exists(_venv) and os.path.realpath(sys.prefix) != os.path.realpath(os.path.dirname(os.path.dirname(_venv))):
-    os.execv(_venv, [_venv] + sys.argv)
-
 import cv2
 
 import argparse

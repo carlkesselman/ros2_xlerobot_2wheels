@@ -1,8 +1,8 @@
 #!/usr/bin/env python3
-"""Export the perception models to ONNX on the laptop (needs torch; ~/venvs/xlerobot-perception) and copy them to the Jetson,
-where `build_engines.sh` turns them into TensorRT engines.
+"""Export the perception models to ONNX on a machine with torch (tools/perception/requirements.txt) and copy them to the
+robot, where `build_engines.sh` turns them into TensorRT engines.
 
-  ~/venvs/xlerobot-perception/bin/python tools/perception/export_models.py [--out ~/.cache/xlerobot/onnx] [--prompts "a cube" "a toy block"]
+  python3 tools/perception/export_models.py [--out ~/.cache/xlerobot/onnx] [--prompts "a cube" "a toy block"]
 
 owlv2_det.onnx: pixel_values [1,3,960,960] + query_embeds [1,1,512] -> logits [1,3600,1], boxes [1,3600,4] (cx,cy,w,h normalised
 to the padded square). The text side runs here, once per prompt: the embeddings go to prompts.npz, so changing the prompt on the
