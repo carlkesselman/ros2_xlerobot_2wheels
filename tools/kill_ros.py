@@ -105,12 +105,36 @@ def find_matches():
 DEFAULT_USB_RESET = "2bc5:0670"  # Orbbec Gemini 2
 
 
+def _shm_in_use():
+    """FastDDS shared-memory files some live process still maps or holds open (the TUI, the MCP server ...)."""
+    used = set()
+    for pid in filter(str.isdigit, os.listdir("/proc")):
+        try:
+            with open(f"/proc/{pid}/maps") as f:
+                used.update(line.split(None, 5)[5].strip() for line in f if "/dev/shm/" in line and len(line.split(None, 5)) == 6)
+            fd_dir = f"/proc/{pid}/fd"
+            for fd in os.listdir(fd_dir):
+                t = os.readlink(os.path.join(fd_dir, fd))
+                if t.startswith("/dev/shm/"):
+                    used.add(t)
+        except OSError:
+            continue
+    return used
+
+
+def _shm_owner(f):
+    """The segment or port file a FastDDS file belongs to: fastrtps_X_el and sem.fastrtps_X_mutex go with fastrtps_X."""
+    d, b = os.path.split(f)
+    return os.path.join(d, b.removeprefix("sem.").removesuffix("_el").removesuffix("_mutex"))
+
+
 def clean_shm(dry_run):
     import glob
     uid = os.getuid()
+    used = {_shm_owner(f) for f in _shm_in_use()}
     files = [f for pat in ("/dev/shm/fastrtps_*", "/dev/shm/sem.fastrtps_*") for f in glob.glob(pat)
-             if os.stat(f).st_uid == uid]
-    print(f"{len(files)} stale FastDDS shared-memory file(s) owned by this user")
+             if os.stat(f).st_uid == uid and _shm_owner(f) not in used]
+    print(f"{len(files)} stale FastDDS shared-memory file(s) owned by this user ({len(used)} in use by running processes, kept)")
     if dry_run:
         return
     for f in files:
