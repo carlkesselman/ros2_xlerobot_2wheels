@@ -6,8 +6,9 @@ skill_server:
     head_camera_frame: ""         # empty = the frame_id of the head camera's images
     look_at_tolerance_deg: 2.0
     approach_height_m: 0.05       # gap between the object's top and the claw tip
-    # The tool point (claw tip) in each arm's gripper_link frame. The printed claws lie along the link's -y axis and
-    # differ in length (right 13.2 cm measured, left about 11 cm); replace with the parallel gripper's measured TCP.
+    # The tool point (claw tip) in each arm's gripper_link frame. Printed claws lie along the link's -y axis; their
+    # length depends on the print (these are the reference robot's: right 13.2 cm, left about 11 cm). Measure yours,
+    # e.g. by resting the tip on the table and finding it in the wrist camera image.
     tip_correction_tolerance_m: 0.005   # re-aim the tool point while it lands farther than this from the goal
     tip_correction_steps: 2
     # approach keeps the wrist camera above the hand (clear of the table, looking down at the target): wrist roll

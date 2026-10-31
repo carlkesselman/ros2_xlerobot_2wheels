@@ -9,9 +9,9 @@ prevents is usually confusing enough to cost an afternoon.
 - **JetPack 7.2** (L4T R39, Ubuntu 24.04, CUDA 13, TensorRT 10.16) on the Orin NX, see
   [ADR-0002](decisions/0002-jazzy-and-isaac-ros.md).
 - **Power mode**: a high mode for the whole stack. Check with `nvpmodel -q`, set with `sudo nvpmodel -m <id>`; the modes
-  are listed in `/etc/nvpmodel.conf`. This robot runs the 40 W mode.
+  are listed in `/etc/nvpmodel.conf`. The full stack has been run in the Orin NX 16 GB's 40 W mode.
 - **Fan**: `FAN_DEFAULT_PROFILE` in `/etc/nvfancontrol.conf` (`quiet` or `cool`), then
-  `sudo systemctl restart nvfancontrol`. Under the full stack the board runs at about 65-70 °C.
+  `sudo systemctl restart nvfancontrol`. Under the full stack expect about 65-70 °C.
 - `jetson-stats` (`jtop`) to watch CPU, GPU and temperatures, optional.
 
 ## 2. ROS 2

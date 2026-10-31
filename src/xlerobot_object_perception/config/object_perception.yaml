@@ -11,6 +11,6 @@ object_perception:
     engines_dir: ""           # empty = ~/.cache/xlerobot/engines
     prompts_file: ""          # empty = ~/.cache/xlerobot/prompts.npz
     sam_variant: l0
-    # Multiplies the head depth camera's readings. This Gemini 2 reads 0.8% too far, the same from 0.35 to 0.8 m
-    # (tools/depth_scale.py against the 7x5 ChArUco board, 91 frames, 2026-10-30; docs/setup.md#9-head-depth-scale).
+    # Multiplies the head depth camera's readings. Measure it for your camera with tools/depth_scale.py
+    # (docs/setup.md#9-head-depth-scale); this value is the reference robot's, whose camera read 0.8% too far.
     depth_scale: 0.992

@@ -104,7 +104,7 @@ Read [docs/arms-bringup.md](docs/arms-bringup.md) before the arms' first start.
 ## Before you plug anything in
 
 **Upstream's wheel radius is wrong; measure yours.** `config_xlerobot_2wheels.py` says `wheel_radius = 0.05`, the
-0.4.0 build notes say 5 inch wheels, and this robot's measured 0.0625 m. It goes in
+0.4.0 build notes say 5 inch wheels, and the reference robot's measured 0.0625 m. It goes in
 `src/xlerobot_description/config/robot_dimensions.yaml`, and odometry and Nav2's limits scale from it.
 
 **Neither upstream URDF has wheels.** Both put the base on a virtual planar joint, a simulation trick.

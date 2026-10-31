@@ -68,9 +68,9 @@ Move the 11x8 board in front of the camera at many angles and distances while it
 
 ## 7. Head camera
 
-The Gemini 2 publishes its factory calibration (`/cameras/head/camera_info`), and it is used as is: a ChArUco lens
-calibration of this camera (`tools/head_record.py`, then `tools/side_cam.py calibrate --from <folder>`) agreed with it
-to within the fit's uncertainty.
+The Gemini 2 publishes its factory calibration (`/cameras/head/camera_info`), and the stack uses it as is. To check
+it, record the 7x5 board (`tools/head_record.py`) and fit it (`tools/side_cam.py calibrate --from <folder>`); a
+matching focal length within the fit's uncertainty means the factory values are good.
 
 Its mount on the head is `head_camera_joint` in `src/xlerobot_description/urdf/sensors.xacro`.
 `tools/calibrate_head_pose.py` fits the floor plane in the depth cloud and prints the height, pitch and roll that make
@@ -101,8 +101,9 @@ python3 tools/depth_scale.py ~/head_calib/calib_<time>
 
 Compares the depth with the board's distance from the colour image, per distance band. A ratio that is the same at
 every distance is a scale error: put the printed `depth_scale` into
-`src/xlerobot_object_perception/config/object_perception.yaml`. This robot's camera reads 0.8% too far. The point
-cloud the octomap uses is not corrected; for obstacles that is well within what matters.
+`src/xlerobot_object_perception/config/object_perception.yaml` (the value there is from the reference robot, where the
+camera read 0.8% too far; measure your own). The point cloud the octomap uses is not corrected; an error of this size
+does not matter for obstacles.
 
 ## 10. Object perception
 
