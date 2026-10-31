@@ -26,6 +26,8 @@ Running on the real robot:
 Not yet:
 
 - [ ] Grasping: the wrist-camera closed loop for the last centimetre
+- [ ] Task execution: a planner writing behaviour trees, an executive on the robot and a visual watcher, see
+  [ADR-0006](docs/decisions/0006-plan-execute-watch.md) (proposed)
 - [ ] Tag-based AMCL re-localization (ArUco home marker): built, not tested end to end
 - [ ] cuVSLAM / nvblox
 - [ ] CI
