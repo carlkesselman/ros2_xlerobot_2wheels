@@ -43,15 +43,15 @@ CUBE_MM = 28.0
 YELLOW_LO, YELLOW_HI = (20, 90, 90), (40, 255, 255)
 
 
-def sheet_pose(img, sheet, scale, K, D=None):
+def sheet_pose(img, sheet, scale, K, D=None, min_span=(100, 60), min_markers=4):
     """Pose of the sheet in the camera (4x4, millimetres), from its markers; None if too few agree."""
     dic = aruco.getPredefinedDictionary(aruco.DICT_4X4_50)
     mc, mi, _ = aruco.detectMarkers(cv2.cvtColor(img, cv2.COLOR_BGR2GRAY), dic)
-    if mi is None or len(mi) < 4:
+    if mi is None or len(mi) < min_markers:
         return None, 0
     by_id = {m["id"]: np.array(m["corners_mm"], np.float32) * scale for m in sheet["markers"]}
     keep = [k for k, i in enumerate(mi.ravel()) if int(i) in by_id]
-    if len(keep) < 4:
+    if len(keep) < min_markers:
         return None, 0
     src = np.array([by_id[int(mi[k][0])].mean(0) for k in keep], np.float32)
     dst = np.array([mc[k].reshape(-1, 2).mean(0) for k in keep], np.float32)
@@ -70,9 +70,9 @@ def sheet_pose(img, sheet, scale, K, D=None):
     if not n:
         return None, 0
     span = np.ptp(obj[:, :2], axis=0)
-    if span[0] < 100 or span[1] < 60:                # a sheet seen only along one edge gives a poor plane
+    if span[0] < min_span[0] or span[1] < min_span[1]:  # a distant sheet seen only along one edge gives a poor plane
         return None, 0
-    if len(good) < len(sheet["markers"]) and not getattr(sheet_pose, "warned", False):
+    if min_span[0] >= 100 and len(good) < len(sheet["markers"]) - 1 and not getattr(sheet_pose, "warned", False):
         print(f"  warning: only {len(good)} of {len(sheet['markers'])} sheet markers are visible; the sheet's tilt is poorly determined and positions away from the visible markers can be off by 1-3 mm (move the sheet or tilt the head so all of them are in view)")
         sheet_pose.warned = True
     b = int(np.argmin([float(np.ravel(e)[0]) for e in errs]))

@@ -32,7 +32,9 @@ import sys
 # the robot's RMW and discovery settings (tools/ros_env.sh), unless the shell already set them
 with open(os.path.join(os.path.dirname(os.path.abspath(__file__)), "ros_env.sh")) as _f:
     for _k, _v in re.findall(r"^export (\w+)=(\S+)", _f.read(), re.M):
-        os.environ.setdefault(_k, _v)
+        if "$" not in _v:
+            os.environ.setdefault(_k, _v)
+os.environ.setdefault("CYCLONEDDS_URI", "file://" + os.path.join(os.path.dirname(os.path.abspath(__file__)), "cyclonedds.xml"))
 
 import argparse
 import collections

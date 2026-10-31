@@ -34,7 +34,7 @@ from rclpy.qos import DurabilityPolicy, QoSProfile, ReliabilityPolicy, qos_profi
 from rclpy.time import Time
 from sensor_msgs.msg import CameraInfo, JointState
 from std_msgs.msg import Bool, String
-from std_srvs.srv import SetBool
+from std_srvs.srv import Empty, SetBool
 from tf2_ros import Buffer, TransformListener
 from trajectory_msgs.msg import JointTrajectoryPoint
 from vision_msgs.msg import Detection3DArray
@@ -72,6 +72,7 @@ class SkillServer(Node):
         self.default_scaling = float(P("default_scaling", 1.0).value)
         self.table_box = bool(P("table_box", True).value)
         self.table_margin = float(P("table_margin_m", 0.025).value)
+        self.table_min_x = float(P("table_box_min_x", 0.20).value)
         self.correct_tol = float(P("tip_correction_tolerance_m", 0.005).value)
         self.correct_steps = int(P("tip_correction_steps", 2).value)
         self.camera_up_roll = {a: float(P(f"camera_up_wrist_roll_{a}", 1.5708).value) for a in ("left", "right")}
@@ -116,6 +117,7 @@ class SkillServer(Node):
         self.validity = self.create_client(GetStateValidity, "/check_state_validity", callback_group=self.cb)
         self.ik = self.create_client(GetPositionIK, "/compute_ik", callback_group=self.cb)
         self.fk = self.create_client(GetPositionFK, "/compute_fk", callback_group=self.cb)
+        self.clear_octomap = self.create_client(Empty, "/clear_octomap", callback_group=self.cb)
         self.get_scene = self.create_client(GetPlanningScene, "/get_planning_scene", callback_group=self.cb)
         self.apply_scene = self.create_client(ApplyPlanningScene, "/apply_planning_scene", callback_group=self.cb)
         self.nav = ActionClient(self, NavigateToPose, "/navigate_to_pose", callback_group=self.cb)
@@ -284,9 +286,20 @@ class SkillServer(Node):
         self._require_safe()
         self._claim(skill, [bus])
         try:
-            handle = self._send(self.move_group, MoveGroup.Goal(request=request, planning_options=PlanningOptions(plan_only=True)),
-                                "move_group (/move_action)")
-            res = self._wait(handle.get_result_async(), 30.0, goal_handle, on_stop=lambda unsafe: handle.cancel_goal_async())
+            for attempt in range(2):
+                handle = self._send(self.move_group, MoveGroup.Goal(request=request, planning_options=PlanningOptions(plan_only=True)),
+                                    "move_group (/move_action)")
+                res = self._wait(handle.get_result_async(), 30.0, goal_handle, on_stop=lambda unsafe: handle.cancel_goal_async())
+                if res.result.error_code.val == 1 or attempt == 1:
+                    break
+                contacts = self._start_state_contacts(group)
+                # stale octomap voxels where the arm itself stands (it sat there while the map filled in): clear once
+                if not contacts or any("<octomap>" not in c for c in contacts.split(", ")):
+                    break
+                if self.clear_octomap.wait_for_service(timeout_sec=2.0):
+                    self.get_logger().info(f"{skill}: start state inside stale octomap voxels, clearing the octomap")
+                    self._wait(self.clear_octomap.call_async(Empty.Request()), 5.0, guard=False)
+                    time.sleep(0.3)
             if res.result.error_code.val != 1:
                 contacts = self._start_state_contacts(group)
                 if contacts:
@@ -343,10 +356,25 @@ class SkillServer(Node):
         scene.allowed_collision_matrix = acm
         table = CollisionObject(id="skill_table")
         table.header.frame_id = BASE_FRAME
+        min_x = self.table_min_x
+        if allow:                                             # stay clear of claws that hang down near the robot
+            for a in ("left", "right"):
+                try:
+                    p = self._tip_in_base(a)
+                except SkillError:
+                    continue
+                if p[2] < table_z + self.table_margin + 0.03 and a != arm:
+                    min_x = max(min_x, p[0] + 0.03)
+            try:
+                own = self._tip_in_base(arm)
+                if own[2] < table_z + self.table_margin + 0.03:
+                    min_x = max(min_x, own[0] + 0.03)
+            except SkillError:
+                pass
         if allow and self.table_box:
             table.operation = CollisionObject.ADD
             table.primitives = [SolidPrimitive(type=SolidPrimitive.BOX, dimensions=[0.8, 1.2, 0.04])]
-            table.primitive_poses = [Pose(position=Point(x=0.15 + 0.4, y=0.0, z=float(table_z) + self.table_margin - 0.02))]
+            table.primitive_poses = [Pose(position=Point(x=min_x + 0.4, y=0.0, z=float(table_z) + self.table_margin - 0.02))]
         else:
             table.operation = CollisionObject.REMOVE
         scene.world.collision_objects = [table]
@@ -372,7 +400,7 @@ class SkillServer(Node):
         req.ik_request.ik_link_name = motion.GROUP_TIP_LINK[group]
         req.ik_request.robot_state = self._state(seed)
         req.ik_request.avoid_collisions = collisions
-        req.ik_request.timeout = DurationMsg(sec=0, nanosec=300_000_000)
+        req.ik_request.timeout = DurationMsg(sec=1, nanosec=0)
         ps = req.ik_request.pose_stamped
         ps.header.frame_id = BASE_FRAME
         ps.pose.position = Point(x=float(link_pos[0]), y=float(link_pos[1]), z=float(link_pos[2]))
@@ -404,8 +432,15 @@ class SkillServer(Node):
         seed.update(seed_overrides or {})
         T = self._fk(arm, seed)
         best, best_err = None, None
+        rng = np.random.default_rng(0)
         for _ in range(iterations):
-            joints = self._ik(arm, np.asarray(target) - T[:3, :3] @ tip, T[:3, :3], seed, collisions)
+            joints = None
+            for attempt in range(4):                          # collision-checked IK can give up near a dense octomap
+                s0 = seed if attempt == 0 else {j: v + (rng.normal(0, 0.15) if j not in (seed_overrides or {}) else 0.0)
+                                                for j, v in seed.items()}
+                joints = self._ik(arm, np.asarray(target) - T[:3, :3] @ tip, T[:3, :3], s0, collisions)
+                if joints is not None:
+                    break
             if joints is None:
                 break
             joints.update(seed_overrides or {})                  # held joints (the wrist roll) stay where asked
@@ -774,6 +809,24 @@ class SkillServer(Node):
             if not group.startswith(g.arm):
                 raise SkillError(R.FAILED, f"'{g.named_position}' belongs to {group}, not the {g.arm} arm")
             request = motion.joint_goal_request(group, entry["joints"], g.scaling)
+        elif g.tool_point:
+            if not g.point.header.frame_id:
+                raise SkillError(R.FAILED, "tool_point needs a point with a frame")
+            target = self._point_in(BASE_FRAME, g.point)
+            roll = {f"{g.arm}_arm_wrist_roll_joint": (self.camera_up_roll[g.arm], self.roll_tol)}
+
+            def moving(phase):
+                fb.phase = phase
+                goal_handle.publish_feedback(fb)
+            if g.table_z > 0.0:
+                self._near_table(g.arm, g.table_z, True)
+            try:
+                residual = self._move_tip("move_arm", goal_handle, g.arm, target, g.scaling, feedback=moving, joints=roll)
+            finally:
+                if g.table_z > 0.0:
+                    self._near_table(g.arm, g.table_z, False)
+            result.result.message = f"{g.arm} tool point at the point, {residual * 1000:.0f} mm by the joint encoders"
+            return
         else:
             group = f"{g.arm}_arm"
             if not g.point.header.frame_id:

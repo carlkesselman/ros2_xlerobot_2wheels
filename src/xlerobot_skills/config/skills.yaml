@@ -17,6 +17,7 @@ skill_server:
     tip_offset_left: [0.0, -0.111, 0.0]
     tip_offset_right: [0.0, -0.132, 0.0]
     table_margin_m: 0.025         # the table box's top above the measured table: the arms sag 1-2 cm below the model
+    table_box_min_x: 0.20         # the table box starts this far in front; the resting claws hang down to table height closer in
     association_gate_m: 0.05      # how far a re-detection may be from the object reference
     nav_timeout_s: 120.0
     arm_timeout_s: 60.0

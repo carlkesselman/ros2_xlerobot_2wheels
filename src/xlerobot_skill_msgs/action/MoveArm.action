@@ -2,6 +2,8 @@
 string arm                            # left or right
 string named_position                 # name in saved_positions.yaml; used when not empty
 geometry_msgs/PointStamped point
+bool tool_point                       # point is for the tool point (claw tip), wrist camera on top; else the gripper link
+float32 table_z                       # with tool_point: height of the table under the point (base_footprint); 0 = none
 float32 scaling                       # velocity and acceleration scaling; 0 = joint_limits.yaml default
 float32 timeout_s
 ---

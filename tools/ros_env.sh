@@ -8,4 +8,6 @@
 # stay inside their composable containers (intra-process, later NITROS), so loopback UDP carries little.
 # Every process must use the same RMW, so interactive shells on the Jetson should source this file too.
 export RMW_IMPLEMENTATION=rmw_cyclonedds_cpp
+# Large socket receive buffers for camera images (tools/cyclonedds.xml; the kernel limit is in docs/setup.md).
+export CYCLONEDDS_URI="file://$(cd "$(dirname "${BASH_SOURCE[0]:-$0}")" && pwd)/cyclonedds.xml"
 export ROS_AUTOMATIC_DISCOVERY_RANGE=SUBNET
