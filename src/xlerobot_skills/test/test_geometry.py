@@ -2,7 +2,7 @@ import math
 
 import numpy as np
 
-from xlerobot_skills.geometry import aim_step, joint_info
+from xlerobot_skills.geometry import aim_step, joint_info, matrix_to_quat, quat_to_matrix
 
 
 def rot(axis, q):
@@ -36,3 +36,8 @@ def test_joint_info():
               <child link="head_pan_link"/><limit lower="-1.5" upper="1.5" effort="1" velocity="1"/></joint></robot>"""
     j = joint_info(urdf, ["head_pan_joint"])["head_pan_joint"]
     assert np.allclose(j["axis"], [0, 0, -1]) and j["lower"] == -1.5
+
+
+def test_quat_roundtrip():
+    R = rot([0.3, -0.5, 0.8], 2.1)
+    assert np.allclose(quat_to_matrix(*matrix_to_quat(R)), R, atol=1e-9)

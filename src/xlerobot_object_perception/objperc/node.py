@@ -196,7 +196,10 @@ class ObjectPerception(Node):
     # ---- service ----
     def _on_detect(self, req, res):
         t_start = time.time()
-        with self._lock:
+        if not self._lock.acquire(blocking=False):          # never queue: a waiting request holds an executor thread
+            res.codes = ["BUSY"]
+            return res
+        try:
             try:
                 self._load(req.prompt)
             except Exception as e:                          # noqa: BLE001
@@ -241,6 +244,8 @@ class ObjectPerception(Node):
             res.detections = msg
             res.codes = sorted(set(codes))
             self.pub.publish(msg)
+        finally:
+            self._lock.release()
         res.latency_ms = float((time.time() - t_start) * 1000.0)
         self.get_logger().info(f"{req.prompt!r}: {len(merged)} object(s) from {len(frames)} frame(s) in {res.latency_ms:.0f} ms {res.codes} | ms: " + ", ".join(f"{k} {v:.0f}" for k, v in self.prof.items()))
         return res
@@ -294,7 +299,7 @@ class ObjectPerception(Node):
 def main():
     rclpy.init()
     node = ObjectPerception()
-    ex = MultiThreadedExecutor(num_threads=4)
+    ex = MultiThreadedExecutor(num_threads=8)
     ex.add_node(node)
     try:
         ex.spin()

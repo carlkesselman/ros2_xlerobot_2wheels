@@ -96,5 +96,9 @@
 
   <xacro:if value="$(arg disabled_collisions)">
     <xacro:include filename="$(find xlerobot_moveit_config)/config/disabled_collisions.xacro"/>
+    <!-- The arms rest folded on their shoulder-lift hard stop (about 3.4 rad), past the folded pose the matrix was
+         generated with, and there each upper arm touches its own base link. The stop limits them physically. -->
+    <disable_collisions link1="left_arm_base_link" link2="left_arm_upper_arm_link" reason="Default"/>
+    <disable_collisions link1="right_arm_base_link" link2="right_arm_upper_arm_link" reason="Default"/>
   </xacro:if>
 </robot>

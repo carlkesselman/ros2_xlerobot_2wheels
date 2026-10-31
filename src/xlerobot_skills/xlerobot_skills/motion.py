@@ -59,17 +59,21 @@ def joint_goal_request(group, goal, scaling):
     return r
 
 
-def position_goal_request(group, frame, point, scaling):
+def position_goal_request(group, frame, point, scaling, tip=(0.0, 0.0, 0.0), joints=None):
+    """Put a point of the gripper link (`tip`, in that link's frame) at `point`. The arm has five joints, so the hand's
+    orientation is free except for `joints`: {joint: (position, tolerance)}, e.g. the wrist roll."""
     r = _request(group, scaling)
     pc = PositionConstraint()
     pc.header.frame_id = frame
     pc.link_name = GROUP_TIP_LINK[group]
-    pc.target_point_offset = Vector3()
+    pc.target_point_offset = Vector3(x=float(tip[0]), y=float(tip[1]), z=float(tip[2]))
     pc.constraint_region = BoundingVolume(
         primitives=[SolidPrimitive(type=SolidPrimitive.SPHERE, dimensions=[POSITION_TOLERANCE_M])],
         primitive_poses=[Pose(position=Point(x=float(point[0]), y=float(point[1]), z=float(point[2])))])
     pc.weight = 1.0
-    r.goal_constraints.append(Constraints(position_constraints=[pc]))
+    jc = [JointConstraint(joint_name=j, position=float(v), tolerance_above=float(t), tolerance_below=float(t), weight=1.0)
+          for j, (v, t) in (joints or {}).items()]
+    r.goal_constraints.append(Constraints(position_constraints=[pc], joint_constraints=jc))
     return r
 
 

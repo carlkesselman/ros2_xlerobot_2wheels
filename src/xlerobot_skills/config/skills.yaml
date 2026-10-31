@@ -5,7 +5,19 @@ skill_server:
     waypoints_file: ""            # empty = xlerobot_bringup/config/saved_waypoints.yaml
     head_camera_frame: ""         # empty = the frame_id of the head camera's images
     look_at_tolerance_deg: 2.0
-    approach_height_m: 0.05       # gap between the object's top and the gripper link
+    approach_height_m: 0.05       # gap between the object's top and the claw tip
+    # The tool point (claw tip) in each arm's gripper_link frame. The printed claws lie along the link's -y axis and
+    # differ in length (right 13.2 cm measured, left about 11 cm); replace with the parallel gripper's measured TCP.
+    tip_correction_tolerance_m: 0.005   # re-aim the tool point while it lands farther than this from the goal
+    tip_correction_steps: 2
+    # approach keeps the wrist camera above the hand (clear of the table, looking down at the target): wrist roll
+    camera_up_wrist_roll_left: 1.5708
+    camera_up_wrist_roll_right: 1.5708
+    camera_up_tolerance: 0.6
+    tip_offset_left: [0.0, -0.111, 0.0]
+    tip_offset_right: [0.0, -0.132, 0.0]
+    table_margin_m: 0.025         # the table box's top above the measured table: the arms sag 1-2 cm below the model
     association_gate_m: 0.05      # how far a re-detection may be from the object reference
     nav_timeout_s: 120.0
     arm_timeout_s: 60.0
+    default_scaling: 1.0          # arm speed when a goal gives none (MoveIt reads 0 as full speed anyway)
