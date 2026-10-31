@@ -49,20 +49,14 @@ B. `adityakamath/sts_hardware_interface`, one per serial bus, under a normal
 
 ## Consequences
 
-Costs accepted:
-
-- Upstream teleop scripts, VR interface and dataset recording examples don't work against
-  this stack unchanged. Bringing them back is phase 5, not a side effect.
-- Hard dependency on a third party hardware interface, with two things not yet verified:
-  multi-bus instantiation, multi-turn wheel position. Both are week 1 tests with fallbacks
-  identified, see ARCHITECTURE §7 R1 and R2.
-- No lerobot policy inference until phase 5.
-
-Gained: standard odometry, standard controllers, MoveIt and Isaac compatibility, and
-per-joint temperature/current telemetry for a real safety supervisor.
+- Upstream's teleop scripts, VR interface and dataset recording don't run against this stack unchanged; LeRobot comes
+  back as a client of ROS topics, not as the layer underneath.
+- The stack depends on a third-party hardware interface. It runs both buses under one `controller_manager`, with the
+  arms in position mode and the wheels in velocity mode on the same bus; fixes made here go upstream as PRs.
+- Gained: standard odometry and controllers, MoveIt and Isaac ROS compatibility, and per-joint temperature and current
+  for the safety supervisor.
 
 ## Revisit if
 
-`sts_hardware_interface` fails both the multi-bus test and the `feetech_ros2_driver`
-fallback, or a working lerobot policy is needed before phase 2 is done. Then option A is a
-legitimate stopgap for the base only.
+A LeRobot policy has to drive the robot before a topic-level integration exists; a bridge for the base only would be a
+legitimate stopgap.

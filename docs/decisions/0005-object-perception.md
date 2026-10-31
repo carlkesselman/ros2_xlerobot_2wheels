@@ -1,6 +1,6 @@
 # ADR-0005: Object pose perception for manipulation
 
-- Status: Accepted for M1 (cube poses implemented; other objects and the learned-detector benchmark on cluttered scenes pending)
+- Status: Accepted
 - Date: 2026-10-25
 
 ## Context
@@ -110,9 +110,9 @@ Placement sheet, cube on six footprints, head tilted so all seven sheet markers 
 - The service (`xlerobot_object_perception`) answers in about 1.7 s for three frames and lands within 1.5 to 1.8 mm of the footprint
   with the depth-derived table height shifted by the depth bias below.
 
-Known gap: the depth reads about 1% farther than the plane the sheet markers give (5 to 6 mm at 0.55 m). Either the depth scale or the
-head colour camera's focal length (still the factory value) is off; a ChArUco calibration of the head colour lens decides which.
-Until then the pose is about 4 mm off along the viewing ray and the depth-measured cube height reads 26 mm for a 28 mm cube.
+The head depth camera reads 0.8% too far, the same from 0.35 to 0.8 m (measured against the board, the colour camera's
+factory intrinsics confirmed by a lens calibration); the service corrects it with `depth_scale`, see
+[docs/setup.md](../setup.md#9-head-depth-scale).
 
 ## Out of scope for this ADR
 
