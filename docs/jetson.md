@@ -12,7 +12,15 @@ prevents is usually confusing enough to cost an afternoon.
   are listed in `/etc/nvpmodel.conf`. The full stack has been run in the Orin NX 16 GB's 40 W mode.
 - **Clocks**: `sudo jetson_clocks` pins CPU, GPU and memory clocks at the power mode's maximum instead of scaling
   them with load, which removes latency spikes (the controller manager reports them as missed 100 Hz cycles). It runs
-  hotter and draws more power, and does not survive a reboot unless started by a service.
+  hotter and draws more power. To run it at every boot:
+
+  ```bash
+  printf "[Unit]\nDescription=Pin Jetson clocks at the power mode maximum\nAfter=nvpmodel.service\n\n[Service]\nType=oneshot\nExecStart=/usr/bin/jetson_clocks\n\n[Install]\nWantedBy=multi-user.target\n" \
+    | sudo tee /etc/systemd/system/jetson-clocks.service
+  sudo systemctl daemon-reload && sudo systemctl enable --now jetson-clocks.service
+  ```
+
+  `sudo jetson_clocks --show` prints the pinned frequencies; the fan stays under nvfancontrol.
 - **Fan**: `FAN_DEFAULT_PROFILE` in `/etc/nvfancontrol.conf` (`quiet` or `cool`), then
   `sudo systemctl restart nvfancontrol`. Under the full stack expect about 65-70 °C.
 - `jetson-stats` (`jtop`) to watch CPU, GPU and temperatures, optional.
@@ -76,10 +84,16 @@ through Rerun (`tools/rerun_bridge.py`, which runs on the robot) or compressed t
   `sudo cp /opt/ros/jazzy/share/orbbec_camera/udev/99-obsensor-libusb.rules /etc/udev/rules.d/ && sudo udevadm control --reload-rules && sudo udevadm trigger`.
 - **Power**: three cameras and two servo adapters exceed what the carrier board's ports supply; a camera that drops
   out now and then is starved of power, not broken. Put the cameras on a hub with its own power supply.
-- **Autosuspend**: devices that stream are not suspended, but to rule it out for the robot's devices, keep them
-  powered with a udev rule (cameras, servo adapters, lidar), for example
-  `ACTION=="add", SUBSYSTEM=="usb", ATTR{idVendor}=="2bc5", TEST=="power/control", ATTR{power/control}="on"`
-  per vendor id in `/etc/udev/rules.d/`.
+- **Autosuspend**: keep the robot's USB devices powered. Devices that stream are not suspended anyway, but the rule
+  removes the question for all of them. The vendor ids are the Orbbec camera (2bc5), the wrist cameras (05a3), the
+  servo adapters (1a86) and the lidar adapter (10c4); check yours with `lsusb`.
+
+  ```bash
+  for v in 2bc5 05a3 1a86 10c4; do
+    echo "ACTION==\"add\", SUBSYSTEM==\"usb\", ATTR{idVendor}==\"$v\", TEST==\"power/control\", ATTR{power/control}=\"on\""
+  done | sudo tee /etc/udev/rules.d/90-xlerobot-usb-power.rules
+  sudo udevadm control --reload-rules && sudo udevadm trigger --subsystem-match=usb --action=add
+  ```
 - **Cables**: the depth camera runs USB 3 (SuperSpeed). Kernel messages like "Device not responding to setup address;
   reset SuperSpeed USB device" (`sudo dmesg`) mean a marginal cable, connector or power: the camera re-enumerates,
   and a driver starting during that finds no device. Use a short, good USB 3 cable that does not pull on the head.
@@ -99,6 +113,9 @@ printf "@realtime soft rtprio 99\n@realtime hard rtprio 99\n@realtime soft memlo
 sudo groupadd -f realtime && sudo usermod -aG realtime $USER    # log in again
 ```
 
+After a new login and a stack start, the controller manager logs "Successful set up FIFO RT scheduling policy". The
+stack inherits the permission from the session that starts it, so restart the TUI from a new login too.
+
 Give real-time priority to the control loop only, not to whole processes such as the DDS threads of every node: on a
 kernel without real-time patches, busy high-priority threads starve everything else, the control loop included.
 
@@ -114,6 +131,8 @@ built on the robot from ONNX files exported on a machine with torch:
 sysctl net.core.rmem_max                              # 67108864
 iw dev wlP1p1s0 get power_save                        # off (interface name may differ)
 echo $RMW_IMPLEMENTATION $CYCLONEDDS_URI              # rmw_cyclonedds_cpp file://.../cyclonedds.xml
+ulimit -r                                             # 99 (real-time priority allowed)
+sudo jetson_clocks --show                             # MinFreq = MaxFreq
 ros2 topic hz /cameras/head/image_raw                 # about 30 Hz with the stack running
 ls -l /dev/xle-*                                      # bus1, bus2, the cameras
 ```
