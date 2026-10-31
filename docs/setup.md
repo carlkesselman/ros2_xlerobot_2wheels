@@ -6,9 +6,9 @@ on its own.
 
 ## 1. Software
 
-Build the workspace ([README](../README.md#getting-started)) and create the Python venv for the tools
-([docs/tools.md](tools.md#python-environment)). On the robot, every shell and process uses the settings in
-`tools/ros_env.sh` (Cyclone DDS); the TUI, the MCP server and the stack start script source it themselves.
+Prepare the robot's computer ([docs/jetson.md](jetson.md): DDS buffers, Wi-Fi power saving, USB), build the workspace
+([README](../README.md#getting-started)) and create the Python venv for the tools
+([docs/tools.md](tools.md#python-environment)).
 
 ## 2. Device names
 

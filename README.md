@@ -61,6 +61,7 @@ src/xlerobot_object_perception/   on-demand object pose service
 sim/                              Isaac Sim twin
 tools/                            TUI, calibration, diagnostics, MCP server, see docs/tools.md
 docs/setup.md                     setting up and calibrating a robot, step by step
+docs/jetson.md                    preparing the Jetson for the full stack (DDS, network, USB, power)
 docs/arms-bringup.md              bringing up the arms safely
 docs/sim-twin.md                  the Isaac Sim twin
 docs/decisions/                   architecture decision records
@@ -80,6 +81,7 @@ source install/setup.bash
 
 The tools in `tools/` need a Python venv on top of this ([docs/tools.md](docs/tools.md#python-environment)). A new
 robot then needs its devices named and its servos, dimensions and cameras calibrated: [docs/setup.md](docs/setup.md).
+The robot's computer needs a few system settings first: [docs/jetson.md](docs/jetson.md).
 
 Without hardware:
 
