@@ -64,6 +64,7 @@ class SkillServer(Node):
         self.positions_file = P("positions_file", "").value or motion.default_store("saved_positions.yaml")
         self.waypoints_file = P("waypoints_file", "").value or motion.default_store("saved_waypoints.yaml")
         self.camera_frame = P("head_camera_frame", "").value
+        self.camera_frame_fallback = P("head_camera_frame_fallback", "head_camera_optical_frame").value
         self.look_tol = math.radians(float(P("look_at_tolerance_deg", 2.0).value))
         self.approach_height = float(P("approach_height_m", 0.05).value)
         self.gate = float(P("association_gate_m", 0.05).value)
@@ -656,14 +657,15 @@ class SkillServer(Node):
                 self._head_to(goal_handle, [entry["joints"][j] for j in HEAD_JOINTS])
                 result.result.message = f"head at '{g.named_position}'"
                 return
-            if self.head is None or not self.camera_frame:
+            frame = self.camera_frame or self.camera_frame_fallback      # no camera_info (camera down, or mock hardware)
+            if self.head is None or not frame:
                 raise SkillError(R.FAILED, "no robot description or head camera frame yet")
             tol = math.radians(g.tolerance_deg) if g.tolerance_deg > 0 else self.look_tol
             target = self._point_in(BASE_FRAME, g.target)
             lim = np.array([[self.head[j]["lower"], self.head[j]["upper"]] for j in HEAD_JOINTS])
             err = math.pi
             for _ in range(5):
-                Tc = self._lookup(BASE_FRAME, self.camera_frame)
+                Tc = self._lookup(BASE_FRAME, frame)
                 axes = [self._lookup(BASE_FRAME, self.head[j]["child"])[:3, :3] @ self.head[j]["axis"] for j in HEAD_JOINTS]
                 dq, err = geo.aim_step(Tc[:3, 3], Tc[:3, 2], target, axes)
                 fb.phase, fb.error_deg = "aiming", math.degrees(err)

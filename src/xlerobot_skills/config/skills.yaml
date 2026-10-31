@@ -4,6 +4,7 @@ skill_server:
     positions_file: ""            # empty = xlerobot_bringup/config/saved_positions.yaml
     waypoints_file: ""            # empty = xlerobot_bringup/config/saved_waypoints.yaml
     head_camera_frame: ""         # empty = the frame_id of the head camera's images
+    head_camera_frame_fallback: head_camera_optical_frame   # the model's frame while no camera_info has arrived
     look_at_tolerance_deg: 2.0
     approach_height_m: 0.05       # gap between the object's top and the claw tip
     # The tool point (claw tip) in each arm's gripper_link frame. Printed claws lie along the link's -y axis; their

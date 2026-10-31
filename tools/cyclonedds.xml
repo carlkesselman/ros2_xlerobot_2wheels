@@ -2,7 +2,7 @@
 <!-- Cyclone DDS settings for the robot, loaded by tools/ros_env.sh. Camera images (2.7 MB per colour frame) travel
      between processes as thousands of UDP fragments; with the default socket receive buffer a reader that falls
      behind for a moment loses fragments, and best-effort delivery then drops whole frames. The kernel must allow the
-     size: net.core.rmem_max of at least 16 MB (docs/setup.md). -->
+     size (net.core.rmem_max of at least 16 MB, docs/jetson.md); with a lower limit it takes what it gets. -->
 <CycloneDDS xmlns="https://cdds.io/config">
   <Domain Id="any">
     <!-- Each process takes a participant index; the stack runs about 50 ROS processes on the robot, more than
@@ -12,7 +12,7 @@
       <MaxAutoParticipantIndex>200</MaxAutoParticipantIndex>
     </Discovery>
     <Internal>
-      <SocketReceiveBufferSize min="16MB"/>
+      <SocketReceiveBufferSize min="default" max="16MB"/>
     </Internal>
   </Domain>
 </CycloneDDS>

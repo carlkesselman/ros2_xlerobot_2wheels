@@ -46,7 +46,8 @@ source ~/Developer/ros2_xlerobot_2wheels/tools/ros_env.sh
 Camera images travel between processes as UDP over loopback, a 1280x720 colour frame as about 2,000 fragments. With
 the kernel's default receive buffer (208 KB) a reader that falls behind for a moment loses fragments, and best-effort
 delivery drops the whole frame: slow readers (Python nodes, tools) receive few or no images while the camera driver
-keeps publishing. `tools/cyclonedds.xml` asks for 16 MB; the kernel has to allow it:
+keeps publishing. `tools/cyclonedds.xml` asks for 16 MB (it takes less where the kernel does not allow it, so other
+machines still work); on the robot, allow it:
 
 ```bash
 printf "net.core.rmem_max=67108864\nnet.core.wmem_max=67108864\n" | sudo tee /etc/sysctl.d/60-ros-dds.conf
