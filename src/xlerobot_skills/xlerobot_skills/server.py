@@ -246,6 +246,21 @@ class SkillServer(Node):
             if c is not None and c.service_is_ready():
                 c.call_async(SetBool.Request(data=True))
 
+    def _hold(self, group):
+        """Stop an arm where it is, whatever is driving it: a one-point trajectory at the current joint positions
+        replaces the controller's running trajectory at once (a cancelled MoveIt execution can keep running)."""
+        arm = group.split("_")[0]
+        client = self.arm_ctl.get(arm)
+        joints = motion.GROUP_JOINTS.get(f"{arm}_arm", [])
+        if client is None or not all(j in self.joints for j in joints) or not client.server_is_ready():
+            return
+        goal = FollowJointTrajectory.Goal()
+        goal.trajectory.joint_names = list(joints)
+        goal.trajectory.points = [JointTrajectoryPoint(positions=[float(self.joints[j]) for j in joints],
+                                                       time_from_start=DurationMsg(sec=0, nanosec=100_000_000))]
+        client.send_goal_async(goal)
+        self.get_logger().warning(f"{group}: holding where it is")
+
     def _stop_base(self):
         for _ in range(5):
             cmd = TwistStamped()
@@ -315,8 +330,7 @@ class SkillServer(Node):
 
             def stop(unsafe):
                 handle.cancel_goal_async()
-                if unsafe:
-                    self._estop([bus])
+                self._hold(group)
             res = self._wait(handle.get_result_async(), timeout or self.arm_timeout, goal_handle, on_stop=stop)
             if res.result.error_code.val != 1:
                 raise SkillError(motion.moveit_code(res.result.error_code.val),
@@ -588,8 +602,6 @@ class SkillServer(Node):
 
         def stop(unsafe):
             handle.cancel_goal_async()
-            if unsafe:
-                self._estop([bus])
         res = self._wait(handle.get_result_async(), duration + 5.0, goal_handle, on_stop=stop)
         if res.result.error_code != FollowJointTrajectory.Result.SUCCESSFUL:
             raise SkillError(R.FAILED, f"{what} error {res.result.error_code} {res.result.error_string}")
@@ -623,8 +635,6 @@ class SkillServer(Node):
 
         def stop(unsafe):
             handle.cancel_goal_async()
-            if unsafe:
-                self._estop([motion.GROUP_BUS["head"]])
         res = self._wait(handle.get_result_async(), t + timeout, goal_handle, on_stop=stop)
         if res.result.error_code != FollowJointTrajectory.Result.SUCCESSFUL:
             raise SkillError(R.FAILED, f"head controller error {res.result.error_code} {res.result.error_string}")
