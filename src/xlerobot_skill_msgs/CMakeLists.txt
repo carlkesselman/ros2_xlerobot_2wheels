@@ -15,6 +15,7 @@ rosidl_generate_interfaces(${PROJECT_NAME}
   "action/Detect.action"
   "action/MoveArm.action"
   "action/Approach.action"
+  "action/Touch.action"
   DEPENDENCIES geometry_msgs vision_msgs action_msgs
 )
 

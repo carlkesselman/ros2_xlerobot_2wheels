@@ -18,6 +18,7 @@ import rclpy
 from action_msgs.msg import GoalStatus
 from builtin_interfaces.msg import Duration as DurationMsg
 from control_msgs.action import FollowJointTrajectory
+from control_msgs.msg import DynamicJointState
 from geometry_msgs.msg import Point, PointStamped, Pose, PoseStamped, TwistStamped
 from shape_msgs.msg import SolidPrimitive
 from moveit_msgs.action import ExecuteTrajectory, MoveGroup
@@ -38,7 +39,7 @@ from tf2_ros import Buffer, TransformListener
 from trajectory_msgs.msg import JointTrajectoryPoint
 from vision_msgs.msg import Detection3DArray
 from xlerobot_object_perception.srv import DetectObjects
-from xlerobot_skill_msgs.action import Approach, Detect, LookAt, MoveArm, NavigateTo
+from xlerobot_skill_msgs.action import Approach, Detect, LookAt, MoveArm, NavigateTo, Touch
 from xlerobot_skill_msgs.msg import SkillResult
 
 from . import geometry as geo
@@ -75,6 +76,12 @@ class SkillServer(Node):
         self.correct_steps = int(P("tip_correction_steps", 2).value)
         self.camera_up_roll = {a: float(P(f"camera_up_wrist_roll_{a}", 1.5708).value) for a in ("left", "right")}
         self.roll_tol = float(P("camera_up_tolerance", 0.6).value)
+        self.touch_step = float(P("touch_step_m", 0.003).value)
+        self.touch_travel = float(P("touch_max_travel_m", 0.02).value)
+        self.touch_early = float(P("touch_early_margin_m", 0.015).value)
+        self.stall_ratio = float(P("touch_stall_ratio", 0.4).value)
+        self.load_jump = float(P("touch_load_jump", 0.2).value)
+        self.loads = {}
         self.tip = {a: [float(v) for v in P(f"tip_offset_{a}", [0.0, 0.0, 0.0]).value] for a in ("left", "right")}
 
         self.joints = {}
@@ -88,15 +95,21 @@ class SkillServer(Node):
         state = MutuallyExclusiveCallbackGroup()
         self.cb = ReentrantCallbackGroup()
         latched = QoSProfile(depth=1, reliability=ReliabilityPolicy.RELIABLE, durability=DurabilityPolicy.TRANSIENT_LOCAL)
-        self.create_subscription(JointState, "/joint_states", self._on_joints, 10, callback_group=state)
         self.create_subscription(Bool, "/mcp_presence_ok", lambda m: setattr(self, "presence_ok", m.data), 10, callback_group=state)
         self.create_subscription(Bool, "/e_stop", lambda m: setattr(self, "estop_active", m.data), 10, callback_group=state)
         self.create_subscription(String, "/robot_description", self._on_urdf, latched, callback_group=state)
+        self._camera_sub = None
         if not self.camera_frame:
-            self.create_subscription(CameraInfo, "/cameras/head/camera_info", self._on_camera_info,
-                                     qos_profile_sensor_data, callback_group=state)
+            self._camera_sub = self.create_subscription(CameraInfo, "/cameras/head/camera_info", self._on_camera_info,
+                                                        qos_profile_sensor_data, callback_group=state)
+        # Joint states and TF arrive at about 100 Hz each, which costs a Python node a lot of CPU: they are followed
+        # only while a skill runs (see _follow).
         self.tf = Buffer()
-        self.tf_listener = TransformListener(self.tf, self)
+        self._state_group = state
+        self._followers = 0
+        self._follow_lock = threading.Lock()
+        self._joint_sub = self._tf_listener = None
+        self._joint_time = 0.0
 
         self.move_group = ActionClient(self, MoveGroup, "/move_action", callback_group=self.cb)
         self.execute = ActionClient(self, ExecuteTrajectory, "/execute_trajectory", callback_group=self.cb)
@@ -106,6 +119,8 @@ class SkillServer(Node):
         self.get_scene = self.create_client(GetPlanningScene, "/get_planning_scene", callback_group=self.cb)
         self.apply_scene = self.create_client(ApplyPlanningScene, "/apply_planning_scene", callback_group=self.cb)
         self.nav = ActionClient(self, NavigateToPose, "/navigate_to_pose", callback_group=self.cb)
+        self.arm_ctl = {a: ActionClient(self, FollowJointTrajectory, f"/{a}_arm_controller/follow_joint_trajectory",
+                                        callback_group=self.cb) for a in ("left", "right")}
         self.head_ctl = ActionClient(self, FollowJointTrajectory, "/head_controller/follow_joint_trajectory",
                                      callback_group=self.cb)
         self.perception = self.create_client(DetectObjects, "/perception/detect", callback_group=self.cb)
@@ -115,15 +130,37 @@ class SkillServer(Node):
 
         for name, action, fn in (("navigate_to", NavigateTo, self.navigate_to), ("look_at", LookAt, self.look_at),
                                  ("detect", Detect, self.detect), ("move_arm", MoveArm, self.move_arm),
-                                 ("approach", Approach, self.approach)):
+                                 ("approach", Approach, self.approach), ("touch", Touch, self.touch)):
             ActionServer(self, action, f"/skills/{name}", execute_callback=self._wrap(name, action, fn),
                          goal_callback=lambda g: GoalResponse.ACCEPT,
                          cancel_callback=lambda g: CancelResponse.ACCEPT, callback_group=self.cb)
-        self.get_logger().info("skills ready: /skills/{navigate_to, look_at, detect, move_arm, approach}")
+        self.get_logger().info("skills ready: /skills/{navigate_to, look_at, detect, move_arm, approach, touch}")
 
     # ---- state ----
     def _on_joints(self, m):
         self.joints.update(zip(m.name, m.position))
+        self._joint_time = time.monotonic()
+
+    def _follow(self, on):
+        """Start (or stop, when the last skill ends) following /joint_states and TF; waits for fresh data on start."""
+        with self._follow_lock:
+            if on:
+                self._followers += 1
+                if self._followers == 1:
+                    self._joint_sub = self.create_subscription(JointState, "/joint_states", self._on_joints, 10,
+                                                               callback_group=self._state_group)
+                    self._tf_listener = TransformListener(self.tf, self)
+            else:
+                self._followers -= 1
+                if self._followers == 0:
+                    self.destroy_subscription(self._joint_sub)
+                    self._tf_listener.unregister()
+                    self._joint_sub = self._tf_listener = None
+        if on:
+            t0 = time.monotonic()
+            while time.monotonic() - self._joint_time > 0.2 and time.monotonic() - t0 < 2.0:
+                time.sleep(0.02)
+            time.sleep(0.15)                                     # a few TF messages after the static ones
 
     def _on_urdf(self, m):
         self.urdf = m.data
@@ -134,6 +171,9 @@ class SkillServer(Node):
 
     def _on_camera_info(self, m):
         self.camera_frame = self.camera_frame or m.header.frame_id
+        if self._camera_sub is not None:
+            self.destroy_subscription(self._camera_sub)
+            self._camera_sub = None
 
     def _safe(self):
         if self.estop_active:
@@ -146,6 +186,7 @@ class SkillServer(Node):
     def _wrap(self, name, action, fn):
         def execute(goal_handle):
             result = action.Result()
+            self._follow(True)
             try:
                 fn(goal_handle, result)
                 result.result.code, result.result.message = R.SUCCEEDED, result.result.message or "done"
@@ -154,6 +195,8 @@ class SkillServer(Node):
             except Exception as e:                              # noqa: BLE001
                 self.get_logger().error(f"{name}: {e!r}")
                 result.result.code, result.result.message = R.FAILED, f"{type(e).__name__}: {e}"
+            finally:
+                self._follow(False)
             if result.result.code == R.SUCCEEDED:
                 goal_handle.succeed()
             elif result.result.code == R.PREEMPTED and goal_handle.is_cancel_requested:
@@ -375,6 +418,35 @@ class SkillServer(Node):
             seed = joints
         return best, best_err
 
+    def _solve_fixed_hand(self, arm, q0, target, R0, iterations=4):
+        """Joints near `q0` putting the tool point at `target` with the hand's orientation kept at R0 (base frame), by
+        damped least squares on shoulder pan, lift, elbow and wrist flex with numerical derivatives from FK. Keeping the
+        orientation keeps the model's tool-point error constant, so the real tip moves the way the model's does."""
+        names = [f"{arm}_arm_{j}_joint" for j in ("shoulder_pan", "shoulder_lift", "elbow_flex", "wrist_flex")]
+        tip = np.asarray(self.tip[arm])
+        q = dict(q0)
+
+        def residual(qd):
+            T = self._fk(arm, qd)
+            pos = T[:3, :3] @ tip + T[:3, 3] - np.asarray(target)
+            Rerr = R0.T @ T[:3, :3]                              # rotation vector of the orientation change
+            ang = np.array([Rerr[2, 1] - Rerr[1, 2], Rerr[0, 2] - Rerr[2, 0], Rerr[1, 0] - Rerr[0, 1]]) / 2.0
+            return np.concatenate([pos, 0.05 * ang])             # 1 rad of tilt weighs like 5 cm of position
+
+        for _ in range(iterations):
+            r = residual(q)
+            if np.linalg.norm(r[:3]) < 0.0005:
+                break
+            J = np.zeros((6, len(names)))
+            for k, n in enumerate(names):
+                qd = dict(q)
+                qd[n] += 1e-3
+                J[:, k] = (residual(qd) - r) / 1e-3
+            dq = -np.linalg.solve(J.T @ J + 1e-6 * np.eye(len(names)), J.T @ r)
+            for k, n in enumerate(names):
+                q[n] += float(dq[k])
+        return q, float(np.linalg.norm(residual(q)[:3]))
+
     def _move_tip(self, skill, goal_handle, arm, target, scaling, feedback=None, joints=None):
         """Put the arm's tool point at `target` (base frame): solve the joints (see _solve_tip), plan to them, then read
         the tool point back through TF (the arm stops short under gravity, which the encoders see) and re-solve from
@@ -471,6 +543,37 @@ class SkillServer(Node):
         finally:
             self._release(["base"])
 
+    def _joints_to(self, goal_handle, client, joints, q, duration, bus, what):
+        """Send one point straight to a joint trajectory controller (no planning) and wait for it."""
+        goal = FollowJointTrajectory.Goal()
+        goal.trajectory.joint_names = list(joints)
+        goal.trajectory.points = [JointTrajectoryPoint(positions=[float(v) for v in q],
+                                                       time_from_start=DurationMsg(sec=int(duration), nanosec=int((duration % 1) * 1e9)))]
+        handle = self._send(client, goal, what)
+
+        def stop(unsafe):
+            handle.cancel_goal_async()
+            if unsafe:
+                self._estop([bus])
+        res = self._wait(handle.get_result_async(), duration + 5.0, goal_handle, on_stop=stop)
+        if res.result.error_code != FollowJointTrajectory.Result.SUCCESSFUL:
+            raise SkillError(R.FAILED, f"{what} error {res.result.error_code} {res.result.error_string}")
+
+    def _on_loads(self, m):
+        for n, iv in zip(m.joint_names, m.interface_values):
+            if "effort" in iv.interface_names:
+                self.loads[n] = iv.values[list(iv.interface_names).index("effort")]
+
+    def _load(self, arm, seconds=0.2):
+        """Mean effort of the joints that carry the arm (shoulder lift, elbow, wrist flex) over a short window."""
+        names = [f"{arm}_arm_{j}_joint" for j in ("shoulder_lift", "elbow_flex", "wrist_flex")]
+        acc, t0 = [], time.monotonic()
+        while time.monotonic() - t0 < seconds:
+            if all(n in self.loads for n in names):
+                acc.append([self.loads[n] for n in names])
+            time.sleep(0.01)
+        return np.mean(acc, axis=0) if acc else np.zeros(3)
+
     def _head_to(self, goal_handle, q, timeout=10.0):
         missing = [j for j in HEAD_JOINTS if j not in self.joints]
         if missing:
@@ -533,6 +636,89 @@ class SkillServer(Node):
             result.result.message = f"looking at the target, {math.degrees(err):.1f} deg off"
         finally:
             self._release([bus])
+
+    def touch(self, goal_handle, result):
+        g = goal_handle.request
+        arm = g.arm
+        if arm not in ("left", "right"):
+            raise SkillError(R.FAILED, "arm must be left or right")
+        group = f"{arm}_arm"
+        size = g.object.size_m or 0.028
+        centre = self._point_in(BASE_FRAME, g.object.pose)
+        top, bottom = centre[2] + size / 2.0, centre[2] - size / 2.0
+        result.expected_z, result.contact_z = float(top), float("nan")
+        step = g.step_m or self.touch_step
+        floor = max(top - (g.max_travel_m or self.touch_travel), bottom + 0.005)
+        tip0 = self._tip_in_base(arm)
+        if tip0[2] < top + 0.005:
+            raise SkillError(R.FAILED, f"the tool point is not above the object ({(tip0[2] - top) * 1000:.0f} mm): approach first")
+        if np.linalg.norm(tip0[:2] - centre[:2]) > 0.03:
+            raise SkillError(R.FAILED, f"the tool point is {np.linalg.norm(tip0[:2] - centre[:2]) * 100:.1f} cm beside the object: approach first")
+        self._require_safe()
+        bus = motion.GROUP_BUS[group]
+        self._claim("touch", [bus])
+        load_sub = self.create_subscription(DynamicJointState, "/dynamic_joint_states", self._on_loads, 10,
+                                            callback_group=self._state_group)
+        joints = motion.GROUP_JOINTS[group]
+        start = [self.joints[j] for j in joints]
+        fb = Touch.Feedback(phase="descending")
+        retreat = not g.stay
+        try:
+            prev_load = self._load(arm, 0.4)
+            # Steps are taken on the measured tool point: each command aims one step below where the tip really is,
+            # corrected by how far the last command missed (the arm sags under gravity), and the travel limit is
+            # checked against the measured height, never the commanded one.
+            z_prev = tip0[2]
+            sag = 0.0
+            q_cmd = {j: self.joints[j] for j in joints}
+            R0 = self._fk(arm, q_cmd)[:3, :3]
+            stalls, contact = 0, None
+            while z_prev > floor + 0.0005:
+                z_goal = max(z_prev - step, floor)
+                z_cmd = z_goal + sag
+                sol, miss = self._solve_fixed_hand(arm, q_cmd, (tip0[0], tip0[1], z_cmd), R0)
+                if miss > 0.002:
+                    raise SkillError(R.NOT_REACHABLE, f"the hand cannot go lower at this angle (z {z_cmd:.3f}, {miss * 1000:.0f} mm off)")
+                q_cmd = sol
+                self._joints_to(goal_handle, self.arm_ctl[arm], joints, [sol[j] for j in joints], 0.35, bus, f"{arm}_arm_controller")
+                time.sleep(0.15)
+                z_now = self._tip_in_base(arm)[2]
+                load = self._load(arm)
+                moved, wanted = z_prev - z_now, z_prev - z_goal
+                sag = float(np.clip(sag + (z_goal - z_now) * 0.7, -0.03, 0.03))
+                dload = float(np.max(np.abs(load - prev_load)))
+                stalls = stalls + 1 if wanted > 0.001 and moved < self.stall_ratio * wanted else 0
+                fb.tool_z, fb.load_change = float(z_now), dload
+                goal_handle.publish_feedback(fb)
+                self.get_logger().info(f"touch: goal {z_goal:.4f} cmd {z_cmd:.4f} tip {z_now:.4f} moved {moved * 1000:.1f}/{wanted * 1000:.1f} mm, "
+                                       f"load {np.round(load, 3).tolist()} change {dload:.3f}")
+                by = [n for n, hit in (("stall", stalls >= 2), ("load", dload > self.load_jump)) if hit]
+                if by:
+                    contact = (z_now, "+".join(by))
+                    break
+                z_prev, prev_load = z_now, load
+            if contact is None:
+                raise SkillError(R.NOT_FOUND, f"no contact down to {floor:.3f} m ({(top - floor) * 1000:.0f} mm below the expected top)")
+            result.contact_z, result.sensed_by = float(contact[0]), contact[1]
+            fb.phase = "contact"
+            goal_handle.publish_feedback(fb)
+            off = contact[0] - top
+            if off > self.touch_early:
+                raise SkillError(R.COLLISION, f"contact {off * 1000:.0f} mm above the object's top ({contact[1]}): something is in the way")
+            result.result.message = f"contact {off * 1000:+.0f} mm from the expected top, sensed by {contact[1]}"
+        except SkillError as e:
+            if e.code == R.SAFETY_STOP:
+                retreat = False
+            raise
+        finally:
+            try:
+                if retreat:
+                    fb.phase = "retreating"
+                    goal_handle.publish_feedback(fb)
+                    self._joints_to(None, self.arm_ctl[arm], joints, start, 1.0, bus, f"{arm}_arm_controller")
+            finally:
+                self.destroy_subscription(load_sub)
+                self._release([bus])
 
     def _detect(self, goal_handle, prompt, label, size_m, frames, timeout=30.0):
         if not self.perception.wait_for_service(timeout_sec=3.0):
@@ -653,7 +839,7 @@ class SkillServer(Node):
 def main():
     rclpy.init()
     node = SkillServer()
-    ex = MultiThreadedExecutor(num_threads=8)
+    ex = MultiThreadedExecutor(num_threads=4)
     ex.add_node(node)
     try:
         ex.spin()

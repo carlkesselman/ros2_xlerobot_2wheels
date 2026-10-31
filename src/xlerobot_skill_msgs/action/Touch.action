@@ -1,0 +1,17 @@
+# From a pose above an object (after approach), move the tool point straight down until it touches the object.
+# Contact is sensed by the arm: the tool point stops following the commanded steps, or the joints' load jumps.
+# On contact the arm stops and backs up to where it started.
+string arm                            # left or right
+xlerobot_skill_msgs/ObjectRef object  # expected contact = the top of the object (pose = its centre, size_m its edge)
+float32 max_travel_m                  # how far past the expected contact to go at most; 0 = default
+float32 step_m                        # descent step; 0 = default
+bool stay                             # true = stay in contact instead of backing up
+---
+xlerobot_skill_msgs/SkillResult result
+float32 contact_z                     # tool point height at contact (base_footprint), NaN without contact
+float32 expected_z                    # where contact was expected
+string sensed_by                      # stall, load, or both
+---
+string phase                          # descending, contact, retreating
+float32 tool_z
+float32 load_change

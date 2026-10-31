@@ -21,3 +21,9 @@ skill_server:
     nav_timeout_s: 120.0
     arm_timeout_s: 60.0
     default_scaling: 1.0          # arm speed when a goal gives none (MoveIt reads 0 as full speed anyway)
+    # touch: straight down in steps until the tool point stops following (two steps in a row) or the load jumps
+    touch_step_m: 0.003
+    touch_max_travel_m: 0.02      # past the expected contact
+    touch_early_margin_m: 0.015   # contact this far above the expected top is something in the way
+    touch_stall_ratio: 0.4        # a step that moves less than this share of the command is a stall
+    touch_load_jump: 0.2          # effort change between steps on shoulder lift, elbow or wrist flex
