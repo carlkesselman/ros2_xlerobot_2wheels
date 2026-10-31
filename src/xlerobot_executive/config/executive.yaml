@@ -1,0 +1,6 @@
+executive:
+  ros__parameters:
+    lease_s: 60.0                 # the planner must call wait_for_event at least this often while a plan runs
+    max_hold_s: 120.0             # a paused plan is retreated and aborted after this long
+    retreat_positions: [left_rest, right_rest]   # where the arms go when a plan is given up (lease, hold limit)
+    positions_file: ""            # empty = xlerobot_bringup/config/saved_positions.yaml

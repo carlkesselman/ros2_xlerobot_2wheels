@@ -1,0 +1,7 @@
+# Submit a plan (JSON, schema in the xlerobot_executive README) to the executive. It is validated before it runs; a
+# plan is refused while another one is running or paused.
+string plan_json
+---
+bool accepted
+string plan_id
+string[] errors             # why the plan was refused, one entry per problem

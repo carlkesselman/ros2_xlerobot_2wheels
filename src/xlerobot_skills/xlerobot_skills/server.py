@@ -76,6 +76,7 @@ class SkillServer(Node):
         self.table_min_x = float(P("table_box_min_x", 0.20).value)
         self.correct_tol = float(P("tip_correction_tolerance_m", 0.005).value)
         self.correct_steps = int(P("tip_correction_steps", 2).value)
+        self.max_tip_error = float(P("max_tip_error_m", 0.015).value)
         self.camera_up_roll = {a: float(P(f"camera_up_wrist_roll_{a}", 1.5708).value) for a in ("left", "right")}
         self.roll_tol = float(P("camera_up_tolerance", 0.6).value)
         self.touch_step = float(P("touch_step_m", 0.003).value)
@@ -468,6 +469,69 @@ class SkillServer(Node):
             seed = joints
         return best, best_err
 
+    def _solve_tip_multi(self, arm, target, overrides=None):
+        """_solve_tip_ls from the current joints, then from a few generic reaching postures (shoulder pan pointed at
+        the target); the best result. Folded near its limits, an arm can sit in a local minimum of the tool-point error."""
+        best = self._solve_tip_ls(arm, target, overrides)
+        if best[1] < 0.002:
+            return best
+        try:
+            sh = self._lookup(BASE_FRAME, f"{arm}_arm_shoulder_link")[:3, 3]
+        except SkillError:
+            sh = np.zeros(3)
+        az = math.atan2(target[1] - sh[1], target[0] - sh[0])
+        pan0 = self.joints.get(f"{arm}_arm_shoulder_pan_joint", 0.0)
+        for lift in (1.0, 1.5, 2.0):
+            for elbow in (-1.2, -1.8):
+                for pan in (pan0, pan0 + az, pan0 - az):
+                    seed = dict(overrides or {})
+                    seed.update({f"{arm}_arm_shoulder_pan_joint": pan, f"{arm}_arm_shoulder_lift_joint": lift,
+                                 f"{arm}_arm_elbow_flex_joint": elbow, f"{arm}_arm_wrist_flex_joint": -0.6})
+                    cand = self._solve_tip_ls(arm, target, seed)
+                    if cand[1] < best[1]:
+                        best = cand
+                    if best[1] < 0.002:
+                        return best
+        return best
+
+    def _solve_tip_ls(self, arm, target, overrides=None, iterations=30):
+        """Joints putting the tool point at `target`, by damped least squares on shoulder pan, lift, elbow and wrist flex
+        (the wrist roll held), staying near the current joints and inside the joint limits. Converges from any start,
+        where alternating position-only IK and FK can oscillate. Returns (joints, error m)."""
+        names = [f"{arm}_arm_{j}_joint" for j in ("shoulder_pan", "shoulder_lift", "elbow_flex", "wrist_flex")]
+        try:
+            lim = geo.joint_info(self.urdf, names) if self.urdf else {}
+        except ValueError:
+            lim = {}
+        tip = np.asarray(self.tip[arm])
+        q = {j: self.joints[j] for j in motion.GROUP_JOINTS[f"{arm}_arm"] if j in self.joints}
+        q.update(overrides or {})
+        q0 = dict(q)
+
+        def tip_of(qd):
+            T = self._fk(arm, qd)
+            return T[:3, :3] @ tip + T[:3, 3]
+
+        err = None
+        for _ in range(iterations):
+            r = tip_of(q) - np.asarray(target)
+            err = float(np.linalg.norm(r))
+            if err < 0.001:
+                break
+            J = np.zeros((3, len(names)))
+            for k, n in enumerate(names):
+                qd = dict(q)
+                qd[n] += 1e-3
+                J[:, k] = (tip_of(qd) - np.asarray(target) - r) / 1e-3
+            lam = 0.05 if err > 0.02 else 0.01
+            reg = np.array([q[n] - q0[n] for n in names]) * 0.002   # a little pull towards the start posture
+            dq = -np.linalg.solve(J.T @ J + lam ** 2 * np.eye(len(names)), J.T @ r + reg)
+            dq = np.clip(dq, -0.3, 0.3)
+            for k, n in enumerate(names):
+                lo, hi = (lim[n]["lower"], lim[n]["upper"]) if n in lim else (-math.pi, math.pi)
+                q[n] = float(np.clip(q[n] + dq[k], lo, hi))
+        return q, float(np.linalg.norm(tip_of(q) - np.asarray(target)))
+
     def _solve_fixed_hand(self, arm, q0, target, R0, iterations=4):
         """Joints near `q0` putting the tool point at `target` with the hand's orientation kept at R0 (base frame), by
         damped least squares on shoulder pan, lift, elbow and wrist flex with numerical derivatives from FK. Keeping the
@@ -505,28 +569,43 @@ class SkillServer(Node):
         overrides = {j: v for j, (v, _) in (joints or {}).items()}
         sol, err = self._solve_tip(arm, target, overrides)
         if sol is None or err > 0.01:
-            free, _ = self._solve_tip(arm, target, overrides, collisions=False)
-            if free is not None:
-                contacts = self._contacts(group, free)
-                raise SkillError(R.NOT_REACHABLE, f"reachable, but the pose is in collision: {contacts or 'unknown contact'}")
-            raise SkillError(R.NOT_REACHABLE, "out of reach for the tool point")
+            # collision-checked IK can run out of time (a large octomap, MoveIt still loading its scene): solve without
+            # and check the result, which also names what is in the way
+            free, ferr = self._solve_tip(arm, target, overrides, collisions=False)
+            if free is None or ferr > 0.01:
+                free, ferr = self._solve_tip_multi(arm, target, overrides)
+            if ferr > 0.01:
+                raise SkillError(R.NOT_REACHABLE, f"out of reach for the tool point ({ferr * 1000:.0f} mm short)")
+            contacts = self._contacts(group, free)
+            if contacts:
+                raise SkillError(R.NOT_REACHABLE, f"reachable, but the pose is in collision: {contacts}")
+            sol = free
         self._move_group(skill, goal_handle, motion.joint_goal_request(group, sol, scaling), group, feedback=feedback)
         goal = np.asarray(target, float)
-        e = None
+        best_q, best_e = None, None
         for step in range(self.correct_steps + 1):
             time.sleep(0.4)                                      # let the servos settle and TF catch up
             e = np.asarray(target) - self._tip_in_base(arm)
+            ne = float(np.linalg.norm(e))
             self.get_logger().info(f"{skill}: tool point {np.round(e * 1000).astype(int).tolist()} mm from the goal after move {step + 1}")
-            if np.linalg.norm(e) <= self.correct_tol or step == self.correct_steps:
+            if best_e is not None and ne > best_e:              # the correction made it worse: back to the best pose
+                self._move_group(skill, goal_handle, motion.joint_goal_request(group, best_q, scaling), group)
+                ne = best_e
+                break
+            best_q, best_e = {j: self.joints[j] for j in motion.GROUP_JOINTS[group]}, ne
+            if ne <= self.correct_tol or step == self.correct_steps:
                 break
             goal = goal + e
-            sol, _ = self._solve_tip(arm, goal, overrides)       # seeded with where the arm is now
-            if sol is None:
+            # stay with this posture: least squares from the current joints, not a fresh IK that may pick another one
+            sol, serr = self._solve_tip_ls(arm, goal, overrides)
+            if serr > 0.005:
                 break
             if feedback is not None:
                 feedback("correcting")
             self._move_group(skill, goal_handle, motion.joint_goal_request(group, sol, scaling), group)
-        return float(np.linalg.norm(e))
+        if ne > self.max_tip_error:
+            raise SkillError(R.NOT_REACHABLE, f"the tool point ended {ne * 1000:.0f} mm from the goal")
+        return ne
 
     def _contacts(self, group, joints):
         if not self.validity.wait_for_service(timeout_sec=1.0):

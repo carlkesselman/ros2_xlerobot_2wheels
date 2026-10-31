@@ -34,9 +34,9 @@ Constraints:
 
 ### Plans
 
-The planner writes a plan as a JSON document; the executive validates it, compiles it to a `py_trees` tree and runs
-it. Version 1 plans are flat sequences: each step has `on_failure: retry <n> | goto <step> | abort`. Trees with
-fallback branches come later, once logged plans show where they are needed.
+The planner writes a plan as a JSON document; the executive validates it and runs it. Version 1 plans are flat
+sequences: each step has `on_failure: retry <n> | goto <step> | abort`, and a small state machine runs them. Trees with
+fallback branches come later, once logged plans show where they are needed, run by `py_trees`.
 
 Schema (version 1):
 

@@ -16,6 +16,9 @@ rosidl_generate_interfaces(${PROJECT_NAME}
   "action/MoveArm.action"
   "action/Approach.action"
   "action/Touch.action"
+  "srv/SubmitPlan.srv"
+  "srv/WaitForEvent.srv"
+  "srv/ExecutionControl.srv"
   DEPENDENCIES geometry_msgs vision_msgs action_msgs
 )
 

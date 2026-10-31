@@ -1,0 +1,8 @@
+# Long poll for execution events. Returns at once when there are events after after_seq, otherwise waits up to
+# max_wait_s (at most 30) for one. Every call renews the planner's lease.
+uint64 after_seq
+float32 max_wait_s
+---
+string[] events_json        # each a JSON object with seq, time, type, plan_id, step_id, attempt and details
+uint64 last_seq             # pass this as after_seq next time
+string state_json           # the executive's state now (plan, step, status)

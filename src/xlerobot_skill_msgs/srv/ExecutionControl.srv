@@ -1,0 +1,5 @@
+# pause, resume or abort the running plan
+string command
+---
+bool ok
+string message

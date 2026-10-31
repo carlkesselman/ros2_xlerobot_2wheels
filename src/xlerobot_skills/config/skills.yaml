@@ -12,6 +12,7 @@ skill_server:
     # e.g. by resting the tip on the table and finding it in the wrist camera image.
     tip_correction_tolerance_m: 0.005   # re-aim the tool point while it lands farther than this from the goal
     tip_correction_steps: 2
+    max_tip_error_m: 0.015        # a tool-point move that ends farther than this (by the encoders) fails NOT_REACHABLE
     # approach keeps the wrist camera above the hand (clear of the table, looking down at the target): wrist roll
     camera_up_wrist_roll_left: 1.5708
     camera_up_wrist_roll_right: 1.5708
