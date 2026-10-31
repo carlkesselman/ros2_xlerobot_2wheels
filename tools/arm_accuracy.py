@@ -2,6 +2,7 @@
 """How far the claw tip really lands from where it was sent, over the placement sheet (issue #12).
 
   python3 tools/arm_accuracy.py [--arms right left] [--height 0.03] [--ids cube2 brick3 ...]
+  python3 tools/arm_accuracy.py --fit ~/arm_accuracy/<time> [...]   # correction for robot_dimensions.yaml
 
 Needs the stack, move_group, the skill server and both wrist cameras, with the placement sheet
 (tools/generate_placement_sheet.py) flat on the table where the head camera sees its markers and the arms reach its
@@ -13,7 +14,12 @@ markers as well, which gives the hand's real pose in the head camera's frame: co
 encoders and the model predict gives the claw tip's real position, so the error covers the whole chain from head
 perception to arm motion, without finding the tip in an image. Per target it prints the real tip's offset from the
 target (dx forward, dy left, dz up, mm) and the model's own residual; a CSV, the wrist frames and the measured poses go
-to ~/arm_accuracy/<time>/.
+to ~/arm_accuracy/<time>/, together with every sample's measured and model wrist-camera poses (samples.npz).
+
+--fit reads one or more such folders and, per arm, finds the rigid correction of the arm's mount that maps the model's
+hand poses onto the measured ones (least squares over points on the hand), expressed as `mount_correction` for
+src/xlerobot_description/config/robot_dimensions.yaml (composed with the correction already there). After a rebuild
+and a restart of the stack, a new measurement shows what is left.
 """
 import argparse
 import csv
@@ -77,6 +83,62 @@ def lookup(tfb, target, source):
     return transform_to_matrix(tfb.lookup_transform(target, source, Time(), timeout=Duration(seconds=2.0)))
 
 
+def kabsch(P, Q):
+    """Rigid transform (4x4) minimising |R P + t - Q| over point rows."""
+    cp, cq = P.mean(0), Q.mean(0)
+    U, _, Vt = np.linalg.svd((P - cp).T @ (Q - cq))
+    d = np.sign(np.linalg.det(Vt.T @ U.T))
+    R = Vt.T @ np.diag([1, 1, d]) @ U.T
+    T = np.eye(4)
+    T[:3, :3], T[:3, 3] = R, cq - R @ cp
+    return T
+
+
+def rpy_of(R):
+    return (math.atan2(R[2, 1], R[2, 2]), math.asin(max(-1.0, min(1.0, -R[2, 0]))), math.atan2(R[1, 0], R[0, 0]))
+
+
+def matrix_of(xyz, rpy):
+    r, p, y = rpy
+    Rx = np.array([[1, 0, 0], [0, math.cos(r), -math.sin(r)], [0, math.sin(r), math.cos(r)]])
+    Ry = np.array([[math.cos(p), 0, math.sin(p)], [0, 1, 0], [-math.sin(p), 0, math.cos(p)]])
+    Rz = np.array([[math.cos(y), -math.sin(y), 0], [math.sin(y), math.cos(y), 0], [0, 0, 1]])
+    T = np.eye(4)
+    T[:3, :3], T[:3, 3] = Rz @ Ry @ Rx, xyz
+    return T
+
+
+def fit(dirs):
+    import yaml
+    dims_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "src", "xlerobot_description", "config",
+                             "robot_dimensions.yaml")
+    arms_cfg = yaml.safe_load(open(dims_path))["xlerobot"]["arms"]
+    data = [np.load(os.path.join(os.path.expanduser(d), "samples.npz")) for d in dirs]
+    # points on the hand, in the wrist camera's frame: its origin, and 10 cm along each axis
+    pts = np.array([[0, 0, 0, 1], [0.1, 0, 0, 1], [0, 0.1, 0, 1], [0, 0, 0.1, 1]], float).T
+    for arm in ("left", "right"):
+        P, Q, frames = [], [], []
+        for d in data:
+            for k in np.nonzero(d["arm"] == arm)[0]:
+                P.append((d["model"][k] @ pts)[:3].T)
+                Q.append((d["meas"][k] @ pts)[:3].T)
+                frames.append(d["arms_frame"][k])
+        if not P:
+            continue
+        P, Q = np.concatenate(P), np.concatenate(Q)
+        C = kabsch(P, Q)                                     # base frame: real = C @ model
+        res_before = np.linalg.norm(P - Q, axis=1)
+        res_after = np.linalg.norm((C[:3, :3] @ P.T).T + C[:3, 3] - Q, axis=1)
+        A = frames[0]                                         # base_footprint <- arms_frame
+        old = arms_cfg.get("mount_correction", {}).get(arm, {"xyz": "0 0 0", "rpy": "0 0 0"})
+        M_old = matrix_of([float(v) for v in old["xyz"].split()], [float(v) for v in old["rpy"].split()])
+        M_new = np.linalg.inv(A) @ C @ A @ M_old
+        xyz, rpy = M_new[:3, 3], rpy_of(M_new[:3, :3])
+        print(f"{arm}: {len(P) // 4} samples, hand points off by {res_before.mean() * 1000:.1f} mm before, "
+              f"{res_after.mean() * 1000:.1f} mm after (max {res_after.max() * 1000:.1f})")
+        print(f'      {arm}:  {{xyz: "{xyz[0]:.6f} {xyz[1]:.6f} {xyz[2]:.6f}", rpy: "{rpy[0]:.6f} {rpy[1]:.6f} {rpy[2]:.6f}"}}')
+
+
 def main():
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument("--arms", nargs="+", default=["right", "left"])
@@ -84,7 +146,10 @@ def main():
     ap.add_argument("--ids", nargs="*", help="footprint ids, default every footprint on the arm's side")
     ap.add_argument("--sheet", default=os.path.expanduser("~/placement_sheet.json"))
     ap.add_argument("--scale", type=float, default=0.998)
+    ap.add_argument("--fit", nargs="+", metavar="DIR", help="fit the mount corrections from saved measurements")
     a = ap.parse_args()
+    if a.fit:
+        return fit(a.fit)
     sheet = json.load(open(a.sheet))
     out = os.path.expanduser(time.strftime("~/arm_accuracy/%Y%m%d_%H%M%S"))
     os.makedirs(out, exist_ok=True)
@@ -153,7 +218,7 @@ def main():
     T_base_sheet[:3, 3] = T_base_head[:3, :3] @ (T_head_sheet[:3, 3] / 1000.0) + T_base_head[:3, 3]
     print(f"sheet from the head camera: {n_head} markers, centre at {np.round(T_base_sheet[:3, 3], 3).tolist()} m")
 
-    rows = []
+    rows, samples = [], []
     for arm in a.arms:
         side = 1.0 if arm == "left" else -1.0
         targets = []
@@ -188,6 +253,10 @@ def main():
                 print(f"{arm} {fid}: the wrist camera does not see enough of the sheet")
                 continue
             T_model_cam = lookup(tfb, "base_footprint", wrist[arm].frame_id)
+            T_base_corr = lookup(tfb, "base_footprint", "arms_frame")
+            for T_meas_cam, _ in meas:
+                samples.append({"arm": arm, "id": fid, "meas": T_meas_cam, "model": T_model_cam, "arms_frame": T_base_corr,
+                                "target": target})
             T_model_link = lookup(tfb, "base_footprint", f"{arm}_arm_gripper_link")
             tip_model = (T_model_link @ [*TIP[arm], 1.0])[:3]
             tips, angles, axes = [], [], []
@@ -211,6 +280,9 @@ def main():
                          round(float(np.median(angles)), 2), *np.round(np.median(axes, axis=0), 2), meas[0][1], round(spread, 1)])
         rest = MoveArm.Goal(arm=arm, named_position=f"{arm}_rest")
         run(rest)
+    np.savez(os.path.join(out, "samples.npz"), arm=[x["arm"] for x in samples], id=[x["id"] for x in samples],
+             meas=np.array([x["meas"] for x in samples]), model=np.array([x["model"] for x in samples]),
+             arms_frame=np.array([x["arms_frame"] for x in samples]), target=np.array([x["target"] for x in samples]))
     with open(os.path.join(out, "accuracy.csv"), "w", newline="") as f:
         w = csv.writer(f)
         w.writerow(["arm", "footprint", "x", "y", "z", "dx_mm", "dy_mm", "dz_mm", "model_dx", "model_dy", "model_dz",

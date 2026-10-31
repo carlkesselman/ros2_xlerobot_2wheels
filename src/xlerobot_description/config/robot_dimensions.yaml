@@ -201,6 +201,13 @@ xlerobot:
     # difference, the data cannot say which of the two is off). wrist_camera: the optical frame's
     # position and rotation as measured.
     frame_correction: {xyz: "0.023183 -0.006399 -0.008623", rpy: "0.010156 -0.050829 0.004562"}
+    # mount_correction: each arm's base relative to the arms' frame, fitted in the table workspace with
+    # tools/arm_accuracy.py --fit (the hand's real pose from the wrist camera against the placement sheet). It absorbs
+    # what the calibration above, done with the arms in the air, misses near the table: sag at full stretch and wrist
+    # errors that the clustered calibration poses could not separate.
+    mount_correction:
+      left:  {xyz: "0.012111 0.007711 0.002646", rpy: "-0.006927 -0.024701 -0.003282"}
+      right: {xyz: "0.067248 0.090929 0.016046", rpy: "0.096916 -0.072291 -0.024834"}
     wrist_camera:
       left:  {xyz: "-0.015770 0.015190 0.003387", rpy: "0.376871 -1.549444 2.303024"}
       right: {xyz: "0.004451 0.026293 0.013168", rpy: "-0.319586 -1.544162 3.034952"}

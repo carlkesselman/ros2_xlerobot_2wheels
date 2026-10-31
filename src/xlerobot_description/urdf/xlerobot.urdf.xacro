@@ -73,10 +73,21 @@
       <child link="arms_frame"/>
       <origin xyz="${a['frame_correction']['xyz']}" rpy="${a['frame_correction']['rpy']}"/>
     </joint>
-    <xacro:so101_arm prefix="left_arm"  parent="arms_frame" side="left" cam_xyz="${a['wrist_camera']['left']['xyz']}" cam_rpy="${a['wrist_camera']['left']['rpy']}" joints="${a['joints']}" margin="${a['limit_margin']}"
+    <!-- Per-arm correction of the mount, fitted in the table workspace (tools/arm_accuracy.py, fit mode). -->
+    <xacro:macro name="arm_mount" params="side">
+      <link name="${side}_arm_correction"/>
+      <joint name="${side}_arm_correction_joint" type="fixed">
+        <parent link="arms_frame"/>
+        <child link="${side}_arm_correction"/>
+        <origin xyz="${a['mount_correction'][side]['xyz']}" rpy="${a['mount_correction'][side]['rpy']}"/>
+      </joint>
+    </xacro:macro>
+    <xacro:arm_mount side="left"/>
+    <xacro:arm_mount side="right"/>
+    <xacro:so101_arm prefix="left_arm"  parent="left_arm_correction" side="left" cam_xyz="${a['wrist_camera']['left']['xyz']}" cam_rpy="${a['wrist_camera']['left']['rpy']}" joints="${a['joints']}" margin="${a['limit_margin']}"
         xyz="${a['mount_x'] - pan_off * sin(a['left_yaw'])} ${-a['mount_y'] + pan_off * cos(a['left_yaw'])} ${a['mount_z']}"
         rpy="0 0 ${a['left_yaw']}"/>
-    <xacro:so101_arm prefix="right_arm" parent="arms_frame" side="right" cam_xyz="${a['wrist_camera']['right']['xyz']}" cam_rpy="${a['wrist_camera']['right']['rpy']}" joints="${a['joints']}" margin="${a['limit_margin']}"
+    <xacro:so101_arm prefix="right_arm" parent="right_arm_correction" side="right" cam_xyz="${a['wrist_camera']['right']['xyz']}" cam_rpy="${a['wrist_camera']['right']['rpy']}" joints="${a['joints']}" margin="${a['limit_margin']}"
         xyz="${a['mount_x'] - pan_off * sin(a['right_yaw'])}  ${a['mount_y'] + pan_off * cos(a['right_yaw'])} ${a['mount_z']}"
         rpy="0 0 ${a['right_yaw']}"/>
   </xacro:if>

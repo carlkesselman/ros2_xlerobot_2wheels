@@ -16,13 +16,9 @@ prevents is usually confusing enough to cost an afternoon.
 
 ## 2. ROS 2
 
-ROS 2 Jazzy from the ROS apt repository, then the workspace's own dependencies with `rosdep` as in the
-[README](../README.md#getting-started). Besides those, the robot uses:
-
-```bash
-sudo apt install ros-jazzy-rmw-cyclonedds-cpp ros-jazzy-orbbec-camera ros-jazzy-usb-cam \
-                 ros-jazzy-navigation2 ros-jazzy-slam-toolbox ros-jazzy-moveit
-```
+ROS 2 Jazzy from the ROS apt repository, then the workspace's dependencies with `rosdep` as in the
+[README](../README.md#getting-started): the packages declare everything they run (camera drivers, Nav2, MoveIt, Cyclone
+DDS), and `vcs import` brings the community packages that are built from source.
 
 ## 3. DDS: Cyclone with large socket buffers
 
