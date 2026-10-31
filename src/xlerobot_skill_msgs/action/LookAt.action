@@ -1,0 +1,10 @@
+# Point the head camera at a point (pan and tilt, closed on TF) or move the head to a saved position.
+geometry_msgs/PointStamped target
+string named_position                 # name in saved_positions.yaml (group head); used when not empty
+float32 tolerance_deg                 # 0 = default
+---
+xlerobot_skill_msgs/SkillResult result
+float32 error_deg                     # angle between the camera's optical axis and the target at the end
+---
+string phase                          # aiming, settling
+float32 error_deg

@@ -1,0 +1,11 @@
+# Find objects with the object perception service; poses in map when the robot is localised, else base_footprint.
+string prompt
+string label                          # class name in the result; empty = the prompt
+float32 size_m                        # 0 = the service's default
+uint8 frames                          # 0 = the service's default
+---
+xlerobot_skill_msgs/SkillResult result
+vision_msgs/Detection3DArray detections
+float32[] heights_m
+---
+string phase                          # detecting

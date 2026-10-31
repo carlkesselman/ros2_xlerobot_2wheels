@@ -1,0 +1,11 @@
+skill_server:
+  ros__parameters:
+    # Saved positions and waypoints, the same files the tools and the MCP server use.
+    positions_file: ""            # empty = xlerobot_bringup/config/saved_positions.yaml
+    waypoints_file: ""            # empty = xlerobot_bringup/config/saved_waypoints.yaml
+    head_camera_frame: ""         # empty = the frame_id of the head camera's images
+    look_at_tolerance_deg: 2.0
+    approach_height_m: 0.05       # gap between the object's top and the gripper link
+    association_gate_m: 0.05      # how far a re-detection may be from the object reference
+    nav_timeout_s: 120.0
+    arm_timeout_s: 60.0

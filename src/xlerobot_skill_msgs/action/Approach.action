@@ -1,0 +1,10 @@
+# Re-detect an object and put an arm's gripper link above it, ready for touch or grasp.
+string arm                            # left or right
+xlerobot_skill_msgs/ObjectRef object
+float32 height_m                      # gap between the object's top and the gripper link; 0 = default
+float32 scaling
+---
+xlerobot_skill_msgs/SkillResult result
+geometry_msgs/PoseStamped object_pose # the re-detected object, in the frame of the request
+---
+string phase                          # detecting, planning, moving

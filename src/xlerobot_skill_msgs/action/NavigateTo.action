@@ -1,0 +1,9 @@
+# Drive the base to a saved waypoint or a pose with Nav2.
+string waypoint                       # name in saved_waypoints.yaml; empty = use pose
+geometry_msgs/PoseStamped pose
+float32 timeout_s                     # 0 = default
+---
+xlerobot_skill_msgs/SkillResult result
+---
+string phase                          # waiting_for_nav2, driving, recovering
+float32 distance_remaining_m
