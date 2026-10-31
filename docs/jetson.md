@@ -89,8 +89,9 @@ through Rerun (`tools/rerun_bridge.py`, which runs on the robot) or compressed t
 
 ## 6. Real-time priority for the control loop
 
-`ros2_control_node` can run its update loop with real-time scheduling, which keeps the 100 Hz servo loop on time
-while cameras and planning load the CPUs. The user needs permission for it:
+`ros2_control_node` runs its update loop with real-time scheduling when it is allowed to, which keeps the 100 Hz
+servo loop on time while cameras and planning load the CPUs. Without permission it logs "Could not enable FIFO RT
+scheduling policy ... Operation not permitted" at start. The permission:
 
 ```bash
 printf "@realtime soft rtprio 99\n@realtime hard rtprio 99\n@realtime soft memlock unlimited\n@realtime hard memlock unlimited\n" \
