@@ -10,6 +10,9 @@ prevents is usually confusing enough to cost an afternoon.
   [ADR-0002](decisions/0002-jazzy-and-isaac-ros.md).
 - **Power mode**: a high mode for the whole stack. Check with `nvpmodel -q`, set with `sudo nvpmodel -m <id>`; the modes
   are listed in `/etc/nvpmodel.conf`. The full stack has been run in the Orin NX 16 GB's 40 W mode.
+- **Clocks**: `sudo jetson_clocks` pins CPU, GPU and memory clocks at the power mode's maximum instead of scaling
+  them with load, which removes latency spikes (the controller manager reports them as missed 100 Hz cycles). It runs
+  hotter and draws more power, and does not survive a reboot unless started by a service.
 - **Fan**: `FAN_DEFAULT_PROFILE` in `/etc/nvfancontrol.conf` (`quiet` or `cool`), then
   `sudo systemctl restart nvfancontrol`. Under the full stack expect about 65-70 °C.
 - `jetson-stats` (`jtop`) to watch CPU, GPU and temperatures, optional.
@@ -42,6 +45,10 @@ printf "net.core.rmem_max=67108864\nnet.core.wmem_max=67108864\n" | sudo tee /et
 sudo sysctl --system
 ```
 
+`tools/cyclonedds.xml` also raises the participant index limit: every ROS process takes one, the full stack runs about
+50, and with Cyclone's default the processes started last (move_group) fail with "Failed to find a free participant
+index".
+
 Fast DDS (Jazzy's default) is not used: under load its shared-memory transport recreated discovery ports of busy
 processes, after which new processes saw topics but no nodes, and with localhost-only discovery it found only about
 20 participants.
@@ -69,11 +76,32 @@ through Rerun (`tools/rerun_bridge.py`, which runs on the robot) or compressed t
   `sudo cp /opt/ros/jazzy/share/orbbec_camera/udev/99-obsensor-libusb.rules /etc/udev/rules.d/ && sudo udevadm control --reload-rules && sudo udevadm trigger`.
 - **Power**: three cameras and two servo adapters exceed what the carrier board's ports supply; a camera that drops
   out now and then is starved of power, not broken. Put the cameras on a hub with its own power supply.
+- **Autosuspend**: devices that stream are not suspended, but to rule it out for the robot's devices, keep them
+  powered with a udev rule (cameras, servo adapters, lidar), for example
+  `ACTION=="add", SUBSYSTEM=="usb", ATTR{idVendor}=="2bc5", TEST=="power/control", ATTR{power/control}="on"`
+  per vendor id in `/etc/udev/rules.d/`.
+- **Cables**: the depth camera runs USB 3 (SuperSpeed). Kernel messages like "Device not responding to setup address;
+  reset SuperSpeed USB device" (`sudo dmesg`) mean a marginal cable, connector or power: the camera re-enumerates,
+  and a driver starting during that finds no device. Use a short, good USB 3 cable that does not pull on the head.
 - **Permissions**: the udev rules give the robot's devices mode 0666, so no group membership is needed for them.
 - `tools/kill_ros.py --usb-reset` resets the head camera on the USB bus with `usbreset`, which needs sudo without a
   password for that command.
 
-## 6. Python and the perception models
+## 6. Real-time priority for the control loop
+
+`ros2_control_node` can run its update loop with real-time scheduling, which keeps the 100 Hz servo loop on time
+while cameras and planning load the CPUs. The user needs permission for it:
+
+```bash
+printf "@realtime soft rtprio 99\n@realtime hard rtprio 99\n@realtime soft memlock unlimited\n@realtime hard memlock unlimited\n" \
+  | sudo tee /etc/security/limits.d/realtime.conf
+sudo groupadd -f realtime && sudo usermod -aG realtime $USER    # log in again
+```
+
+Give real-time priority to the control loop only, not to whole processes such as the DDS threads of every node: on a
+kernel without real-time patches, busy high-priority threads starve everything else, the control loop included.
+
+## 7. Python and the perception models
 
 The tools' venv: [docs/tools.md](tools.md#python-environment). The object perception service's TensorRT engines are
 built on the robot from ONNX files exported on a machine with torch:
