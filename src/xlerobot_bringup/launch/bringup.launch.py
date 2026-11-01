@@ -1,6 +1,9 @@
 """Base bringup: robot_state_publisher + controller_manager + spawners.
-No arms, no sensors yet, that's the phase 1 scope. Point bus1_port/bus2_port
-at your udev symlinks, not the raw ttyACM device, those numbers swap on reboot.
+The base is the ODrive (USB), so a base-only bringup needs no servo bus; bus1
+(left arm + head) and bus2 (right arm) come in with with_head/with_arms. Point
+bus1_port/bus2_port at your udev symlinks, not the raw ttyACM device, those
+numbers swap on reboot. Until the ODrive hardware interface exists (step 2 of
+docs/rosie-port-plan.md), run with use_mock_hardware:=true.
 
 use_sim:=true switches to the Isaac Sim twin's hardware interface instead
 of the real bus (or sts_hardware_interface's mock mode), see docs/sim-twin.md.
@@ -82,11 +85,15 @@ def _check_serial_ports_free(context, *args, **kwargs):
     if use_sim or use_mock_hardware:
         return []  # no real serial port gets opened in either mode
 
+    # The wheels are on the ODrive (USB, libusb), not on a servo bus, so a base-only
+    # bringup opens no serial port at all.
     with_head = LaunchConfiguration("with_head").perform(context) == "true"
     with_arms = LaunchConfiguration("with_arms").perform(context) == "true"
-    ports = [LaunchConfiguration("bus2_port").perform(context)]
+    ports = []
     if with_head or with_arms:
         ports.append(LaunchConfiguration("bus1_port").perform(context))
+    if with_arms:
+        ports.append(LaunchConfiguration("bus2_port").perform(context))
 
     problems = []
     for port in ports:

@@ -1,0 +1,56 @@
+# Python packages for tools/ on top of ROS 2 Jazzy, managed with uv. ROS itself (rclpy, cv_bridge, the message types)
+# and, on the robot, OpenCV, SciPy, PyYAML and TensorRT come from the ROS install, not from here: apt on elroy, the pixi
+# environment (pixi.toml) on a Mac. Create the environments with tools/setup_venv.sh, not a bare `uv sync`, which would
+# build a venv that cannot see rclpy (docs/tools.md#python-environment).
+#
+# Three environments from one lock file, because the ROS tools need NumPy 1.x (cv_bridge and Ubuntu's OpenCV are built
+# against it) while rerun-sdk and the model export need NumPy 2:
+#
+#   tools    .venv, sees the ROS Python's packages          tools/setup_venv.sh
+#   rerun    ~/venvs/xlerobot-rerun, rerun_bridge.py         tools/setup_venv.sh rerun
+#   models   ~/venvs/xlerobot-models, perception export      tools/setup_venv.sh models   (NVIDIA GPU machine)
+[project]
+name = "xlerobot-tools"
+version = "0.1.0"
+requires-python = ">=3.12,<3.13"
+dependencies = []
+
+[dependency-groups]
+tools = [
+    "mcp[cli]",                               # tools/mcp_server
+    "textual>=8",                             # xlerobot_tui.py; Ubuntu's python3-textual is far too old
+    "pyserial",                               # calibrate_arm.py and the servo bus tests
+    "mcap",                                   # calibrate_from_bag.py
+    "numpy<2; sys_platform == 'linux'",       # apt ROS Jazzy is built against NumPy 1.x; on a Mac pixi's NumPy is used
+    "cuda-python; sys_platform == 'linux'",   # object perception service (TensorRT runner); needs an NVIDIA GPU
+]
+rerun = [
+    "rerun-sdk==0.38.1",                      # keep equal to the Rerun viewer you connect to
+    "numpy",
+    "pyyaml",
+]
+models = [
+    "torch",
+    "torchvision",
+    "transformers",
+    "huggingface_hub",
+    "onnx",
+    "onnxscript",
+    "numpy",
+    "scipy",
+    "opencv-python",
+    "ultralytics",                            # YOLO-World, MobileSAM and SAM in the benchmark
+    "clip @ git+https://github.com/ultralytics/CLIP.git",   # YOLO-World's text encoder
+    "segment-anything",                       # EfficientViT-SAM's prompt encoder
+    "timm",
+    "einops",
+]
+
+[tool.uv]
+package = false
+default-groups = ["tools"]
+conflicts = [
+    [{ group = "tools" }, { group = "rerun" }],
+    [{ group = "tools" }, { group = "models" }],
+]
+environments = ["sys_platform == 'darwin'", "sys_platform == 'linux'"]

@@ -30,7 +30,7 @@ absolute path):
 stdio clients only pass an allow-listed subset of environment variables to the server process
 (`PATH`, `HOME`, ... not `PYTHONPATH`/`AMENT_PREFIX_PATH`/`LD_LIBRARY_PATH`), so `rclpy` is not
 visible otherwise, regardless of what's sourced in the shell that started Claude Code. It activates
-`$XLEROBOT_VENV` (`~/venvs/xlerobot` by default); edit the ROS `source` line if ROS is installed elsewhere, and make sure
+`$XLEROBOT_VENV` (the repo's `.venv` by default, `tools/setup_venv.sh`); edit the ROS `source` line if ROS is installed elsewhere, and make sure
 `ROS_DOMAIN_ID` (if you use one) matches the rest of the bringup - add an `export` for it in
 `run.sh` alongside the other `source` lines if so.
 

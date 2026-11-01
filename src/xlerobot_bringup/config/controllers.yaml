@@ -47,26 +47,24 @@ diff_drive_controller:
     right_wheel_names: ["right_wheel_joint"]
 
     # TODO pull these from robot_dimensions.yaml instead of duplicating them
-    # here. For now keep in sync by hand. Measured values, see
-    # robot_dimensions.yaml for how (ARCHITECTURE §1.4, §6).
-    wheel_separation: 0.55
-    wheel_radius: 0.0625
+    # here. For now keep in sync by hand. Cart-measured values, see
+    # robot_dimensions.yaml (6.5 in hub wheels, 527 mm track).
+    wheel_separation: 0.527
+    wheel_radius: 0.0825
 
-    # Calibrated via tools/calibrate_wheel_odometry.py, see ARCHITECTURE §6.
-    wheel_separation_multiplier: 0.9412
-    left_wheel_radius_multiplier: 1.0
+    # Calibrate with tools/calibrate_wheel_odometry.py, see ARCHITECTURE §6.
+    # 1.0 until measured on this cart (the servo base's 0.9412 doesn't carry over).
+    wheel_separation_multiplier: 1.0
 
-    # The right motor is mounted mirrored (confirmed on the real cart by
-    # commanding each wheel individually through a raw velocity_controllers/
-    # JointGroupVelocityController and watching which way it actually
-    # turned: +0.5 rad/s spun the left wheel forward and the right wheel
-    # backward). sts_hardware_interface has no per-joint invert (checked its
-    # source, see xlerobot.ros2_control.xacro), so the correction lives here
-    # instead: a negative radius flips the sign of both the outgoing command
-    # and the odometry reading for this wheel, which cancels the mirroring
-    # on both sides consistently. Don't also try to fix this in the URDF
-    # axis or the hardware interface config, it would double-correct.
-    right_wheel_radius_multiplier: -1.0
+    # The LEFT motor is the mirrored one on this cart: ../XLeRobot's
+    # cart-remote.yaml has invert_left_wheel: true, settled on the real board
+    # with config/odrive-check.sh --spin. The ODrive joints report the raw axis
+    # (xlerobot.ros2_control.xacro), so the correction lives here: a negative
+    # radius flips both the outgoing command and the odometry reading for this
+    # wheel. Don't also invert in the hardware interface, it would
+    # double-correct. If forward drives the cart in a circle, this is wrong.
+    left_wheel_radius_multiplier: -1.0
+    right_wheel_radius_multiplier: 1.0
 
     publish_rate: 50.0
     odom_frame_id: odom
@@ -75,25 +73,27 @@ diff_drive_controller:
     twist_covariance_diagonal: [0.001, 0.0, 0.0, 0.0, 0.0, 0.01]
 
     # open_loop:false means this reads wheel POSITION from the hardware
-    # interface, not velocity. Confirmed by reading sts_hardware_interface's
-    # source that it does not unwrap multi-turn position, so this will break
-    # on the first wheel revolution until that's fixed. See ARCHITECTURE §4.1,
-    # §7 R1. Don't tune anything else here until that's sorted, whatever looks
-    # wrong will actually be this.
+    # interface and differences it. The ODrive reports the encoder's
+    # multi-turn position directly, so the servo base's wrap problem
+    # (ARCHITECTURE §4.1) doesn't arise here.
     open_loop: false
     enable_odom_tf: true
 
-    # matches the servo ceiling from robot_dimensions.yaml limits, stay under it
-    linear.x.max_velocity: 0.25
-    linear.x.min_velocity: -0.25
-    linear.x.max_acceleration: 0.30
-    linear.x.min_acceleration: -0.30
-    angular.z.max_velocity: 1.50
-    angular.z.min_velocity: -1.50
-    angular.z.max_acceleration: 1.00
-    angular.z.min_acceleration: -1.00
+    # robot_dimensions.yaml limits: 1.0 m/s and 1.0 m/s^2 were validated on
+    # this cart (rug and hardwood, 2026-10-25). The ODESC's own VEL_RAMP limits
+    # each wheel's acceleration as well.
+    linear.x.max_velocity: 1.0
+    linear.x.min_velocity: -1.0
+    linear.x.max_acceleration: 1.0
+    linear.x.min_acceleration: -1.0
+    angular.z.max_velocity: 2.0
+    angular.z.min_velocity: -2.0
+    angular.z.max_acceleration: 2.0
+    angular.z.min_acceleration: -2.0
 
-    # tighter than upstream's 500ms host watchdog, see ARCHITECTURE §4.4
+    # tighter than upstream's 500ms host watchdog, see ARCHITECTURE §4.4, and
+    # inside the ODESC's own 0.5 s watchdog, so the controller zeroes the wheels
+    # before the board has to
     cmd_vel_timeout: 0.25
     use_stamped_vel: true
 

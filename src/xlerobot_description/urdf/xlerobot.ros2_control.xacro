@@ -1,12 +1,15 @@
 <?xml version="1.0"?>
 <!--
-  One hardware interface per serial bus. The split crosses subsystems:
+  One hardware interface per serial bus, plus one for the base. Carl's cart drives its
+  wheels with brushless hub motors on an ODESC (ODrive v3, firmware 0.5.1, USB), not with
+  servos on bus2:
 
-    bus1: left arm 1-6 (position) + head 7-8 (position)
-    bus2: right arm 1-6 (position) + wheels 9-10 (velocity)
+    bus1:  left arm 1-6 (position) + head 7-8 (position)     sts_hardware_interface
+    bus2:  right arm 1-6 (position)                           sts_hardware_interface
+    base:  axis0 = right wheel, axis1 = left wheel (velocity) ODrive
 
-  So bus2 runs mixed modes on one UART. sts_hardware_interface does this with a
-  per-joint operating_mode param, which is why we picked it.
+  The wheel joints keep their names, so diff_drive_controller, the sim twin and the tools
+  see the same two joints as on the servo base.
 
   Two instances of this plugin under one controller_manager work: both
   buses load, configure, and activate cleanly (adityakamath/sts_hardware_interface).
@@ -16,12 +19,6 @@
   name, giving /emergency_stop_xlerobot_bus1 and _bus2 (what
   tools/estop.py calls). Each still stops only its own bus, so don't build
   the safety supervisor around these, see ARCHITECTURE.md section 4.4.
-
-  Wheel position needs the fork's multi-turn unwrap for MODE_VELOCITY joints:
-  upstream maps the raw encoder register straight to radians, so a spinning
-  wheel wraps every turn and diff_drive_controller odometry breaks on the
-  first wrap. xlerobot.repos pulls the fork for that, see ARCHITECTURE.md
-  section 4.1.
 
   hold_position_on_activate must stay true: upstream defaults it to false, and then the
   position command sits at its initial 0.0 and torque-on drives every arm joint to the model's
@@ -85,6 +82,21 @@
     <xacro:sts_arm_joint name="${prefix}_gripper_joint"       id="6" j="${joints['gripper']}" side="${side}" margin="${margin}"       read_only="${read_only}"/>
   </xacro:macro>
 
+  <!-- One drive wheel on the ODrive. axis is the board's axis number (0 = M0, 1 = M1). -->
+  <xacro:macro name="odrive_wheel_joint" params="name axis wmax">
+    <joint name="${name}">
+      <param name="axis">${axis}</param>
+      <command_interface name="velocity">
+        <param name="min">${-wmax}</param>
+        <param name="max">${wmax}</param>
+      </command_interface>
+      <state_interface name="position">
+        <param name="initial_value">0.0</param>
+      </state_interface>
+      <state_interface name="velocity"/>
+    </joint>
+  </xacro:macro>
+
   <xacro:macro name="xlerobot_ros2_control" params="bus1_port bus2_port use_mock_hardware with_arms torque_off with_head dims">
 
     <xacro:property name="b"      value="${dims['base']}"/>
@@ -96,7 +108,7 @@
          component still tries to open bus1_port for zero joints, and on a
          base-only robot that port doesn't exist - controller_manager loads
          all hardware components in one process, so a bad bus1_port there
-         takes bus2 (the wheels) down with it too. -->
+         takes the base down with it too. -->
     <xacro:if value="${with_arms or with_head}">
       <ros2_control name="xlerobot_bus1" type="system">
         <hardware>
@@ -128,70 +140,47 @@
       </ros2_control>
     </xacro:if>
 
-    <!-- ================= BUS 2 : right arm + DRIVE WHEELS ================= -->
-    <ros2_control name="xlerobot_bus2" type="system">
-      <hardware>
-        <plugin>sts_hardware_interface/STSHardwareInterface</plugin>
-        <param name="serial_port">${bus2_port}</param>
-        <param name="instance_id">xlerobot_bus2</param>
-        <param name="hold_position_on_activate">true</param>
-        <param name="baud_rate">1000000</param>
-        <param name="enable_mock_mode">$(arg use_mock_hardware)</param>
-        <param name="proportional_vel_max">${dims['arms']['servo_speed_limit_steps']}</param>
-      </hardware>
-
-      <xacro:if value="${with_arms}">
+    <!-- ================= BUS 2 : right arm ================= -->
+    <!-- Only declared with the arms, for the same reason as bus1: with the wheels on the
+         ODrive, nothing else is on this bus. -->
+    <xacro:if value="${with_arms}">
+      <ros2_control name="xlerobot_bus2" type="system">
+        <hardware>
+          <plugin>sts_hardware_interface/STSHardwareInterface</plugin>
+          <param name="serial_port">${bus2_port}</param>
+          <param name="instance_id">xlerobot_bus2</param>
+          <param name="hold_position_on_activate">true</param>
+          <param name="baud_rate">1000000</param>
+          <param name="enable_mock_mode">$(arg use_mock_hardware)</param>
+          <param name="proportional_vel_max">${dims['arms']['servo_speed_limit_steps']}</param>
+        </hardware>
         <xacro:sts_arm_joints prefix="right_arm" side="right" read_only="${torque_off}" joints="${dims['arms']['joints']}" margin="${dims['arms']['limit_margin']}"/>
-      </xacro:if>
+      </ros2_control>
+    </xacro:if>
 
-      <!-- The RIGHT motor is mounted mirrored (confirmed on the real robot by
-           commanding each wheel individually and watching it turn - see
-           controllers.yaml's right_wheel_radius_multiplier comment; an
-           earlier version of this comment guessed it was the left motor,
-           that guess was wrong).
+    <!-- ================= BASE : two brushless wheels on the ODrive ================= -->
+    <!-- Mock: ros2_control's own GenericSystem, which integrates the velocity command into the
+         position state (calculate_dynamics), so diff_drive_controller gets odometry to difference.
+         Real: the ODrive hardware interface is step 2 of docs/rosie-port-plan.md and doesn't exist
+         yet, so asking for it stops xacro with a message instead of failing inside
+         controller_manager.
 
-           Checked the driver source: it has no per-joint invert param. What it
-           does have is a FIXED, uniform CW-to-REP103-CCW inversion applied the
-           same way to every joint (sts_conversions.hpp), which is a different
-           problem (protocol convention) to ours (this robot's mechanical
-           mounting). It doesn't help here.
-
-           NOT in this file: don't add a fake invert param, it will be
-           silently ignored (joint.parameters.count() just won't find it, no
-           error). The actual fix is diff_drive_controller's
-           right_wheel_radius_multiplier: -1.0, see controllers.yaml - that's
-           the "sign goes in the ros2_control joint config, once" ARCHITECTURE.md
-           section 1.2 talks about, just one layer up from here since the
-           hardware interface itself can't do it. -->
-      <joint name="left_wheel_joint">
-        <param name="motor_id">9</param>
-        <param name="operating_mode">1</param>
-        <command_interface name="velocity">
-          <param name="min">${-wmax}</param>
-          <param name="max">${wmax}</param>
-        </command_interface>
-        <state_interface name="position"/>
-        <state_interface name="velocity"/>
-        <state_interface name="effort"/>
-        <state_interface name="temperature"/>
-        <state_interface name="current"/>
-        <state_interface name="voltage"/>
-      </joint>
-
-      <joint name="right_wheel_joint">
-        <param name="motor_id">10</param>
-        <param name="operating_mode">1</param>
-        <command_interface name="velocity">
-          <param name="min">${-wmax}</param>
-          <param name="max">${wmax}</param>
-        </command_interface>
-        <state_interface name="position"/>
-        <state_interface name="velocity"/>
-        <state_interface name="effort"/>
-        <state_interface name="temperature"/>
-        <state_interface name="current"/>
-        <state_interface name="voltage"/>
-      </joint>
+         The left motor is the mirrored one on this cart. That sign lives in exactly one place,
+         diff_drive_controller's left_wheel_radius_multiplier: -1.0 (controllers.yaml); the joints
+         here report the raw axis, as the ODrive does. -->
+    <xacro:property name="od" value="${b['odrive']}"/>
+    <ros2_control name="xlerobot_base" type="system">
+      <hardware>
+        <xacro:if value="$(arg use_mock_hardware)">
+          <plugin>mock_components/GenericSystem</plugin>
+          <param name="calculate_dynamics">true</param>
+        </xacro:if>
+        <xacro:unless value="$(arg use_mock_hardware)">
+          ${xacro.fatal('base: no ODrive hardware interface yet (step 2 of docs/rosie-port-plan.md); use use_mock_hardware:=true')}
+        </xacro:unless>
+      </hardware>
+      <xacro:odrive_wheel_joint name="left_wheel_joint"  axis="${od['left_axis']}"  wmax="${wmax}"/>
+      <xacro:odrive_wheel_joint name="right_wheel_joint" axis="${od['right_axis']}" wmax="${wmax}"/>
     </ros2_control>
 
   </xacro:macro>

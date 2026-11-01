@@ -7,35 +7,43 @@ the script itself.
 ## Python environment
 
 The tools are plain Python scripts on top of ROS 2 Jazzy. ROS's own Python packages (`rclpy`, `cv_bridge`, the message
-types), OpenCV, SciPy and, on a Jetson, TensorRT come from the system; the few packages Ubuntu does not ship (or ships too
-old) go into a venv that also sees the system packages. Ubuntu 24.04 refuses `pip install` into the system Python, and
-forcing it can replace the NumPy that ROS was built against.
+types), OpenCV, SciPy and, on a Jetson, TensorRT come from the ROS install; the few packages it doesn't ship (or ships too
+old) are in `pyproject.toml` at the repo root and managed by [uv](https://docs.astral.sh/uv/). The tools venv is built on
+the ROS install's own Python with `--system-site-packages`, so it sees all of that. `tools/setup_venv.sh` does this; a bare
+`uv sync` would build `.venv` on a uv-managed Python that cannot see `rclpy`.
 
-On the robot (and on any machine that runs the TUI, the MCP server or the calibration tools):
+On the robot (apt Jazzy, and on any machine that runs the TUI, the MCP server or the calibration tools):
 
 ```bash
 source /opt/ros/jazzy/setup.bash
-python3 -m venv --system-site-packages ~/venvs/xlerobot
-source ~/venvs/xlerobot/bin/activate
-pip install -r tools/requirements.txt
+tools/setup_venv.sh                 # creates or updates <repo>/.venv
 ```
 
-Then run tools with that venv active, for example:
+On a Mac, ROS comes from the pixi environment (`pixi.toml`), and the venv is built on its Python:
 
 ```bash
-source /opt/ros/jazzy/setup.bash && source install/setup.bash && source ~/venvs/xlerobot/bin/activate
+pixi run venv
+```
+
+Then run tools with ROS sourced and the venv active, for example:
+
+```bash
+source /opt/ros/jazzy/setup.bash && source install/setup.bash && source .venv/bin/activate
 python3 tools/xlerobot_tui.py
 ```
 
-The MCP server's `run.sh` and the object perception launch file activate the venv themselves; they look for it in
-`$XLEROBOT_VENV` and fall back to `~/venvs/xlerobot`, so set that variable if you keep it elsewhere.
+The MCP server's `run.sh` and the object perception launch file activate the venv themselves; they use `$XLEROBOT_VENV`
+and fall back to the repo's `.venv`, so set that variable if you keep it elsewhere.
 
-Two tools need a venv of their own because their packages want NumPy 2, which breaks `cv_bridge`:
+Two tools need a venv of their own because their packages want NumPy 2, which breaks `cv_bridge`. They are dependency
+groups of the same uv project, synced into their own venvs:
 
-| Venv | Requirements | For |
+| Venv | Create with | For |
 |---|---|---|
-| `~/venvs/xlerobot-rerun` (no `--system-site-packages`) | `tools/requirements-rerun.txt` | `rerun_bridge.py`; keep `rerun-sdk` at the viewer's version |
-| `~/venvs/xlerobot-models` (no `--system-site-packages`) | `tools/perception/requirements.txt` | exporting and benchmarking the perception models (`tools/perception/export_models.py`, `segment_eval.py`), on a machine with an NVIDIA GPU |
+| `~/venvs/xlerobot-rerun` | `tools/setup_venv.sh rerun` | `rerun_bridge.py`; keep `rerun-sdk` in `pyproject.toml` at the viewer's version |
+| `~/venvs/xlerobot-models` | `tools/setup_venv.sh models` | exporting and benchmarking the perception models (`tools/perception/export_models.py`, `segment_eval.py`), on a machine with an NVIDIA GPU |
+
+To add a package, add it to the right group in `pyproject.toml`, run `uv lock` and rerun `tools/setup_venv.sh`.
 
 Downloaded model weights, exported ONNX files and TensorRT engines live in `~/.cache/xlerobot`.
 
@@ -124,7 +132,7 @@ The order to run the calibrations in, and where each result goes, is in [setup.m
 |---|---|
 | `generate_placement_sheet.py` | A printable sheet (PDF at actual size) with markers around the edge and cube and brick footprints at known positions and yaws: ground truth for object poses. |
 | `cube_pose_eval.py` | Measures the head camera's cube pose on the placement sheet with a colour threshold (no learned model), and saves every frame for comparing models later. |
-| `segment_eval.py` | Scores detectors and mask models (OWLv2, OWL-ViT, Grounding DINO, YOLO-World; SAM 2, MobileSAM, EfficientViT-SAM, also on TensorRT) on saved frames through the same pose fit. Needs `perception/requirements.txt`. |
+| `segment_eval.py` | Scores detectors and mask models (OWLv2, OWL-ViT, Grounding DINO, YOLO-World; SAM 2, MobileSAM, EfficientViT-SAM, also on TensorRT) on saved frames through the same pose fit. Needs the models venv (`tools/setup_venv.sh models`). |
 | `perception_check.py` | Calls the object pose service while the head camera sees the placement sheet and prints the error to the nearest footprint. |
 | `perception/export_models.py`, `perception/build_engines.sh` | Export the models to ONNX (with torch) and build TensorRT engines on the robot, see [the package README](../src/xlerobot_object_perception/README.md). |
 

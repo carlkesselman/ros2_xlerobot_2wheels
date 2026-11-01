@@ -1,3 +1,0 @@
-# rclpy, cv_bridge, moveit_msgs, nav2_msgs etc. come from the sourced ROS Jazzy install, not pip
-# - create this venv with --system-site-packages (see README.md) so those are visible here too.
-mcp[cli]

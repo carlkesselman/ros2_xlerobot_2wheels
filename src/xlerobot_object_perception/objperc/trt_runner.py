@@ -6,7 +6,7 @@ import tensorrt as trt
 try:
     from cuda.bindings import runtime as cudart
 except ImportError as e:
-    raise ImportError("cuda-python is missing: activate the tools venv, or pip install -r tools/requirements.txt") from e
+    raise ImportError("cuda-python is missing: activate the tools venv, or run tools/setup_venv.sh") from e
 
 _LOGGER = trt.Logger(trt.Logger.WARNING)
 

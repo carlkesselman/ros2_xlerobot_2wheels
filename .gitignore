@@ -41,3 +41,9 @@ __pycache__/
 # slam_toolbox pose graphs, several MB each, kept on the robot
 /src/xlerobot_navigation/maps/*.posegraph
 /src/xlerobot_navigation/maps/*.data
+
+# pixi environment (pixi.toml, Mac development)
+/.pixi/
+
+# the uv tools venv, tools/setup_venv.sh
+/.venv/

@@ -56,7 +56,7 @@ try:
     from textual.binding import Binding
     from textual.widgets import DataTable, Footer, Header, Input, RichLog, Static
 except ImportError:
-    sys.exit("textual is missing: activate the tools venv, or pip install -r tools/requirements.txt (docs/tools.md#python-environment)")
+    sys.exit("textual is missing: activate the tools venv, or run tools/setup_venv.sh (docs/tools.md#python-environment)")
 
 import motion_recorder
 

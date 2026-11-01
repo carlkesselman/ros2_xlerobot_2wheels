@@ -1,0 +1,35 @@
+# ROS 2 Jazzy for this workspace on a Mac (Apple Silicon), from RoboStack's conda-forge
+# builds - the only binary ROS 2 for macOS. pixi supplies ROS and its build tools and nothing
+# else; every Python package the repo's own tools need is in pyproject.toml and managed by uv
+# (tools/setup_venv.sh). The robot itself runs apt Jazzy on elroy with the same uv project.
+#
+#   pixi run build        colcon build of the packages listed below
+#   pixi run venv         the uv tools venv (.venv) on this environment's Python
+#   pixi shell            then: source install/setup.zsh
+[workspace]
+name = "ros2_xlerobot_2wheels"
+channels = ["https://prefix.dev/conda-forge", "robostack-jazzy"]
+platforms = ["osx-arm64"]
+
+[tasks]
+venv = "tools/setup_venv.sh"
+build = "colcon build --symlink-install --packages-select xlerobot_description xlerobot_teleop xlerobot_bringup"
+
+[dependencies]
+python = "3.12.*"
+ros-jazzy-desktop = "*"
+ros-jazzy-xacro = "*"
+ros-jazzy-ros2-control = "*"
+ros-jazzy-ros2-controllers = "*"
+ros-jazzy-joint-state-publisher-gui = "*"
+ros-jazzy-teleop-twist-keyboard = "*"
+ros-jazzy-joy = "*"
+ros-jazzy-teleop-twist-joy = "*"
+ros-jazzy-twist-mux = "*"
+colcon-common-extensions = "*"
+compilers = "*"
+cmake = "*"
+pkg-config = "*"
+make = "*"
+ninja = "*"
+setuptools = "<80"           # colcon builds the ament_python packages with it

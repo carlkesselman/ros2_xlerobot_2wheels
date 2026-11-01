@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Export the perception models to ONNX on a machine with torch (tools/perception/requirements.txt) and copy them to the
+"""Export the perception models to ONNX on a machine with torch (tools/setup_venv.sh models) and copy them to the
 robot, where `build_engines.sh` turns them into TensorRT engines.
 
   python3 tools/perception/export_models.py [--out ~/.cache/xlerobot/onnx] [--prompts "a cube" "a toy block"]

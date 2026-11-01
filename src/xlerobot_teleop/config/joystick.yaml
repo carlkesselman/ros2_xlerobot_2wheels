@@ -3,9 +3,9 @@
 teleop_twist_joy_node:
   ros__parameters:
     axis_linear.x: 1
-    scale_linear.x: 0.25    # matches robot_dimensions.yaml linear_velocity_max
+    scale_linear.x: 0.6     # full stick, as on the cart's lerobot gamepad (base_speed_mps 0.6)
     axis_angular.yaw: 0
-    scale_angular.yaw: 1.50 # matches angular_velocity_max
+    scale_angular.yaw: 1.05 # full stick, 60 deg/s as on the lerobot gamepad
     enable_button: 7        # RB - moved here from Y(4) 2026-10-03, swapped with
                              # mcp_presence.yaml's presence_button so drive-enable and MCP
                              # presence still never share a button

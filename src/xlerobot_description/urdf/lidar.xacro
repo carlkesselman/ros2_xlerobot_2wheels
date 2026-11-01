@@ -1,26 +1,29 @@
 <?xml version="1.0"?>
 <!--
-  LDROBOT LD19 2D lidar, mounted upside down under the second basket. The frame is
-  ldlidar_link, the driver's default frame_id, at the scan plane. Its z axis points
-  down, so scans that are counter-clockwise in the sensor's own frame run clockwise
-  seen from above. TF carries that, the driver's rot_verse stays at its default.
-  Position and yaw come from robot_dimensions.yaml (lidar).
+  LDROBOT LD19 2D lidar, low on the cart frame. The frame is ldlidar_link, the driver's
+  default frame_id, at the scan plane. Hung upside down under a basket (upside_down: true)
+  its z axis points down, so scans that are counter-clockwise in the sensor's own frame run
+  clockwise seen from above. TF carries that, the driver's rot_verse stays at its default.
+  Position, yaw and which way up come from robot_dimensions.yaml (lidar).
 -->
 <robot xmlns:xacro="http://www.ros.org/wiki/xacro">
   <xacro:macro name="xlerobot_lidar" params="dims parent">
     <xacro:property name="l" value="${dims['lidar']}"/>
+    <!-- the scan plane is scan_below_mount from the mounting surface, below it when hung upside
+         down, above it when upright -->
+    <xacro:property name="flip" value="${-1 if l['upside_down'] else 1}"/>
 
     <link name="ldlidar_link">
       <visual>
-        <!-- housing is 0.0349 m tall, its mounting surface is l['scan_below_mount'] above
-             the scan plane, that is at z = -scan_below_mount in this flipped frame -->
+        <!-- housing is 0.0349 m tall, its mounting surface is scan_below_mount from the scan
+             plane, at z = -scan_below_mount in this frame either way up -->
         <origin xyz="0 0 ${-l['scan_below_mount'] + 0.0349 / 2}" rpy="0 0 0"/>
         <geometry><cylinder radius="0.0193" length="0.0349"/></geometry>
         <material name="xle_black"/>
       </visual>
       <collision>
-        <!-- housing is 0.0349 m tall, its mounting surface is l['scan_below_mount'] above
-             the scan plane, that is at z = -scan_below_mount in this flipped frame -->
+        <!-- housing is 0.0349 m tall, its mounting surface is scan_below_mount from the scan
+             plane, at z = -scan_below_mount in this frame either way up -->
         <origin xyz="0 0 ${-l['scan_below_mount'] + 0.0349 / 2}" rpy="0 0 0"/>
         <geometry><cylinder radius="0.0193" length="0.0349"/></geometry>
       </collision>
@@ -32,7 +35,8 @@
     <joint name="ldlidar_joint" type="fixed">
       <parent link="${parent}"/>
       <child  link="ldlidar_link"/>
-      <origin xyz="${l['x']} ${l['y']} ${l['mount_z'] - l['scan_below_mount']}" rpy="${pi} 0 ${l['yaw']}"/>
+      <origin xyz="${l['x']} ${l['y']} ${l['mount_z'] + flip * l['scan_below_mount']}"
+              rpy="${pi if l['upside_down'] else 0} 0 ${l['yaw']}"/>
     </joint>
   </xacro:macro>
 </robot>

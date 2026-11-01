@@ -1,41 +1,38 @@
-# XLeRobot 0.4.0 two-wheel base, physical dimensions.
+# XLeRobot 0.4.0, two-wheel ODrive base, physical dimensions.
 #
 # These are measurements, not constants. Anything marked TODO is a guess and is
 # probably wrong. See ARCHITECTURE.md, calibration section.
 
 xlerobot:
+  # Carl's cart (branch rosie): the brushless ODrive base, see docs/rosie-port-plan.md. Base values marked
+  # "cart" come from ../XLeRobot (branch rosie-config, config/cart-remote.yaml) and were measured on this cart.
+  # Everything still marked TODO, and the head, arms and lidar blocks further down, are the reference robot's
+  # numbers until they are measured or calibrated here.
   base:
     # --- odometry critical, do these first ---
     #
-    # Measured directly off the drive wheel: 125mm outer diameter.
-    wheel_radius: 0.0625
+    # cart: 6.5 in (165.1 mm) hub wheel, vendor spec, confirmed 2026-10-21. Half the tyre's outside
+    # diameter under load; an error here scales every velocity and all odometry.
+    wheel_radius: 0.0825
 
-    # Nose-up lean of the whole base, rad. The rear casters sit lower than the drive wheels'
-    # level, so the front deck is 9 mm higher over 290 mm (ruler, symmetric cart) = 1.78 deg.
-    # Applied as a pitch on base_footprint_joint about the axle, so the arms and the head see
-    # gravity correctly. Re-measure after changing wheels or casters.
-    pitch_up: 0.031
+    # Nose-up lean of the whole base, rad, applied as a pitch on base_footprint_joint about the axle
+    # so the arms and the head see gravity correctly. TODO measure on this cart: the hub wheels and
+    # the new casters changed it (the reference robot's was 0.031).
+    pitch_up: 0.0
 
-    # Distance between the two wheel contact patches. diff_drive_controller calls
-    # it wheel_separation. Measured 550mm - wider than the cart body itself
-    # (405-459mm across upstream's own chassis collision boxes) and wider than
-    # upstream's own reference URDF track (0.45m, wheels at y=+-0.225): the
-    # custom drive-wheel axle bar extends past the basket on both sides, unlike
-    # the stock cart's wheels which sit roughly flush with the body edge.
-    wheel_separation: 0.55
+    # cart: tyre centre to centre between the contact patches, 20 3/4 in (527 mm), measured
+    # 2026-10-21. diff_drive_controller calls it wheel_separation.
+    wheel_separation: 0.527
 
     # UMBmark correction if the two wheels are not equal. 1.0 until measured.
     wheel_radius_scale_left: 1.0
     wheel_radius_scale_right: 1.0
 
-    wheel_width: 0.020          # measured
-    wheel_mass: 0.15            # TODO
+    wheel_width: 0.045          # TODO measure the tyre
+    wheel_mass: 2.5             # TODO weigh, hub motor and tyre
 
     # --- chassis ---
-    # length/height still IKEA RASKOG nominal, TODO check against the real
-    # build. width corrected from upstream's own chassis collision boxes
-    # (0.405-0.459m depending which cross-section) - the old 0.350 guess was
-    # narrower than the actual cart.
+    # IKEA RASKOG nominal and the reference robot's fit, TODO check against this cart.
     body_length: 0.340
     body_width:  0.405
     body_height: 0.780
@@ -44,50 +41,56 @@ xlerobot:
     # against the real cart's front and rear edges.
     body_x_offset: 0.119
 
-    # axle height above floor. Measured 62.5mm, same as wheel_radius - the
-    # mount is not recessed.
-    axle_height: 0.0625
+    # axle height above floor, TODO measure. Assumes the hub axle is not recessed, so it equals
+    # wheel_radius.
+    axle_height: 0.0825
 
     # axle offset from base_link, positive is forward. TODO
     axle_x_offset: 0.0
 
-    # Four generic casters (front left/right, rear left/right) - the stock
-    # cart's original four wheels are all still there, the drive wheels are
-    # an addition on their own axle bar, not a replacement for any of
-    # them. No encoder on any of them, so each is a fixed sphere in the URDF.
-    # Diameter measured 55mm.
+    # Four passive casters (front left/right, rear left/right). No encoder on any of them, so each
+    # is a fixed sphere in the URDF. TODO measure: this cart has new casters (diameter and
+    # positions below are the reference robot's).
     caster_radius: 0.0275
     # base_link frame, front is +x (the drive-wheel end, where the arms and the
-    # head camera face). The cart body mesh spans x=-0.289 to x=0.052 (drive axle
-    # is x=0), the casters sit just inside its ends, scaled with the mesh. Not measured against the real
-    # robot's actual leg positions, just checked to not float in visibly empty
-    # space, and taken from the shared upstream URDF's cart placement.
+    # head camera face).
     caster_rear_x_offset: -0.259
     caster_front_x_offset: 0.045
-    # TODO measure. Estimated from the corrected body_width (0.405m), not
-    # measured directly - casters sit near the corners, inset a bit from
-    # the body edge. Same value used for front and rear pairs.
     caster_y_offset: 0.15
 
-    # Chassis only, no arms, no battery, no payload.
-    # Don't copy the 70.1 kg from the upstream URDF, that is ManiSkill's loaded
-    # cart scene and not this robot.
-    # TODO weigh it.
-    body_mass: 8.0
+    # cart: 17.2 kg complete (38 lb, new casters), weighed. base_link carries what the URDF has
+    # no other link for: chassis, battery, ODESC, Jetson. TODO subtract the arm and head link
+    # masses once those are checked; 16 kg until then.
+    body_mass: 16.0
     com_height: 0.35            # TODO, this sets the tip over limits
 
+    # --- ODrive (ODESC, ODrive v3 / firmware 0.5.1, USB) ---
+    # Read by the ODrive hardware interface (step 2 of the port plan); mock hardware ignores them.
+    # The tuning values are cart-measured, from config/base-characterize.sh (2026-10-25); the board's
+    # own gains (5.2 / 16.3 at encoder bandwidth 50, current_lim 10.5 A) are saved on the ODESC.
+    odrive:
+      serial_number: ""         # empty = the first board found
+      right_axis: 0             # M0 is the right wheel, M1 the left (board wiring)
+      left_axis: 1
+      # The left motor is the mirrored one on this cart (invert_left_wheel: true in cart-remote.yaml).
+      # That sign is applied once, as diff_drive_controller's left_wheel_radius_multiplier: -1.0
+      # (controllers.yaml), never also in the driver.
+      max_accel_mps2: 1.0       # per wheel, the board's VEL_RAMP
+      friction_ff_nm: 0.36      # feed-forward, 90% of the motors' own drag
+      inertia_ff: 0.419         # Nm per turn/s^2, the 17.2 kg cart
+      watchdog_s: 0.5           # the board drops the wheels to IDLE after this without a command
+
   # --- speed limits ---
-  # From the servo ceiling. Upstream clamps at max_raw = 3000 ticks/s:
-  #   3000 / (4096/360) = 263.7 deg/s = 4.60 rad/s
-  #   v_max = 4.60 * 0.0625 = 0.288 m/s
-  # Keep Nav2 under these.
+  # cart: 1.0 m/s and 1.0 m/s^2 per wheel, validated with `step --candidates` on rug and hardwood
+  # (2026-10-25); from 1.0 m/s the cart stops in 0.5 s and ~0.5 m. Raise the acceleration only after
+  # a brake-from-top-speed test with the arms up. Angular: a pure turn at 1.0 m/s per wheel is
+  # 2 * 1.0 / 0.527 = 3.8 rad/s; 2.0 until the turn has been tested with the arms on.
   limits:
-    wheel_max_angular_velocity: 4.60   # rad/s, servo limit
-    linear_velocity_max: 0.25          # m/s
-    angular_velocity_max: 1.50         # rad/s
-    # Low on purpose. Tall cart, two arms on top, narrow track.
-    linear_acceleration_max: 0.30      # m/s^2
-    angular_acceleration_max: 1.00     # rad/s^2
+    wheel_max_angular_velocity: 12.12  # rad/s, 1.0 m/s / wheel_radius
+    linear_velocity_max: 1.0           # m/s
+    angular_velocity_max: 2.0          # rad/s
+    linear_acceleration_max: 1.0       # m/s^2
+    angular_acceleration_max: 2.0      # rad/s^2
 
   # --- head pan/tilt, IDs 7 and 8 on bus1 ---
   head:
@@ -219,16 +222,22 @@ xlerobot:
       wrist_roll:    {zero_step: {left: 2079, right: 2018}, direction: -1, max_velocity: 0.8, lower: -2.7438473, upper: 2.8412063, model_offset: {left: -0.00000, right: -0.00000}}
       gripper:       {zero_step: {left: 1802, right: 1766}, direction:  1, max_velocity: 0.8, lower: -0.374533,  upper: 1.7453292}
 
-  # --- LD19 2D lidar, upside down under the second basket ---
-  # x, y: measured, centred and in line with the drive axle, base_link frame (front is +x).
-  # mount_z: measured, floor to the housing's mounting surface, 0.420 m.
-  # scan_below_mount: measured, the scan plane is 0.033 m from the mounting surface,
-  #   so 0.387 m above the floor.
-  # yaw: rotation of the lidar about z, base_link frame, counter-clockwise seen from above.
-  #   Checked in the Rerun scan view on the robot.
+  # --- LD19 2D lidar, low on the cart frame ---
+  # Carl's cart: on the centreline over the drive axle, in the gap between the bottom basket's rim and the
+  # middle basket's underside, scan plane about 0.30-0.35 m (docs/rosie-port-plan.md, section 2.4).
+  # TODO measure all of these on the cart once it is mounted; until then they are the reference robot's,
+  # which hangs its LD19 upside down from the second basket, the same kind of mount.
+  # x, y: base_link frame (front is +x), the drive axle is x=0.
+  # mount_z: floor to the housing's mounting surface.
+  # scan_below_mount: distance between the mounting surface and the scan plane (0.033 m on an LD19),
+  #   below the mount when upside down, above it when upright.
+  # upside_down: true when it hangs from a shelf, which flips its frame (z down).
+  # yaw: rotation of the lidar about z, base_link frame, counter-clockwise seen from above; the LD19's
+  #   forward arrow against the robot's front. Checked in RViz against a wall in front of the robot.
   lidar:
     x: 0.0
     y: 0.0
     mount_z: 0.420
     scan_below_mount: 0.033
+    upside_down: true
     yaw: 1.5707963

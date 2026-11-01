@@ -2,7 +2,7 @@
 """Experiment 2/3 of ADR-0005: the cube pose from a learned detector and mask instead of the yellow threshold.
 
 Scores saved frames of tools/cube_pose_eval.py on a machine with an NVIDIA GPU, no ROS needed (packages:
-tools/perception/requirements.txt; downloaded weights go to ~/.cache/xlerobot):
+tools/setup_venv.sh models; downloaded weights go to ~/.cache/xlerobot):
 
   python3 tools/segment_eval.py ~/pose_eval/cube_<time> [--step 4] [--prompt "a cube"]
 

@@ -1,9 +1,0 @@
-# Python packages for the tools in tools/ (TUI, calibration, MCP server, object perception service) on top of ROS 2 Jazzy.
-# rclpy, cv_bridge, the message packages, OpenCV, SciPy, PyYAML and TensorRT (JetPack) come from the system, so create the
-# venv with --system-site-packages (see docs/tools.md#python-environment).
--r mcp_server/requirements.txt
-textual>=8          # xlerobot_tui.py; Ubuntu's python3-textual is far too old
-pyserial            # calibrate_arm.py and the servo bus tests
-mcap                # calibrate_from_bag.py
-cuda-python         # object perception service (TensorRT runner); needs an NVIDIA GPU
-numpy<2             # ROS Jazzy's cv_bridge and Ubuntu's OpenCV are built against NumPy 1.x
