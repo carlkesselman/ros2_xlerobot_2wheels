@@ -166,7 +166,7 @@ robot's value standing in; "—" = no value yet. Where: `dims` = `robot_dimensio
 | Wheel radius | 0.0825 m | vendor (6.5 in), confirmed 2026-10-21 | dims, ctrl | then `calibrate_wheel_odometry.py straight-line`, 5 m+ on the real floor |
 | Track (contact patch to contact patch) | 0.527 m | cart, 2026-10-21 | dims, ctrl | then `rotate-in-place` for `wheel_separation_multiplier` |
 | Per-wheel radius scale | 1.0 | — | dims, ctrl | UMBmark square |
-| Wheel width (tyre) | 0.045 m | — | dims | calipers |
+| Wheel width (tyre) | 0.046 m | cart, 2026-11-01 | dims | calipers |
 | Wheel mass (motor + tyre) | 2.5 kg | — | dims | scale |
 | Axle height above floor | 0.0825 m | — (assumed = radius) | dims | ruler |
 | Base pitch (front deck vs rear) | 0.0 rad | — | dims | ruler: deck height at front and rear, over their distance |
