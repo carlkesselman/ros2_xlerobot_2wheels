@@ -25,9 +25,15 @@ skill_server:
     nav_timeout_s: 120.0
     arm_timeout_s: 60.0
     default_scaling: 1.0          # arm speed when a goal gives none (MoveIt reads 0 as full speed anyway)
-    # touch: straight down in steps until the tool point stops following (two steps in a row) or the load jumps
+    # touch: straight down in steps until the tool point falls behind the commands or the load jumps
     touch_step_m: 0.003
-    touch_max_travel_m: 0.02      # past the expected contact
+    touch_max_travel_m: 0.025     # past the expected contact
     touch_early_margin_m: 0.015   # contact this far above the expected top is something in the way
-    touch_stall_ratio: 0.4        # a step that moves less than this share of the command is a stall
-    touch_load_jump: 0.2          # effort change between steps on shoulder lift, elbow or wrist flex
+    touch_late_margin_m: 0.018    # contact this far below it: the tool point slid off the object's side (LOST_OBJECT); on the
+                                  # reference robot contact on top is 8-15 mm below where perception expects it (issue #16)
+    touch_settle_s: 0.25          # wait after each step before reading the tool point (the servos settle under load)
+    touch_stall_lag_m: 0.003      # contact: the tool point fell this far behind the commanded steps over the last three,
+                                  # counted from touch_early_margin_m above the expected top (on a cube 4-8 mm)
+    touch_stall_move_m: 0.0017    # ... and the last two steps each moved less than this (on a cube under 1.6 mm)
+    touch_load_jump: 0.2          # effort change between steps on shoulder lift, elbow or wrist flex; a guard for hard hits,
+                                  # a light contact on a cube changes the load by less than 0.05

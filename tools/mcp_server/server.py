@@ -18,6 +18,10 @@ cancelled + the arm's bus e-stopped (or the base stopped) if presence lapses mid
 estop/release_estop are never gated - always callable, including to recover from a
 PresenceLost error.
 
+Plans (ADR-0006): describe_scene, submit_plan, wait_for_event, get_execution_state and control_plan
+talk to the executive and the skill server (full_stack ... skills:=true executive:=true);
+submit_plan and resume need presence like any motion.
+
 Every tool takes an optional `reason` argument and every call is appended to
 logs/mcp_calls.jsonl (tool, arguments, reason, outcome, timing) via call_log.py - see
 replay_log.py to play a captured log back against a live server.

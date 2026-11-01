@@ -80,9 +80,12 @@ class SkillServer(Node):
         self.camera_up_roll = {a: float(P(f"camera_up_wrist_roll_{a}", 1.5708).value) for a in ("left", "right")}
         self.roll_tol = float(P("camera_up_tolerance", 0.6).value)
         self.touch_step = float(P("touch_step_m", 0.003).value)
-        self.touch_travel = float(P("touch_max_travel_m", 0.02).value)
+        self.touch_travel = float(P("touch_max_travel_m", 0.025).value)
         self.touch_early = float(P("touch_early_margin_m", 0.015).value)
-        self.stall_ratio = float(P("touch_stall_ratio", 0.4).value)
+        self.touch_late = float(P("touch_late_margin_m", 0.018).value)
+        self.touch_settle = float(P("touch_settle_s", 0.25).value)
+        self.stall_lag = float(P("touch_stall_lag_m", 0.003).value)
+        self.stall_move = float(P("touch_stall_move_m", 0.0017).value)
         self.load_jump = float(P("touch_load_jump", 0.2).value)
         self.loads = {}
         self.tip = {a: [float(v) for v in P(f"tip_offset_{a}", [0.0, 0.0, 0.0]).value] for a in ("left", "right")}
@@ -793,34 +796,68 @@ class SkillServer(Node):
             prev_load = self._load(arm, 0.4)
             # Steps are taken on the measured tool point: each command aims one step below where the tip really is,
             # corrected by how far the last command missed (the arm sags under gravity), and the travel limit is
-            # checked against the measured height, never the commanded one.
+            # checked against the measured height, never the commanded one. The same feedback steers the tip over
+            # the object's centre on the way down: approach leaves it up to 15 mm off, enough to land on an edge.
             z_prev = tip0[2]
             sag = 0.0
+            xy_bias = np.zeros(2)
+            tip_now = tip0
             q_cmd = {j: self.joints[j] for j in joints}
             R0 = self._fk(arm, q_cmd)[:3, :3]
-            stalls, contact = 0, None
+            lags, contact = [], None                             # (height before the step, how far it fell short)
+
+            # Settle over the object first: the corrections take a few commands to converge, and while they do the tip
+            # overshoots and then lags, which would look like contact.
+            for _ in range(6):
+                xy_cmd = centre[:2] + xy_bias
+                sol, miss = self._solve_fixed_hand(arm, q_cmd, (xy_cmd[0], xy_cmd[1], tip0[2] + sag), R0)
+                if miss > 0.002:
+                    raise SkillError(R.NOT_REACHABLE, f"the hand cannot reach over the object's centre at this angle ({miss * 1000:.0f} mm off)")
+                q_cmd = sol
+                self._joints_to(goal_handle, self.arm_ctl[arm], joints, [sol[j] for j in joints], 0.35, bus, f"{arm}_arm_controller")
+                time.sleep(self.touch_settle)
+                tip_now = self._tip_in_base(arm)
+                err = np.append(centre[:2], tip0[2]) - tip_now
+                sag = float(np.clip(sag + err[2] * 0.7, -0.03, 0.03))
+                xy_bias = np.clip(xy_bias + err[:2] * 0.7, -0.02, 0.02)
+                if np.linalg.norm(err) < 0.0015:
+                    break
+            z_prev = tip_now[2]
+            prev_load = self._load(arm, 0.3)
             while z_prev > floor + 0.0005:
                 z_goal = max(z_prev - step, floor)
                 z_cmd = z_goal + sag
-                sol, miss = self._solve_fixed_hand(arm, q_cmd, (tip0[0], tip0[1], z_cmd), R0)
+                xy_cmd = centre[:2] + xy_bias
+                sol, miss = self._solve_fixed_hand(arm, q_cmd, (xy_cmd[0], xy_cmd[1], z_cmd), R0)
                 if miss > 0.002:
                     raise SkillError(R.NOT_REACHABLE, f"the hand cannot go lower at this angle (z {z_cmd:.3f}, {miss * 1000:.0f} mm off)")
                 q_cmd = sol
                 self._joints_to(goal_handle, self.arm_ctl[arm], joints, [sol[j] for j in joints], 0.35, bus, f"{arm}_arm_controller")
-                time.sleep(0.15)
-                z_now = self._tip_in_base(arm)[2]
+                time.sleep(self.touch_settle)
+                tip_now = self._tip_in_base(arm)
+                z_now = tip_now[2]
                 load = self._load(arm)
                 moved, wanted = z_prev - z_now, z_prev - z_goal
                 sag = float(np.clip(sag + (z_goal - z_now) * 0.7, -0.03, 0.03))
+                xy_bias = np.clip(xy_bias + (centre[:2] - tip_now[:2]) * 0.7, -0.02, 0.02)
                 dload = float(np.max(np.abs(load - prev_load)))
-                stalls = stalls + 1 if wanted > 0.001 and moved < self.stall_ratio * wanted else 0
+                # The servos stick and slip on small steps (a step can fall 1.5 mm short in free air and catch up on
+                # the next), so the shortfall is summed with its sign, and only near the expected top: higher up, only
+                # a load jump counts.
+                lags = (lags + [(z_prev, wanted - moved, moved)])[-3:] if z_prev <= top + self.touch_early else []
+                # and on contact the tip nearly stops: free air has single slow steps, not two in a row
+                stopped = len(lags) == 3 and all(m < self.stall_move for _, _, m in lags[1:])
+                lag = sum(d for _, d, _ in lags) if stopped else 0.0
                 fb.tool_z, fb.load_change = float(z_now), dload
                 goal_handle.publish_feedback(fb)
                 self.get_logger().info(f"touch: goal {z_goal:.4f} cmd {z_cmd:.4f} tip {z_now:.4f} moved {moved * 1000:.1f}/{wanted * 1000:.1f} mm, "
+                                       f"{np.linalg.norm(tip_now[:2] - centre[:2]) * 1000:.1f} mm beside, "
                                        f"load {np.round(load, 3).tolist()} change {dload:.3f}")
-                by = [n for n, hit in (("stall", stalls >= 2), ("load", dload > self.load_jump)) if hit]
+                by = [n for n, hit in (("stall", lag >= self.stall_lag), ("load", dload > self.load_jump)) if hit]
                 if by:
-                    contact = (z_now, "+".join(by))
+                    # the tip met the object where it first fell behind, not where the lag added up
+                    first = next((z for z, d, _ in lags if d > 0.0005), z_now) if "stall" in by else z_now
+                    contact = (first, "+".join(by))
                     break
                 z_prev, prev_load = z_now, load
             if contact is None:
@@ -831,7 +868,11 @@ class SkillServer(Node):
             off = contact[0] - top
             if off > self.touch_early:
                 raise SkillError(R.COLLISION, f"contact {off * 1000:.0f} mm above the object's top ({contact[1]}): something is in the way")
-            result.result.message = f"contact {off * 1000:+.0f} mm from the expected top, sensed by {contact[1]}"
+            beside = np.linalg.norm(tip_now[:2] - centre[:2]) * 1000
+            if off < -self.touch_late:
+                raise SkillError(R.LOST_OBJECT, f"contact {-off * 1000:.0f} mm below the object's top ({contact[1]}, {beside:.0f} mm "
+                                                "beside its centre): the tool point probably slid off its side and pushed it")
+            result.result.message = f"contact {off * 1000:+.0f} mm from the expected top, {beside:.0f} mm beside its centre, sensed by {contact[1]}"
         except SkillError as e:
             if e.code == R.SAFETY_STOP:
                 retreat = False

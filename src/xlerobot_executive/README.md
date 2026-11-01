@@ -2,7 +2,8 @@
 
 Runs a planner's plan as a sequence of skills ([ADR-0006](../../docs/decisions/0006-plan-execute-watch.md)): validates
 it, runs the steps with their checks and failure handling, and reports every step as an event. The planner (a language
-model through MCP, or a script) submits a plan and then follows the events.
+model through MCP, or a script) submits a plan and then follows the events. The MCP server's `submit_plan`,
+`wait_for_event`, `get_execution_state`, `control_plan` and `describe_scene` tools are thin clients of these services.
 
 ```bash
 ros2 launch xlerobot_executive executive.launch.py         # needs the skill server (xlerobot_skills)
@@ -69,3 +70,15 @@ python3 -m pytest src/xlerobot_executive/test/ -v
 `test_plan.py` checks validation; `test_executive_mock.py` runs plans on mock hardware with the skill server and a
 scripted perception service (success, retries, goto, pause and resume, abort, one plan at a time, the safety stop, the
 lease), about three minutes.
+
+On the robot, with the full stack (`object_perception`, `skills` and `executive` on), the presence guard, and a cube of
+about 28 mm on the table within reach of the right arm:
+
+```bash
+XLEROBOT_ROBOT=1 python3 -m pytest src/xlerobot_executive/test/test_cube_robot.py -v
+```
+
+`test_cube_robot.py` finds the cube, approaches and touches it three times through plans (contact sensed, the same
+height each time, the cube not moved by the touch, checked by detecting it again), and touches a made-up object in the
+air, which must end `NOT_FOUND`. About three minutes; `XLEROBOT_ARM=left` uses the left arm, `XLEROBOT_CUBE="x,y,z"`
+picks one of several cubes.
