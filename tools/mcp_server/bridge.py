@@ -12,6 +12,7 @@ Motion calls are serialized through motion_lock - the robot only does one thing 
 design, not a limitation worth working around.
 """
 import datetime
+import json
 import math
 import pathlib
 import sys
@@ -42,6 +43,8 @@ from rclpy.qos import QoSDurabilityPolicy, QoSProfile, qos_profile_sensor_data
 from sensor_msgs.msg import CameraInfo, CompressedImage, JointState
 from std_msgs.msg import Bool
 from std_srvs.srv import SetBool
+from xlerobot_skill_msgs.action import Detect
+from xlerobot_skill_msgs.srv import ExecutionControl, SubmitPlan, WaitForEvent
 from tf2_ros import Buffer, TransformException, TransformListener
 
 import position_store
@@ -107,6 +110,11 @@ class XleRobotBridge(Node):
         self.nav_cancel_client = self.create_client(CancelGoal, "/navigate_to_pose/_action/cancel_goal")
         self.cmd_pub = self.create_publisher(TwistStamped, "/diff_drive_controller/cmd_vel", 10)
         self.estop_clients = {b: self.create_client(SetBool, f"/emergency_stop_{b}") for b in ESTOP_BUSES}
+        # the plan executive and the skills (ADR-0006)
+        self.submit_client = self.create_client(SubmitPlan, "/executive/submit_plan")
+        self.wait_client = self.create_client(WaitForEvent, "/executive/wait_for_event")
+        self.control_client = self.create_client(ExecutionControl, "/executive/control")
+        self.detect_action = ActionClient(self, Detect, "/skills/detect")
 
     # -- subscription callbacks (executor thread) --------------------------------------------
 
@@ -431,6 +439,89 @@ class XleRobotBridge(Node):
         if camera_pose_map is None:
             result["pose_note"] = f"camera pose unavailable (not localized yet?): {tf_error}"
         return result
+
+    # -- plans (the executive, ADR-0006) -------------------------------------------------------
+
+    def _service(self, client, request, timeout):
+        if not client.wait_for_service(timeout_sec=3.0):
+            raise MoveError(f"{client.srv_name} is not available - is the executive running (executive:=true)?")
+        result = self._wait_for(client.call_async(request), timeout)
+        if result is None:
+            raise MoveError(f"{client.srv_name} did not answer within {timeout:.0f}s")
+        return result
+
+    def submit_plan(self, plan):
+        self._require_presence()
+        r = self._service(self.submit_client, SubmitPlan.Request(plan_json=json.dumps(plan)), 30.0)
+        state = self.wait_for_event(after_seq=0, max_wait_s=0.0)
+        return {"accepted": r.accepted, "plan_id": r.plan_id, "errors": list(r.errors),
+                "last_seq": state["last_seq"] if r.accepted else None}
+
+    def wait_for_event(self, after_seq=0, max_wait_s=25.0):
+        max_wait_s = max(0.0, min(float(max_wait_s), 30.0))
+        r = self._service(self.wait_client, WaitForEvent.Request(after_seq=int(after_seq), max_wait_s=max_wait_s),
+                          max_wait_s + 10.0)
+        return {"events": [json.loads(e) for e in r.events_json], "last_seq": r.last_seq, "state": json.loads(r.state_json)}
+
+    def control_plan(self, command):
+        if command == "resume":
+            self._require_presence()
+        r = self._service(self.control_client, ExecutionControl.Request(command=command), 15.0)
+        if not r.ok:
+            raise MoveError(r.message)
+        return r.message
+
+    def describe_scene(self, prompt, label="", camera="head"):
+        """Detect objects for a prompt and draw them numbered on a fresh frame of the camera."""
+        if not self.detect_action.wait_for_server(timeout_sec=3.0):
+            raise MoveError("/skills/detect is not available - is the skill server running (skills:=true)?")
+        handle = self._wait_for(self.detect_action.send_goal_async(Detect.Goal(prompt=prompt, label=label, frames=3)), 15.0)
+        if handle is None or not handle.accepted:
+            raise MoveError("detect refused the goal")
+        res = self._wait_for(handle.get_result_async(), 60.0)
+        if res is None:
+            raise MoveError("detect did not finish within 60s")
+        result = res.result
+        frame, info = self._grab_frame(camera)
+        dets = result.detections.detections
+        objects = []
+        for k, d in enumerate(dets, 1):
+            p, sz = d.bbox.center.position, d.bbox.size
+            objects.append({"id": k, "label": d.results[0].hypothesis.class_id if d.results else label or prompt,
+                            "score": round(float(d.results[0].hypothesis.score), 2) if d.results else None,
+                            "pose": [round(p.x, 4), round(p.y, 4), round(p.z, 4)], "frame": result.detections.header.frame_id,
+                            "size_m": [round(sz.x, 4), round(sz.y, 4), round(sz.z, 4)]})
+        out = {"objects": objects, "skill_result": result.result.message, "image": None}
+        if frame is not None and info is not None and dets:
+            try:
+                tf = self.tf_buffer.lookup_transform(info.header.frame_id, result.detections.header.frame_id, rclpy.time.Time(),
+                                                     timeout=rclpy.duration.Duration(seconds=1.0))
+                t, q = tf.transform.translation, tf.transform.rotation
+                x, y, z, w = q.x, q.y, q.z, q.w
+                R = np.array([[1 - 2 * (y * y + z * z), 2 * (x * y - z * w), 2 * (x * z + y * w)],
+                              [2 * (x * y + z * w), 1 - 2 * (x * x + z * z), 2 * (y * z - x * w)],
+                              [2 * (x * z - y * w), 2 * (y * z + x * w), 1 - 2 * (x * x + y * y)]])
+                K, D = np.array(info.k).reshape(3, 3), np.array(info.d, float)
+                for o in objects:
+                    c, hs = np.array(o["pose"]), np.array(o["size_m"]) / 2.0
+                    corners = np.array([[c[0] + sx * hs[0], c[1] + sy * hs[1], c[2] + sz * hs[2]]
+                                        for sx in (-1, 1) for sy in (-1, 1) for sz in (-1, 1)])
+                    cam = (R @ corners.T).T + [t.x, t.y, t.z]
+                    if np.any(cam[:, 2] <= 0.01):
+                        continue
+                    uv, _ = cv2.projectPoints(cam.reshape(-1, 1, 3), np.zeros(3), np.zeros(3), K, D if np.any(D) else None)
+                    hull = cv2.convexHull(uv.reshape(-1, 2).astype(np.float32)).astype(np.int32)
+                    cv2.polylines(frame, [hull], True, (0, 0, 255), 2)
+                    x0, y0 = hull.reshape(-1, 2).min(axis=0)
+                    cv2.putText(frame, str(o["id"]), (int(x0), int(y0) - 6), cv2.FONT_HERSHEY_SIMPLEX, 0.9, (0, 0, 255), 2)
+            except Exception as e:                            # noqa: BLE001  (the list is still useful without marks)
+                out["image_note"] = f"marks not drawn: {e}"
+        if frame is not None:
+            path = CAPTURE_DIR / f"scene_{int(time.time())}.jpg"
+            path.parent.mkdir(parents=True, exist_ok=True)
+            cv2.imwrite(str(path), frame)
+            out["image"] = str(path)
+        return out
 
     # -- spatial memory (remember_object/recall_objects/forget_object) -----------------------
     # Not presence-gated: this only reads cached sensor/TF state and writes a YAML file, it

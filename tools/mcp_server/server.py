@@ -232,6 +232,62 @@ def forget_object(label: str, reason: str = "") -> dict:
     return bridge.get_bridge().forget_object(label)
 
 
+# -- plans (ADR-0006): the planner submits a plan and follows its events --------------------------
+
+@mcp.tool()
+@logged
+@catch_bridge_errors
+def submit_plan(plan: dict, reason: str = "") -> dict:
+    """Run a task as a plan on the robot's executive. `plan` is a JSON object (schema version 1):
+    {"schema_version": 1, "task": "...", "objects": {name: {"prompt", "pose": [x, y, z], "frame", "size_m"}},
+     "steps": [{"id", "skill", "params", "pre", "expect", "on_failure", "on_pause", "timeout_s"}, ...]}.
+    Skills: navigate_to, look_at, detect (params.bind sets an object's pose), move_arm, approach, touch. Checks:
+    {"detected": object}, {"joint_near": {"position", "tol"}}. on_failure: {"codes": [...], "action":
+    "retry"|"goto"|"abort", "max_retries": 1-5, "step"}. Full rules: src/xlerobot_executive/README.md.
+    Returns accepted, plan_id, errors (every problem when refused) and last_seq: then call wait_for_event with
+    after_seq=last_seq, at least once a minute while the plan runs (otherwise the robot retreats and aborts).
+    Requires the presence heartbeat."""
+    return bridge.get_bridge().submit_plan(plan)
+
+
+@mcp.tool()
+@logged
+@catch_bridge_errors
+def wait_for_event(after_seq: int = 0, max_wait_s: float = 25.0, reason: str = "") -> dict:
+    """Events of the running plan after `after_seq` (step_started, step_succeeded, step_failed with code and message,
+    paused, resumed, plan_succeeded / plan_failed / plan_aborted), waiting up to max_wait_s (at most 30) for one,
+    plus the executive's state and last_seq for the next call. Keeps the plan's lease alive."""
+    return bridge.get_bridge().wait_for_event(after_seq, max_wait_s)
+
+
+@mcp.tool()
+@logged
+@catch_bridge_errors
+def get_execution_state(reason: str = "") -> dict:
+    """The executive's state now (status, plan, current step, objects) and last_seq, without waiting."""
+    return bridge.get_bridge().wait_for_event(0, 0.0) | {"events": []}
+
+
+@mcp.tool()
+@logged
+@catch_bridge_errors
+def control_plan(command: str, reason: str = "") -> str:
+    """pause, resume or abort the running plan. Pausing holds the arm (or retreats it, per the step's on_pause);
+    resume re-runs the paused step (requires the presence heartbeat)."""
+    return bridge.get_bridge().control_plan(command)
+
+
+@mcp.tool()
+@logged
+@catch_bridge_errors
+def describe_scene(prompt: str, label: str = "", reason: str = "") -> dict:
+    """Find objects for a text prompt (e.g. "a cube") with the head camera and return them numbered: id, label,
+    score, pose [x, y, z] and frame (map when localised), size. `image` is a head camera frame with the same
+    numbers drawn on the objects, to look at when choosing which one a plan should use; put the chosen object's
+    pose into the plan's objects. No presence needed."""
+    return bridge.get_bridge().describe_scene(prompt, label)
+
+
 @mcp.tool()
 @logged
 @catch_bridge_errors
