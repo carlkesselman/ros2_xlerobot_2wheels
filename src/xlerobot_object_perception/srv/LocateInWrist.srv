@@ -9,6 +9,8 @@ string prompt                 # detector prompt, e.g. "a cube"
 float32 size_mm               # edge length; 0 = 28
 geometry_msgs/Point prior     # where the object is expected, in base_footprint
 uint8 frames                  # frames fitted and averaged; 0 = 2
+bool fix_height_yaw           # fit only x and y, the height from the prior and the yaw from prior_yaw (most of the
+float32 prior_yaw             # object behind the claw, e.g. with the claw tip right over it)
 ---
 bool success
 string code                   # NO_FRAMES, NO_DET, NO_MASK, NO_FIT, STALE_TF, BUSY, BAD_PROMPT, NO_OCCLUDER

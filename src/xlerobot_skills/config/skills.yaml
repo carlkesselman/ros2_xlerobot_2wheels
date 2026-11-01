@@ -20,7 +20,7 @@ skill_server:
     # yours: align the tip over a cube (the align skill, height_m a few mm) and see where it really is with a camera
     # above; the right arm's value here was measured that way.
     tip_offset_left: [0.0, -0.111, 0.0]
-    tip_offset_right: [-0.0034, -0.1269, 0.0046]
+    tip_offset_right: [0.0005, -0.1259, 0.0041]
     table_margin_m: 0.025         # the table box's top above the measured table: the arms sag 1-2 cm below the model
     table_box_min_x: 0.20         # the table box starts this far in front; the resting claws hang down to table height closer in
     association_gate_m: 0.05      # how far a re-detection may be from the object reference
@@ -33,6 +33,7 @@ skill_server:
     align_frames: 3               # wrist frames fitted per measurement
     align_view_offset_m: 0.02     # measure from beside the object, the tip shifted toward the image's left
     align_min_height_m: 0.01      # lowest working gap above the object's top with height_m
+    align_check_over: true        # measure again over the object (x and y only) and correct there
     gripper_open: -0.7            # the gripper joint while aligning (the moving jaw out of the camera's view)
     # touch: straight down in steps until the tool point falls behind the commands or the load jumps
     touch_step_m: 0.003

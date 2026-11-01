@@ -36,8 +36,9 @@ def _perimeter_samples(poly, n):
     return hv[i] + seg[i] * f[:, None]
 
 
-def fit_cube(mask, occluder, T_base_cam, K, D, size, prior):
-    """(centre in base, yaw, rms px, visible share) or None. mask, occluder: bool images; prior: centre guess (base)."""
+def fit_cube(mask, occluder, T_base_cam, K, D, size, prior, fixed_yaw=None):
+    """(centre in base, yaw, rms px, visible share) or None. mask, occluder: bool images; prior: centre guess (base).
+    With fixed_yaw only x and y are fitted (height from the prior): enough when the claw hides much of the object."""
     h, w = mask.shape
     m8 = mask.astype(np.uint8)
     occ = cv2.dilate(occluder.astype(np.uint8), np.ones((5, 5), np.uint8)) if occluder is not None else np.zeros_like(m8)
@@ -66,12 +67,18 @@ def fit_cube(mask, occluder, T_base_cam, K, D, size, prior):
         r2 = outside[np.clip(s[:, 1], 0, h - 1).astype(int), np.clip(s[:, 0], 0, w - 1).astype(int)]
         return np.concatenate([np.asarray(r1, float), r2])
 
-    best = None
-    for yaw0 in np.radians([0.0, 22.5, 45.0, 67.5]):                   # a cube repeats every 90 degrees
-        r = least_squares(resid, [*prior, yaw0], x_scale=[0.005, 0.005, 0.005, 0.2], loss="soft_l1", f_scale=2.0)
-        if best is None or r.cost < best.cost:
-            best = r
-    q = best.x
+    if fixed_yaw is not None:
+        def resid_xy(p):
+            return resid([p[0], p[1], prior[2], fixed_yaw])
+        r = least_squares(resid_xy, list(prior[:2]), x_scale=[0.005, 0.005], loss="soft_l1", f_scale=2.0)
+        q = np.array([r.x[0], r.x[1], prior[2], fixed_yaw])
+    else:
+        best = None
+        for yaw0 in np.radians([0.0, 22.5, 45.0, 67.5]):               # a cube repeats every 90 degrees
+            r = least_squares(resid, [*prior, yaw0], x_scale=[0.005, 0.005, 0.005, 0.2], loss="soft_l1", f_scale=2.0)
+            if best is None or r.cost < best.cost:
+                best = r
+        q = best.x
     rms = float(np.sqrt(np.mean(resid(q)[:len(edge)] ** 2)))
     s = _perimeter_samples(outline(q), 96)
     inside = (s[:, 0] >= 0) & (s[:, 0] < w) & (s[:, 1] >= 0) & (s[:, 1] < h)

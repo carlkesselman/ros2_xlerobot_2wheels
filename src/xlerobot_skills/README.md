@@ -28,22 +28,25 @@ perception service, `navigate_to` Nav2 with localisation. Tool points, the table
 ## Align
 
 After `approach` the claw tip is above the object to within the head camera's and the arm's errors, about a centimetre.
-`align` opens the gripper (the moving jaw would hide the object), measures the object with the wrist camera
-(`/perception/locate_in_wrist`), moves the tip over the measured centre at the same height and hand orientation with
-the encoders keeping it there, and measures again, until the tip is within `align_tolerance_m` (2 mm) of the centre.
-Over the object the claw hides most of it from the camera, so every measurement is taken from beside it: the tip
-shifted `align_view_offset_m` (2 cm) toward the image's left, where the object shows whole. With `height_m` it first
-lowers the tip to that gap above the object and works there, since lowering after the last measurement would add the
-arm's sag, which changes with the pose and which the encoders do not see. The result is the remaining offset by the
-wrist camera and the measured object pose; a plan's executive binds that pose to the object, so a following `touch`
-centres on it.
+`align` opens the gripper (the moving jaw would hide the object) and uses the wrist camera
+(`/perception/locate_in_wrist`) in two stages:
 
-On the reference robot the wrist camera reports 0.4-1.8 mm after one to four moves (12 of 13 runs on the right arm,
-one lost the cube's outline). A camera above the table, as a check, shows the real tip 2-8 mm from the centre with 3-4
-mm between runs: the wrist camera measures the object well, but where the claw tip really is relative to the camera
-(`tip_offset_<arm>`) and the hand's small turns between the measuring pose and the final one (servo play the encoders
-do not see) add to it. Measure the tip for your claws: align over a cube with `height_m` a few mm and see where the tip
-is with a camera above.
+1. From beside the object: over it the claw hides most of it, so the tip is shifted `align_view_offset_m` (2 cm) toward
+   the image's left, where the object shows whole, and the object's centre, height and yaw are measured there. The tip
+   moves over that centre at the same height and hand orientation, the encoders keeping it there, and the object is
+   measured again from beside it, until within `align_tolerance_m` (2 mm).
+2. Over the object (`align_check_over`): the hand turns a little between the two poses (servo play the encoders do not
+   see), so the object is measured once more with the tip where it ends up. The claw hides part of it, so only x and y
+   are fitted, with the height and yaw from stage 1; small moves correct what is left.
+
+With `height_m` the tip is first lowered to that gap above the object and works there. The result is the remaining
+offset by the wrist camera and the measured object pose; a plan's executive binds that pose to the object, so a
+following `touch` centres on it.
+
+On the reference robot (right arm, cube about 25 cm ahead): 0.6-1.2 mm by the wrist camera; a camera above the table
+puts the real tip 2.0-2.1 mm from the centre over three runs. That needs the claw tip right in the camera's frame:
+`tip_offset_right` was measured this way (align with `height_m` about 12 mm, then the real tip from a camera above,
+corrected for the parallax of its height above the cube). Measure yours the same way.
 
 ## Touch
 

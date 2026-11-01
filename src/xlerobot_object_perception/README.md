@@ -22,7 +22,8 @@ the expected position, the mask, and a cube of known size fitted to the mask's o
 claw hides part of what the camera sees; a fixed mask per camera marks it (`config/wrist_occluder_<arm>.png`, made with
 `tools/wrist_occluder.py`; the ones here are the reference robot's printed claws), so the outline next to the claw is not
 taken for the object's edge. The cube's size fixes its distance. The pose comes through the arm's kinematics, so the
-offset to the claw tip does not depend on the arm's absolute accuracy.
+offset to the claw tip does not depend on the arm's absolute accuracy. With `fix_height_yaw` only x and y are fitted, the height and yaw
+given: enough when the claw hides much of the object, as with the claw tip right over it.
 
 On the reference robot, with the object whole in view, repeated calls at a still pose agree to 0.3 mm horizontally and
 2 mm in height; about 0.9 s for three frames. `wrist_debug_dir` (a parameter, settable at run time) saves every frame

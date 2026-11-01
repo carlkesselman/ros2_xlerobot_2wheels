@@ -93,6 +93,7 @@ class SkillServer(Node):
         self.align_frames = int(P("align_frames", 3).value)
         self.align_view = float(P("align_view_offset_m", 0.02).value)
         self.align_min_height = float(P("align_min_height_m", 0.01).value)
+        self.align_final = bool(P("align_check_over", True).value)
         self.gripper_open = float(P("gripper_open", -0.7).value)
         self.loads = {}
         self.tip = {a: [float(v) for v in P(f"tip_offset_{a}", [0.0, 0.0, 0.0]).value] for a in ("left", "right")}
@@ -906,12 +907,14 @@ class SkillServer(Node):
                 self.destroy_subscription(load_sub)
                 self._release([bus])
 
-    def _locate_in_wrist(self, goal_handle, arm, prompt, size, prior, timeout=30.0):
-        """The object's centre (base frame) and yaw measured by the arm's wrist camera."""
+    def _locate_in_wrist(self, goal_handle, arm, prompt, size, prior, timeout=30.0, yaw=None):
+        """The object's centre (base frame) and yaw measured by the arm's wrist camera; with `yaw`, only x and y are
+        measured (the height from the prior)."""
         if not self.locate.wait_for_service(timeout_sec=3.0):
             raise SkillError(R.FAILED, "the object perception service (/perception/locate_in_wrist) is not running")
         req = LocateInWrist.Request(camera=arm, prompt=prompt, size_mm=float(size) * 1000.0, frames=self.align_frames,
-                                    prior=Point(x=float(prior[0]), y=float(prior[1]), z=float(prior[2])))
+                                    prior=Point(x=float(prior[0]), y=float(prior[1]), z=float(prior[2])),
+                                    fix_height_yaw=yaw is not None, prior_yaw=float(yaw or 0.0))
         res = self._wait(self.locate.call_async(req), timeout, goal_handle, guard=False)
         if not res.success:
             if res.code in ("NO_DET", "NO_MASK", "NO_FIT"):
@@ -1008,6 +1011,35 @@ class SkillServer(Node):
                     break
                 target = target + off
             q_cmd, at = self._hold_tip(goal_handle, arm, joints, bus, q_cmd, R0, (target[0], target[1], height))
+            # Then measure where the tip ends up: the claw hides part of the object here, so only x and y are fitted,
+            # the height and yaw from the looks from beside. The hand turns a little between the two poses (servo play
+            # the encoders do not see), which this catches.
+            final = None
+            if np.linalg.norm(off) <= tol and self.align_final:
+                for k in range(self.align_steps):
+                    fb.phase = "measuring"
+                    goal_handle.publish_feedback(fb)
+                    time.sleep(0.3)
+                    try:
+                        here, _, m = self._locate_in_wrist(goal_handle, arm, g.object.prompt, size, check, yaw=yaw)
+                    except SkillError as e:
+                        if e.code != R.LOST_OBJECT:
+                            raise
+                        self.get_logger().info(f"align: over the object the wrist camera cannot measure it ({e}); "
+                                               "keeping the result from beside it")
+                        break
+                    tip_now = self._tip_in_base(arm)
+                    final = here[:2] - tip_now[:2]
+                    self.get_logger().info(f"align: over it, the tip is {np.round(final * 1000, 1).tolist()} mm from the "
+                                           f"centre (rms {m.rms_px:.1f} px, visible {m.visible:.2f})")
+                    check = np.array([here[0], here[1], check[2]])
+                    if np.linalg.norm(final) <= tol or k == self.align_steps - 1:
+                        break
+                    target = tip_now[:2] + final
+                    q_cmd, at = self._hold_tip(goal_handle, arm, joints, bus, q_cmd, R0, (target[0], target[1], height))
+                    steps += 1
+                if final is not None:
+                    off = final
             out = PoseStamped()
             out.header.frame_id = g.object.pose.header.frame_id or BASE_FRAME
             c_, s_ = math.cos(yaw), math.sin(yaw)

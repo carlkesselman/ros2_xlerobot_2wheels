@@ -65,7 +65,7 @@ class ObjectPerception(Node):
         self.occluder_dir = P("wrist_occluder_dir", "").value or os.path.join(
             get_package_share_directory("xlerobot_object_perception"), "config")
         self.wrist_min_score = float(P("wrist_min_score", 0.05).value)
-        self.wrist_max_rms = float(P("wrist_max_rms_px", 4.0).value)
+        P("wrist_max_rms_px", 4.0)
         P("wrist_debug_dir", "")                           # non-empty: save each wrist frame with its mask and fit
         self.occluders = {}
         self.prof = {}
@@ -335,7 +335,7 @@ class ObjectPerception(Node):
                 self.destroy_subscription(sub)
         return frames, info
 
-    def _locate_frame(self, camera, img, frame_id, stamp, K, D, prior, size):
+    def _locate_frame(self, camera, img, frame_id, stamp, K, D, prior, size, fixed_yaw=None):
         """(centre, yaw, rms, visible) or a failure code, for one wrist frame."""
         try:
             tf = self.tf_buf.lookup_transform(self.target, frame_id, Time(seconds=int(stamp), nanoseconds=int((stamp % 1) * 1e9)),
@@ -354,7 +354,7 @@ class ObjectPerception(Node):
         mask = self.sam(img, box[1:])
         if mask.sum() < 50:
             return "NO_MASK"
-        out = wrist_fit.fit_cube(mask, self._occluder(camera), T_base_cam, K, D, size, prior)
+        out = wrist_fit.fit_cube(mask, self._occluder(camera), T_base_cam, K, D, size, prior, fixed_yaw)
         debug_dir = self.get_parameter("wrist_debug_dir").value
         if debug_dir:
             dbg = img.copy()
@@ -367,7 +367,7 @@ class ObjectPerception(Node):
                 cv2.putText(dbg, f"rms {out[2]:.1f} vis {out[3]:.2f} z {out[0][2]:.3f}", (8, 20), cv2.FONT_HERSHEY_SIMPLEX, 0.5, (0, 255, 0), 1)
             os.makedirs(debug_dir, exist_ok=True)
             cv2.imwrite(os.path.join(debug_dir, f"{camera}_{stamp:.3f}.jpg"), dbg)
-        if out is None or out[2] > self.wrist_max_rms:
+        if out is None or out[2] > self.get_parameter("wrist_max_rms_px").value:
             return "NO_FIT"
         return out
 
@@ -397,7 +397,8 @@ class ObjectPerception(Node):
                 return res
             fits, codes = [], []
             for t, fid, img in frames:
-                out = self._locate_frame(req.camera, img, fid, t, info["K"], info["D"], prior, size)
+                out = self._locate_frame(req.camera, img, fid, t, info["K"], info["D"], prior, size,
+                                         float(req.prior_yaw) if req.fix_height_yaw else None)
                 (codes if isinstance(out, str) else fits).append(out)
             if not fits:
                 res.code = codes[0]
