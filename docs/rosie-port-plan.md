@@ -7,6 +7,8 @@ built or tested yet.
 
 ## 1. How the two robots differ
 
+The full inventory, wiring, power and measurement list for Carl's cart is [platform.md](platform.md).
+
 | | this repo (reference robot) | Carl's cart (`rosie-config`) |
 |---|---|---|
 | Cart computer | Jetson Orin NX, JetPack 7.2 | **elroy**, Jetson Orin Nano, JetPack 7, `wlP1p1s0` wifi |
