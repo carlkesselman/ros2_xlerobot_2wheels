@@ -141,12 +141,14 @@ Notes:
   so USB ties the drill battery's negative to the Orin's (and the Solix's) ground. Large motor currents can then
   return partly through the USB cable, the classic cause of ODrive USB disconnects. ODrive recommends a USB
   isolator. Worth fitting if the board ever drops off USB while driving.
-- **No emergency stop or main switch** (2026-11-01). Stopping is software only: `diff_drive_controller`'s 0.25 s
-  command timeout, the ODESC's own 0.5 s watchdog (the wheels coast; from 1 m/s the cart stops within ~0.6 m), and
-  for the arms, torque off on disconnect. None of these helps if the Orin or the ROS stack hangs with a velocity
-  latched. **Recommended before Nav2 drives the cart unattended:** a latching mushroom switch in the drill
-  battery's positive line (it cuts the motors and they coast; at 1 m/s their back-EMF is only ~5 V, KV ~22), and ideally a
-  second pole in the 12 V servo line. The Orin and the cameras stay up, so the stack can be inspected afterwards.
+- **Cut-off: the switch on the drill battery's connector** (2026-11-01). It cuts the ODESC and so the motors, which
+  coast (at 1 m/s their back-EMF is only ~5 V, KV ~22). Nothing cuts the 12 V servo line or the compute except
+  unplugging. In software: `diff_drive_controller`'s 0.25 s command timeout, the ODESC's own 0.5 s watchdog (from
+  1 m/s the cart stops within ~0.6 m), and for the arms, torque off on disconnect; none of these helps if the Orin
+  or the ROS stack hangs with a velocity latched, which is what the battery switch is for. Before Nav2 drives the
+  cart unattended, check the switch can be reached and hit quickly from beside a moving cart; if not, a latching
+  mushroom switch in the same line does the same job, ideally with a second pole for the 12 V servo line. The
+  Orin and the cameras stay up either way, so the stack can be inspected afterwards.
 
 ## 6. Measurements
 
@@ -223,5 +225,5 @@ robot's value standing in; "—" = no value yet. Where: `dims` = `robot_dimensio
 1. ~~What powers the ODESC?~~ A 20 V 4 Ah drill battery (2026-11-01), §5.
 2. ~~What powers the hub, the Pi 5 and the leader arms?~~ Hub: the Solix's USB-C1. Pi 5: a standard Raspberry Pi power supply. Leader arms: their own DC supply (2026-11-01).
 3. ~~Which Solix?~~ Anker SOLIX C300 DC (2026-11-01), §5.
-4. ~~Emergency stop or main switch?~~ None (2026-11-01); one is recommended before unattended Nav2 driving, §5.
+4. ~~Emergency stop or main switch?~~ The switch on the drill battery's connector cuts the base (2026-11-01), §5.
 5. ~~Other parts?~~ None (2026-11-01): the list above is complete.
