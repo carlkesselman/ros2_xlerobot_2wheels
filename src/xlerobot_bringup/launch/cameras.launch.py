@@ -145,6 +145,7 @@ def _camera_nodes(context, *args, **kwargs):
                 # URDF optical frame name below, regardless of what cameras.yaml said.
                 "frame_id": cfg.get("frame_id", f"{name}_camera_optical_frame"),
                 "camera_info_url": "",
+                "brightness": int(cfg.get("brightness", 0)),
                 "image_raw.ffmpeg.encoder": cfg["encoder"],
                 "image_raw.ffmpeg.encoder_av_options": cfg["encoder_options"],
                 "image_raw.ffmpeg.bit_rate": cfg["bit_rate"],

@@ -369,6 +369,8 @@ class ObjectPerception(Node):
             cv2.imwrite(os.path.join(debug_dir, f"{camera}_{stamp:.3f}.jpg"), dbg)
         if out is None or out[2] > self.get_parameter("wrist_max_rms_px").value:
             return "NO_FIT"
+        if abs(out[0][2] - prior[2]) > 0.03 or out[3] < 0.3:    # a cube floating or mostly out of sight: a wrong fit
+            return "NO_FIT"
         return out
 
     def _on_locate(self, req, res):

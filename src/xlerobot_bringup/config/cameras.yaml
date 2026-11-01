@@ -18,6 +18,8 @@ defaults:
   encoder_options: "preset:ultrafast,tune:zerolatency"
   bit_rate: 2000000
   gop_size: 30
+  # usb_cam's own default is 50, near the top of these cameras' -64..64 range: washed out in sunlight
+  brightness: 0
 
 # frame_id is the camera's optical frame in the URDF (head from sensors.xacro, the
 # wrist ones from so101_arm.xacro), so the video can be placed in the robot. It's also the
