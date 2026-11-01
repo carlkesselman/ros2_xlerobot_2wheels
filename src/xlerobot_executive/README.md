@@ -36,9 +36,10 @@ JSON, schema version 1 (full rules in `xlerobot_executive/plan.py`):
 }
 ```
 
-- **Skills**: `navigate_to`, `look_at`, `detect`, `move_arm`, `approach`, `touch` with their parameters (see the
-  skill server's README). Objects are named in `objects`; `detect` with `bind` sets an object's pose from the detection
-  nearest to its previous pose, and later steps refer to the object by name.
+- **Skills**: `navigate_to`, `look_at`, `detect`, `move_arm`, `approach`, `touch`, `align` with their parameters (see
+  the skill server's README). Objects are named in `objects`; `detect` with `bind` sets an object's pose from the
+  detection nearest to its previous pose, `align` sets it from the wrist camera's measurement, and later steps refer to
+  the object by name.
 - **Checks**: `pre` before a step and `expect` after it, from a fixed list: `{"detected": object}`,
   `{"joint_near": {"position": saved position, "tol": rad}}`. A failed check is a failure with code `FAILED`.
 - **Failures**: `on_failure` with `codes` (empty = any), `action` `retry`, `goto` (a step id) or `abort` (default),
@@ -79,6 +80,6 @@ XLEROBOT_ROBOT=1 python3 -m pytest src/xlerobot_executive/test/test_cube_robot.p
 ```
 
 `test_cube_robot.py` finds the cube, approaches and touches it three times through plans (contact sensed, the same
-height each time, the cube not moved by the touch, checked by detecting it again), and touches a made-up object in the
-air, which must end `NOT_FOUND`. About three minutes; `XLEROBOT_ARM=left` uses the left arm, `XLEROBOT_CUBE="x,y,z"`
+height each time, the cube not moved by the touch, checked by detecting it again), aligns the claw tip over it with the
+wrist camera (within 3 mm by that camera), and touches a made-up object in the air, which must end `NOT_FOUND`. About three minutes; `XLEROBOT_ARM=left` uses the left arm, `XLEROBOT_CUBE="x,y,z"`
 picks one of several cubes.

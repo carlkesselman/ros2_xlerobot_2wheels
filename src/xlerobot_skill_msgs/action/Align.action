@@ -1,0 +1,19 @@
+# With the claw tip above an object (after approach), measure the object with the wrist camera and move the tip over
+# its centre, at the same height and hand orientation, until the camera sees it there within the tolerance. Opens the
+# gripper first so the moving jaw is out of the camera's view.
+string arm                            # left or right
+xlerobot_skill_msgs/ObjectRef object
+float32 tolerance_m                   # remaining offset accepted, by the wrist camera; 0 = default
+uint8 max_steps                       # measure-and-move rounds; 0 = default
+float32 height_m                      # work at this gap between the tool point and the object's top (lowered first,
+                                      # measured there); 0 = stay at the approach height
+---
+xlerobot_skill_msgs/SkillResult result
+geometry_msgs/PoseStamped object_pose # the object measured by the wrist camera, in the frame of the request
+float32 offset_m                      # tip to object centre (horizontal) by the wrist camera at the end
+float32 offset_x_m                    # its components in base_footprint
+float32 offset_y_m
+uint8 steps
+---
+string phase                          # opening, measuring, moving
+float32 offset_m

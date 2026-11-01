@@ -17,12 +17,33 @@ ros2 action send_goal --feedback /skills/look_at xlerobot_skill_msgs/action/Look
 | `/skills/move_arm` | Moves an arm to a saved position, puts its gripper link at a point, or (`tool_point`) its claw tip at a point with the wrist camera on top. |
 | `/skills/approach` | Re-detects an object near a reference pose (`NOT_FOUND`, `AMBIGUOUS` instead of guessing) and puts the claw tip above it. |
 | `/skills/touch` | From above an object, moves the claw tip down over its centre until contact, then backs up (see below). |
+| `/skills/align` | From above an object, measures it with the wrist camera and moves the claw tip over its centre (see below). |
 
 Motions need the operator presence heartbeat (`/mcp_presence_ok`). Losing it, or the safety supervisor's `/e_stop`,
 stops a motion with `SAFETY_STOP`: the arm holds where it is with torque on. Two motions on one servo bus at once are
 refused. Requires the stack; `move_arm`, `approach` and `touch` need move_group, `detect` and `approach` the object
 perception service, `navigate_to` Nav2 with localisation. Tool points, the table margin and the touch thresholds are in
 `config/skills.yaml`.
+
+## Align
+
+After `approach` the claw tip is above the object to within the head camera's and the arm's errors, about a centimetre.
+`align` opens the gripper (the moving jaw would hide the object), measures the object with the wrist camera
+(`/perception/locate_in_wrist`), moves the tip over the measured centre at the same height and hand orientation with
+the encoders keeping it there, and measures again, until the tip is within `align_tolerance_m` (2 mm) of the centre.
+Over the object the claw hides most of it from the camera, so every measurement is taken from beside it: the tip
+shifted `align_view_offset_m` (2 cm) toward the image's left, where the object shows whole. With `height_m` it first
+lowers the tip to that gap above the object and works there, since lowering after the last measurement would add the
+arm's sag, which changes with the pose and which the encoders do not see. The result is the remaining offset by the
+wrist camera and the measured object pose; a plan's executive binds that pose to the object, so a following `touch`
+centres on it.
+
+On the reference robot the wrist camera reports 0.4-1.8 mm after one to four moves (12 of 13 runs on the right arm,
+one lost the cube's outline). A camera above the table, as a check, shows the real tip 2-8 mm from the centre with 3-4
+mm between runs: the wrist camera measures the object well, but where the claw tip really is relative to the camera
+(`tip_offset_<arm>`) and the hand's small turns between the measuring pose and the final one (servo play the encoders
+do not see) add to it. Measure the tip for your claws: align over a cube with `height_m` a few mm and see where the tip
+is with a camera above.
 
 ## Touch
 
@@ -37,10 +58,10 @@ small steps in free air, so shortfalls and catch-ups are summed with their sign)
 - `LOST_OBJECT` for contact more than 18 mm below it (the claw slid off the side and pushed the object);
 - `NOT_FOUND` with no contact down to 25 mm below the expected top.
 
-On the reference robot, touches on a 28 mm cube report contact 8-15 mm below the top that perception expects (11 mm on
-average) and leave the cube where it was: the right arm reaches about a centimetre lower than the head camera places
-things (issue #16), and the contact height is the one to trust. The claw lands within
-about 8 mm of the centre, the head-to-arm calibration error.
+After `approach` alone the claw lands within about a centimetre of the centre (the head-to-arm calibration error) and
+the contact can be a centimetre off the height the head camera expects (issue #16): the contact height is the one to
+trust. After `align`, `touch` centres on the wrist camera's measurement and its contact comes within a few millimetres
+of the expected top.
 
 ## Tests
 

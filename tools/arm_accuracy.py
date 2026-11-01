@@ -45,7 +45,7 @@ from xlerobot_skills.geometry import transform_to_matrix
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 import cube_pose_eval as cpe  # noqa: E402
 
-TIP = {"left": [0.0, -0.111, 0.0], "right": [0.0, -0.132, 0.0]}     # as config/skills.yaml of xlerobot_skills
+TIP = {"left": [0.0, -0.111, 0.0], "right": [-0.0034, -0.1269, 0.0046]}     # as config/skills.yaml of xlerobot_skills
 
 
 class Camera:

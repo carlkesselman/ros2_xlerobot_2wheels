@@ -1,0 +1,19 @@
+# Find one cube-shaped object near a prior pose in a wrist camera's view and fit its pose from its outline: the
+# detector's box nearest the prior's projection, the mask model's mask, and a cube of known size fitted to the mask's
+# outline with the claw (a fixed mask per camera, see tools/wrist_occluder.py) treated as hiding what is behind it.
+# For the last few millimetres before touching or grasping: the pose comes through the arm's own kinematics, so the
+# offset between the object and the claw tip it gives does not depend on the arm's absolute accuracy.
+
+string camera                 # left or right (the wrist camera of that arm)
+string prompt                 # detector prompt, e.g. "a cube"
+float32 size_mm               # edge length; 0 = 28
+geometry_msgs/Point prior     # where the object is expected, in base_footprint
+uint8 frames                  # frames fitted and averaged; 0 = 2
+---
+bool success
+string code                   # NO_FRAMES, NO_DET, NO_MASK, NO_FIT, STALE_TF, BUSY, BAD_PROMPT, NO_OCCLUDER
+geometry_msgs/Pose pose       # centre and yaw of the object in base_footprint
+float32 spread_m              # largest horizontal distance between the frames' fits
+float32 rms_px                # outline residual of the fit
+float32 visible               # share of the fitted outline the camera sees (the rest is behind the claw)
+float32 latency_ms

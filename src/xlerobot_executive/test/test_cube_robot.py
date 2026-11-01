@@ -139,6 +139,26 @@ def test_touch_cube_again_lands_at_the_same_height(planner, cube):
     assert abs(runs[0][0] - runs[1][0]) <= 6, runs
 
 
+def test_align_over_the_cube(planner, cube):
+    """approach, then align with the wrist camera: the claw tip within 3 mm of the cube's centre by the wrist camera."""
+    before = nearest(planner, cube)
+    seen = planner.run({"schema_version": 1, "task": "align over the cube",
+                        "objects": {"cube": {"prompt": "a cube", "pose": before, "frame": "map", "size_m": 0.028}},
+                        "steps": [
+                            {"id": "find", "skill": "detect", "params": {"prompt": "a cube", "label": "cube", "bind": "cube"}},
+                            {"id": "reach", "skill": "approach", "params": {"arm": ARM, "object": "cube"},
+                             "on_failure": {"codes": ["NOT_REACHABLE"], "action": "retry", "max_retries": 2}},
+                            {"id": "align", "skill": "align", "params": {"arm": ARM, "object": "cube", "height_m": 0.012,
+                                                                         "tolerance_m": 0.003},
+                             "on_failure": {"action": "goto", "step": "back", "max_retries": 1}},
+                            {"id": "back", "skill": "move_arm", "params": {"arm": ARM, "named_position": f"{ARM}_rest"}}]})
+    failed = [e for e in seen if e["type"] == "step_failed" and e["step_id"] == "align"]
+    assert not failed, failed[0]["message"]
+    assert seen[-1]["type"] == "plan_succeeded", seen[-1]
+    msg = next(e["message"] for e in seen if e["type"] == "step_succeeded" and e["step_id"] == "align")
+    assert float(re.search(r"within ([\d.]+) mm", msg).group(1)) <= 3.0, msg
+
+
 def test_touch_nothing_is_not_found(planner, cube):
     """A made-up object 4 cm above the cube's height beside it: the descent ends at its travel limit in free air."""
     side = -1.0 if ARM == "right" else 1.0

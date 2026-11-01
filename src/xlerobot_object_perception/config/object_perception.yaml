@@ -14,3 +14,8 @@ object_perception:
     # Multiplies the head depth camera's readings. Measure it for your camera with tools/depth_scale.py
     # (docs/setup.md#9-head-depth-scale); this value is the reference robot's, whose camera read 0.8% too far.
     depth_scale: 0.992
+    # Wrist cameras (/perception/locate_in_wrist): the claw's mask per camera is config/wrist_occluder_<arm>.png, made
+    # with tools/wrist_occluder.py; these are the reference robot's printed claws, make your own.
+    wrist_occluder_dir: ""    # empty = this package's config directory
+    wrist_min_score: 0.05     # OWLv2 threshold in the wrist view (the object is close and large)
+    wrist_max_rms_px: 4.0     # a fit whose outline misses the mask's by more than this is refused (NO_FIT)

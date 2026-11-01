@@ -245,7 +245,8 @@ def submit_plan(plan: dict, reason: str = "") -> dict:
     """Run a task as a plan on the robot's executive. `plan` is a JSON object (schema version 1):
     {"schema_version": 1, "task": "...", "objects": {name: {"prompt", "pose": [x, y, z], "frame", "size_m"}},
      "steps": [{"id", "skill", "params", "pre", "expect", "on_failure", "on_pause", "timeout_s"}, ...]}.
-    Skills: navigate_to, look_at, detect (params.bind sets an object's pose), move_arm, approach, touch. Checks:
+    Skills: navigate_to, look_at, detect (params.bind sets an object's pose), move_arm, approach, align (wrist camera:
+    the claw tip over the object's centre, and the object's pose from it; params.height_m to work low), touch. Checks:
     {"detected": object}, {"joint_near": {"position", "tol"}}. on_failure: {"codes": [...], "action":
     "retry"|"goto"|"abort", "max_retries": 1-5, "step"}. Full rules: src/xlerobot_executive/README.md.
     Returns accepted, plan_id, errors (every problem when refused) and last_seq: then call wait_for_event with

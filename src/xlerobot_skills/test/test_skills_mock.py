@@ -32,7 +32,7 @@ from rclpy.qos import DurabilityPolicy, QoSProfile, ReliabilityPolicy  # noqa: E
 from rcl_interfaces.srv import SetParameters  # noqa: E402
 from sensor_msgs.msg import JointState  # noqa: E402
 from std_msgs.msg import String  # noqa: E402
-from xlerobot_skill_msgs.action import Approach, Detect, LookAt, MoveArm, Touch  # noqa: E402
+from xlerobot_skill_msgs.action import Align, Approach, Detect, LookAt, MoveArm, Touch  # noqa: E402
 from xlerobot_skill_msgs.msg import SkillResult as R  # noqa: E402
 
 HERE = os.path.dirname(os.path.abspath(__file__))
@@ -57,7 +57,7 @@ class Robot:
         self.params = self.node.create_client(SetParameters, "/mcp_presence_guard/set_parameters")
         self.clients = {n: ActionClient(self.node, t, f"/skills/{n}") for n, t in
                         (("move_arm", MoveArm), ("look_at", LookAt), ("detect", Detect), ("approach", Approach),
-                         ("touch", Touch))}
+                         ("touch", Touch), ("align", Align))}
 
     def spin(self, seconds):
         t0 = time.monotonic()
@@ -78,8 +78,9 @@ class Robot:
         self.until(f.done, 10.0)
         self.spin(0.5)
 
-    def scene(self, objects=(), codes=()):
-        self.scene_pub.publish(String(data=json.dumps({"objects": [list(o) for o in objects], "codes": list(codes)})))
+    def scene(self, objects=(), codes=(), wrist_offset=(0.0, 0.0, 0.0)):
+        self.scene_pub.publish(String(data=json.dumps({"objects": [list(o) for o in objects], "codes": list(codes),
+                                                       "wrist_offset": list(wrist_offset)})))
         self.spin(0.5)
 
     def send(self, name, goal):
@@ -223,6 +224,23 @@ def test_approach_and_touch(robot):
     res = robot.run("touch", Touch.Goal(arm="right", object=obj(*CUBE)), timeout=180.0)
     assert res.result.code == R.NOT_FOUND, res.result.message
     assert math.isnan(res.contact_z)
+
+
+def test_align_corrects_the_head_cameras_error(robot):
+    """The wrist camera sees the cube 8 mm from where the head camera put it: align moves the tip over it."""
+    robot.scene([CUBE], wrist_offset=(0.006, -0.005, 0.0))
+    res = robot.run("approach", Approach.Goal(arm="right", object=obj(*CUBE)))
+    assert res.result.code == R.SUCCEEDED, res.result.message
+    res = robot.run("align", Align.Goal(arm="right", object=obj(*CUBE)), timeout=180.0)
+    assert res.result.code == R.SUCCEEDED, res.result.message
+    assert res.offset_m < 0.002, res.result.message
+    p = res.object_pose.pose.position
+    assert abs(p.x - (CUBE[0] + 0.006)) < 0.001 and abs(p.y - (CUBE[1] - 0.005)) < 0.001
+    # a cube the wrist camera cannot see is LOST_OBJECT, not a guess
+    robot.scene([])
+    res = robot.run("align", Align.Goal(arm="right", object=obj(*CUBE)), timeout=60.0)
+    assert res.result.code == R.LOST_OBJECT, res.result.message
+    robot.scene([CUBE])
 
 
 # ---- cancel and safety ----

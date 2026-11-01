@@ -28,14 +28,14 @@ from rclpy.executors import MultiThreadedExecutor
 from rclpy.node import Node
 from sensor_msgs.msg import JointState
 from std_msgs.msg import Bool
-from xlerobot_skill_msgs.action import Approach, Detect, LookAt, MoveArm, NavigateTo, Touch
+from xlerobot_skill_msgs.action import Align, Approach, Detect, LookAt, MoveArm, NavigateTo, Touch
 from xlerobot_skill_msgs.msg import ObjectRef
 from xlerobot_skill_msgs.srv import ExecutionControl, SubmitPlan, WaitForEvent
 
 from . import plan as P
 
 ACTIONS = {"navigate_to": NavigateTo, "look_at": LookAt, "detect": Detect, "move_arm": MoveArm, "approach": Approach,
-           "touch": Touch}
+           "touch": Touch, "align": Align}
 CODE_NAMES = P.CODES                                  # SkillResult code number -> name (same order as the message)
 
 
@@ -262,6 +262,10 @@ class Executive(Node):
             g.arm, g.object = params["arm"], self._ref(params["object"])
             g.max_travel_m, g.step_m = float(params.get("max_travel_m", 0.0)), float(params.get("step_m", 0.0))
             g.stay = bool(params.get("stay", False))
+        elif skill == "align":
+            g.arm, g.object = params["arm"], self._ref(params["object"])
+            g.tolerance_m, g.max_steps = float(params.get("tolerance_m", 0.0)), int(params.get("max_steps", 0))
+            g.height_m = float(params.get("height_m", 0.0))
         return g
 
     def _bind(self, name, result):
@@ -383,6 +387,10 @@ class Executive(Node):
                 if code == "SUCCEEDED":
                     if step["skill"] == "detect" and "bind" in step.get("params", {}):
                         self._bind(step["params"]["bind"], res)
+                    if step["skill"] == "align":                 # the wrist camera's measurement replaces the head's
+                        o, p = self.plan["objects"][step["params"]["object"]], res.object_pose
+                        o["pose"] = [round(float(v), 4) for v in (p.pose.position.x, p.pose.position.y, p.pose.position.z)]
+                        o["frame"] = p.header.frame_id
                     ok, why = self._check(step.get("expect"))
                     if ok:
                         self._event("step_succeeded", message=msg)
