@@ -9,7 +9,9 @@ bringup.launch.py itself already folds in teleop/cameras/lidar.
       cameras:=true lidar:=true slam:=true
 
 Add sensor:=gemini for an Orbbec Gemini 2 head camera, arm_teleop:=true for the dual-stick arm
-teleop (needs with_arms:=true and torque_off:=false, the default).
+teleop (needs with_arms:=true and torque_off:=false, the default). For tasks: object_perception:=true (the on-demand
+object pose service, needs its TensorRT engines and the tools venv), skills:=true (the skill actions, needs move_group)
+and executive:=true (runs plans through the skills, needs skills:=true); see ADR-0006.
 
 move_group and navigation start 40 s after bringup, not simultaneously with it - lidar
 and the controllers need to be up first (on the loaded Jetson the controllers take 25-40 s; Nav2's
@@ -46,6 +48,16 @@ def generate_launch_description():
     navigation_launch_file = os.path.join(nav_share, "launch", "navigation.launch.py")
     arm_teleop_launch_file = os.path.join(
         get_package_share_directory("xlerobot_teleop"), "launch", "arm_servo_teleop.launch.py")
+
+    def task_launch(package, launch_file):
+        try:
+            return os.path.join(get_package_share_directory(package), "launch", launch_file)
+        except Exception:                                     # noqa: BLE001  (package not built: argument unusable)
+            return None
+    task_launches = [(arg, task_launch(pkg, f)) for arg, pkg, f in (
+        ("object_perception", "xlerobot_object_perception", "object_perception.launch.py"),
+        ("skills", "xlerobot_skills", "skills.launch.py"),
+        ("executive", "xlerobot_executive", "executive.launch.py"))]
 
     # Same names/defaults as the underlying launch files, so this is a drop-in replacement for
     # running them separately - nothing new to learn, just fewer terminals.
@@ -92,6 +104,9 @@ def generate_launch_description():
         DeclareLaunchArgument("record", default_value="false"),
         DeclareLaunchArgument("foxglove", default_value="false"),
         DeclareLaunchArgument("rviz", default_value="false"),
+        DeclareLaunchArgument("object_perception", default_value="false"),
+        DeclareLaunchArgument("skills", default_value="false"),
+        DeclareLaunchArgument("executive", default_value="false"),
         DeclareLaunchArgument("slam", default_value="false"),
         DeclareLaunchArgument("localization", default_value="false"),
         DeclareLaunchArgument(
@@ -121,5 +136,11 @@ def generate_launch_description():
                     condition=IfCondition(LaunchConfiguration("arm_teleop")),
                 ),
             ],
+        ),
+        # the task layer after move_group has had time to load
+        TimerAction(
+            period=55.0,
+            actions=[IncludeLaunchDescription(PythonLaunchDescriptionSource(path), condition=IfCondition(LaunchConfiguration(arg)))
+                     for arg, path in task_launches if path],
         ),
     ])

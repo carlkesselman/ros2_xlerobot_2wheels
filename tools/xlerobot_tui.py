@@ -40,7 +40,6 @@ import argparse
 import collections
 import socket
 import subprocess
-import sys
 import threading
 import time
 from dataclasses import dataclass, field
@@ -114,14 +113,18 @@ COMPONENTS = [
     Component("presence guard", "presence", nodes=["/mcp_presence_guard"],
               topics=[Topic("/mcp_presence_ok", "std_msgs/msg/Bool", 0.0)], optional=True),
     Component("MCP bridge", "mcp", nodes=["/mcp_bridge"], optional=True),
+    Component("object perception", "tasks", nodes=["/object_perception"]),
+    Component("skills", "tasks", nodes=["/skill_server"]),
+    Component("executive", "tasks", nodes=["/executive"]),
 ]
 
 # profile -> (groups that should be running, full_stack.launch.py arguments)
 PROFILES = {
     "base": ({"base", "nav"}, ""),
     "arms": ({"base", "nav", "arms"}, "with_arms:=true with_head:=true"),
-    "sensing": ({"base", "nav", "arms", "cameras", "lidar"},
-                "with_arms:=true with_head:=true cameras:=true sensor:=gemini lidar:=true"),
+    "sensing": ({"base", "nav", "arms", "cameras", "lidar", "tasks"},
+                "with_arms:=true with_head:=true cameras:=true sensor:=gemini lidar:=true "
+                "object_perception:=true skills:=true executive:=true"),
 }
 
 OK, WARN, FAIL, OFF = "ok", "warn", "FAIL", "off"

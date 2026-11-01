@@ -67,6 +67,9 @@ PATTERNS = [
     "twist_mux/twist_mux",
     "xlerobot_teleop/safety_supervisor",
     "xlerobot_teleop/mcp_presence_guard",
+    "objperc.node",                    # object perception service (run by its venv's python)
+    "xlerobot_skills/skill_server",
+    "xlerobot_executive/executive",
 ]
 
 # Deleting the shared-memory files under a ROS process that stays alive breaks that process's
