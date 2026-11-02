@@ -37,10 +37,10 @@ xlerobot:
     body_length: 0.295          # cart: top basket front to rear, outside of the rim, measured 2026-11-01
     body_width:  0.405          # cart: top basket, outside of the rim, measured 2026-11-01; NOT the side support rails outside it, TODO width across those
     body_height: 0.780
-    # x of the body box centre in base_link (drive axle is x=0), matched to the
-    # centre of raskogbody.stl's footprint (x=-0.048 to 0.344). TODO check
-    # against the real cart's front and rear edges.
-    body_x_offset: 0.119
+    # x of the body box centre behind the drive axle (body frame, front is -x). cart: the top
+    # basket's front rim is 20-22 mm behind the axle line (2026-11-01), so the rims are at 0.021
+    # and 0.316 and the centre at 0.1685. The reference notes had the front rim 22 mm ahead.
+    body_x_offset: 0.1685
 
     # cart: axle height above floor, about 85 mm (ruler, 2026-11-01). 3 mm over wheel_radius,
     # which comes from the circumference and is the better number; this one only places the
