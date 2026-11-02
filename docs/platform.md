@@ -172,7 +172,7 @@ robot's value standing in; "—" = no value yet. Where: `dims` = `robot_dimensio
 | Base pitch (front deck vs rear) | 0.0 rad | cart, essentially level, 2026-11-01 | dims | ruler: deck height at front and rear, over their distance |
 | Caster diameter | 0.0745 m, trail = radius | cart, 2026-11-01 | dims, nav2 footprint | calipers |
 | Caster positions (swivel screws: x, y) | -0.53, ±0.20 m | cart, rear pair, about, 2026-11-01 | dims, nav2 footprint | from the drive axle line and the centreline |
-| Cart body: length, width, height | 0.340, **0.405**, 0.780 m | ref (RÅSKOG nominal); width measured 2026-11-01, top basket outside of the rim | dims | tape, outside of the rim |
+| Cart body: length, width, height | 0.340, **0.405**, 0.780 m | ref (RÅSKOG nominal); width measured 2026-11-01, top basket outside of the rim, without the external side rails (TODO width across them) | dims | tape, outside of the rim |
 | Overall width (outer edges of the drive wheels) | 0.573 m (0.527 track + 0.046 tyre) | cart, 2026-11-01: nothing else is wider | nav2 footprint (±0.29) | — |
 | Top basket rims from the axle line (front, rear) | — | — | dims (`body_x_offset`, mesh scale) | tape; the reference was 22 mm ahead / 260 mm behind |
 | Total mass | 17.2 kg | cart | dims (`body_mass`, less arms/head) | scale |
