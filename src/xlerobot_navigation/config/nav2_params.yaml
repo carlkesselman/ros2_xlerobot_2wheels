@@ -121,7 +121,7 @@ local_costmap:
         enabled: true
         observation_sources: scan
         scan:
-          topic: /ldlidar_node/scan
+          topic: /scan
           data_type: "LaserScan"
           marking: true
           clearing: true
@@ -161,7 +161,7 @@ amcl:
     base_frame_id: "base_footprint"
     odom_frame_id: "odom"
     global_frame_id: "map"
-    scan_topic: /ldlidar_node/scan
+    scan_topic: /scan
     robot_model_type: "nav2_amcl::DifferentialMotionModel"
     laser_model_type: "likelihood_field"
     laser_min_range: 0.30

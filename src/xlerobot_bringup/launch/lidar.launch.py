@@ -2,6 +2,10 @@
 lifecycle manager that configures and activates it. Publishes /ldlidar_node/scan
 in ldlidar_link, the frame xlerobot_description places on the robot.
 
+A laser_filters chain (config/laser_filters.yaml) takes that scan, drops the
+cart's own posts and publishes /scan, which Nav2, slam_toolbox and amcl read.
+It needs base_link -> ldlidar_link from robot_state_publisher.
+
 Not the driver's own ldlidar_bringup.launch.py: that one starts a second
 robot_state_publisher with its own little URDF.
 """
@@ -20,6 +24,8 @@ def generate_launch_description():
     default_config = os.path.join(
         get_package_share_directory("xlerobot_bringup"), "config", "ldlidar.yaml")
     config = LaunchConfiguration("lidar_config")
+    filter_config = os.path.join(
+        get_package_share_directory("xlerobot_bringup"), "config", "laser_filters.yaml")
 
     container = ComposableNodeContainer(
         name="ldlidar_container",
@@ -50,8 +56,17 @@ def generate_launch_description():
             "bond_respawn_max_duration": 10.0,
         }],
     )
+    scan_filter = Node(
+        package="laser_filters",
+        executable="scan_to_scan_filter_chain",
+        name="scan_to_scan_filter_chain",
+        output="screen",
+        parameters=[filter_config],
+        remappings=[("scan", "/ldlidar_node/scan"), ("scan_filtered", "/scan")],
+    )
     return LaunchDescription([
         DeclareLaunchArgument("lidar_config", default_value=default_config),
         container,
         lifecycle_manager,
+        scan_filter,
     ])

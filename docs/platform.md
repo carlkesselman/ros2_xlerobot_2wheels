@@ -104,8 +104,10 @@ elroy (Orin Nano)
 ```
 
 - The hub is full; there is no free port on the cart without another hub.
-- The D415 was given its own port because on the Pi, a wrist camera sharing its controller lost frames as soon as the
-  RealSense streamed. Here it shares stack A with the ODESC, which carries little data. `ORIN-SETUP.md` measured the
+- The D415 is on elroy, on stack A, apart from the hub and its two wrist cameras. That follows XLeRobot's
+  `config/ORIN-SETUP.md` §3: before the cart's cameras moved to the Orin they ran on a Pi, where a wrist camera on the
+  same USB host controller as the RealSense stopped delivering frames once the RealSense streamed. Stack A's other
+  device, the ODESC, carries little data. `ORIN-SETUP.md` measured the
   RealSense at `ID_PATH` `…usb-0:1.3` and the hub's cameras under `…usb-0:2.1.x`.
 - The two bus boards are CH340s (`1a86`). Check their `latency_timer` (ARCHITECTURE §4.3).
 
@@ -192,7 +194,7 @@ robot's value standing in; "—" = no value yet. Where: `dims` = `robot_dimensio
 | Scan plane to mounting surface | 0.033 m | bracket design: 6 mm plate + 27 mm (LD19 base to scan plane); head bottom 40.8 mm under the basket | |
 | Upside down | true | bracket design | as mounted |
 | Yaw (forward arrow vs robot front) | +90° | bracket design (arrow to the robot's left, connector to the rear) | checked in RViz against a wall ahead |
-| Angle crops for the four corner posts | — | front posts (about 0.20 m away) fall under range_min 0.30; the rear ones are about 0.38 m away, at about ±148°, and will show in the scan. TODO filter them | RViz, scan against the posts |
+| Corner posts removed from the scan | box in base_link x -0.40..0.02, y ±0.25 | front posts (about 0.20 m away) fall under range_min 0.30; the rear ones (about 0.38 m, ±148°) are dropped by `config/laser_filters.yaml` on the way from `/ldlidar_node/scan` to `/scan`. Checked on a synthetic scan, 2026-11-01 | RViz: `/scan` against the raw scan once mounted |
 
 ### 6.3 Head and D415
 

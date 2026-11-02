@@ -91,8 +91,9 @@ the reference robot.
   and the yaw of the LD19's forward arrow.
 - `robot_dimensions.yaml` lidar block: those measurements (`x`, `y`, `mount_z`, `scan_below_mount`, `yaw`, plus
   whether it's upside down, which flips roll by π). `lidar.xacro` keeps `ldlidar_link` on `base_link`, as now.
-- `ldlidar.yaml`: crop the four RÅSKOG corner posts (about 8° each, exact windows measured in RViz).
-  `range_min: 0.30` stays.
+- Corner posts: done with a laser_filters box filter (`config/laser_filters.yaml`, started by `lidar.launch.py`),
+  `/ldlidar_node/scan` → `/scan`, which Nav2, slam_toolbox and amcl now read. The driver's angle crop is one sector
+  and would have blinded the whole rear. `range_min: 0.30` stays.
 - `/dev/ldlidar` udev name (`tools/xlerobot_setup_usb_modules.py`).
 - The D415 depth still goes into the local costmap for what's above the scan plane (tabletops, counter edges,
   shelves), as a second obstacle source.

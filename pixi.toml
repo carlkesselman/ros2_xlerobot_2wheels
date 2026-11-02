@@ -26,6 +26,7 @@ ros-jazzy-teleop-twist-keyboard = "*"
 ros-jazzy-joy = "*"
 ros-jazzy-teleop-twist-joy = "*"
 ros-jazzy-twist-mux = "*"
+ros-jazzy-laser-filters = "*"          # drops the cart's own posts from the LD19 scan
 colcon-common-extensions = "*"
 compilers = "*"
 cmake = "*"

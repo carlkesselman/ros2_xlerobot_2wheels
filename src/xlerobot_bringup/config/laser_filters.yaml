@@ -1,0 +1,28 @@
+# laser_filters chain between the LD19 driver and everything that reads the scan (lidar.launch.py):
+# /ldlidar_node/scan in, /scan out. Nav2, slam_toolbox and amcl read /scan.
+#
+# The box drops the cart's own frame. The LD19 hangs on the centreline over the drive axle
+# (robot_dimensions.yaml, lidar), so the front RASKOG posts are about 0.20 m away, already under the
+# driver's range_min, but the rear posts are about 0.38 m away at about +-148 deg and would be in
+# every scan, two fixed points riding along with the robot that spoil slam_toolbox's and amcl's
+# scan matching. The driver's own angle crop is one sector and would blind the whole rear.
+#
+# Box in base_link (drive axle at x=0, front +x), from robot_dimensions.yaml: rear rails at about
+# -0.35 (casters at -0.325 under them), side rails 0.425 apart. Nav2's footprint runs to -0.41 and
+# +-0.29; the box is a little inside it on the sides and stops at the front posts, so nothing it
+# hides is somewhere the robot could drive into. Points inside it become NaN, the scan keeps its
+# size.
+scan_to_scan_filter_chain:
+  ros__parameters:
+    filter1:
+      name: robot_frame
+      type: laser_filters/LaserScanBoxFilter
+      params:
+        box_frame: base_link
+        min_x: -0.40
+        max_x: 0.02
+        min_y: -0.25
+        max_y: 0.25
+        min_z: 0.0
+        max_z: 0.80
+        invert: false

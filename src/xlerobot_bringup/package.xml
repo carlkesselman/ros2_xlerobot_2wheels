@@ -32,6 +32,7 @@
   <exec_depend>image_transport_plugins</exec_depend>
   <exec_depend>python3-yaml</exec_depend>
   <exec_depend>ldlidar_component</exec_depend>
+  <exec_depend>laser_filters</exec_depend>
   <exec_depend>nav2_lifecycle_manager</exec_depend>
   <exec_depend>rclcpp_components</exec_depend>
   <exec_depend>rosbag2</exec_depend>

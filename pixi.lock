@@ -15,6 +15,7 @@ environments:
       - conda: https://conda.anaconda.org/robostack-jazzy/osx-arm64/ros-jazzy-desktop-0.11.0-h60d57d3_25.conda
       - conda: https://conda.anaconda.org/robostack-jazzy/osx-arm64/ros-jazzy-joint-state-publisher-gui-2.4.3-h60d57d3_25.conda
       - conda: https://conda.anaconda.org/robostack-jazzy/osx-arm64/ros-jazzy-joy-3.3.0-h60d57d3_25.conda
+      - conda: https://conda.anaconda.org/robostack-jazzy/osx-arm64/ros-jazzy-laser-filters-2.0.9-h60d57d3_21.conda
       - conda: https://conda.anaconda.org/robostack-jazzy/osx-arm64/ros-jazzy-ros2-control-4.47.0-h60d57d3_21.conda
       - conda: https://conda.anaconda.org/robostack-jazzy/osx-arm64/ros-jazzy-ros2-controllers-4.42.1-h60d57d3_21.conda
       - conda: https://conda.anaconda.org/robostack-jazzy/osx-arm64/ros-jazzy-teleop-twist-joy-2.6.5-h60d57d3_25.conda
@@ -161,6 +162,7 @@ environments:
       - conda: https://conda.anaconda.org/robostack-jazzy/osx-arm64/ros2-kdl-parser-2.11.0-np2py312haf4906a_21.conda
       - conda: https://conda.anaconda.org/robostack-jazzy/osx-arm64/ros2-keyboard-handler-0.3.2-np2py312haf4906a_21.conda
       - conda: https://conda.anaconda.org/robostack-jazzy/osx-arm64/ros2-kinematics-interface-1.7.1-np2py312hd6e7b62_21.conda
+      - conda: https://conda.anaconda.org/robostack-jazzy/osx-arm64/ros2-laser-filters-2.0.9-np2py312haf4906a_21.conda
       - conda: https://conda.anaconda.org/robostack-jazzy/osx-arm64/ros2-laser-geometry-2.7.2-np2py312hd6e7b62_21.conda
       - conda: https://conda.anaconda.org/robostack-jazzy/osx-arm64/ros2-launch-3.4.11-np2py312haf4906a_22.conda
       - conda: https://conda.anaconda.org/robostack-jazzy/osx-arm64/ros2-launch-ros-0.26.12-np2py312haf4906a_22.conda
@@ -824,6 +826,13 @@ packages:
   - ros2-joy ==3.3.0
   size: 1973
   timestamp: 1791439409858
+- conda: https://conda.anaconda.org/robostack-jazzy/osx-arm64/ros-jazzy-laser-filters-2.0.9-h60d57d3_21.conda
+  sha256: 4f40e6ec0386b2bc688929644722182601d420c58a466328904a950c1a29ba95
+  md5: 45879a5d6908b5c66575ed2cc5f9df1f
+  depends:
+  - ros2-laser-filters ==2.0.9
+  size: 2023
+  timestamp: 1788463977141
 - conda: https://conda.anaconda.org/robostack-jazzy/osx-arm64/ros-jazzy-ros2-control-4.47.0-h60d57d3_21.conda
   sha256: acdc67e31ac574d8dc2543610445d18859cc7c09e097acc8a0201bfb9a744d03
   md5: 21f60c6020298e603fa92300d7f17961
@@ -3602,6 +3611,36 @@ packages:
   license: Apache-2.0
   size: 47136
   timestamp: 1788459997259
+- conda: https://conda.anaconda.org/robostack-jazzy/osx-arm64/ros2-laser-filters-2.0.9-np2py312haf4906a_21.conda
+  sha256: adbed20355f04170b3489330de42f1d36d96fd524658db2436fb7560d8a59afd
+  md5: 55704dad923f9fe9bd061822e24f2f8e
+  depends:
+  - python
+  - ros2-angles
+  - ros2-diagnostic-msgs
+  - ros2-diagnostic-updater
+  - ros2-distro-mutex 0.16.* jazzy_*
+  - ros2-filters
+  - ros2-laser-geometry
+  - ros2-message-filters
+  - ros2-pluginlib
+  - ros2-rclcpp
+  - ros2-rclcpp-components
+  - ros2-rclcpp-lifecycle
+  - ros2-ros-workspace
+  - ros2-sensor-msgs
+  - ros2-tf2
+  - ros2-tf2-geometry-msgs
+  - ros2-tf2-kdl
+  - ros2-tf2-ros
+  - __osx >=12.0
+  - libcxx >=19
+  - ros2-distro-mutex >=0.16.0,<0.17.0a0
+  - numpy >=1.25,<3
+  - python_abi 3.12.* *_cp312
+  license: BSD-3-Clause
+  size: 548823
+  timestamp: 1788462368941
 - conda: https://conda.anaconda.org/robostack-jazzy/osx-arm64/ros2-laser-geometry-2.7.2-np2py312hd6e7b62_21.conda
   sha256: 48ecca83d3ae91cb3a15476fb7d9709c7c4cdd32ffa7e5a28b51cfdc5b5c3fb1
   md5: 31e255401459d0f8a032148dce501c4c

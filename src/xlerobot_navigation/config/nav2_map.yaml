@@ -15,7 +15,7 @@ global_costmap:
         enabled: true
         observation_sources: scan
         scan:
-          topic: /ldlidar_node/scan
+          topic: /scan
           data_type: "LaserScan"
           marking: true
           clearing: true
