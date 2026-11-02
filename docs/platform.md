@@ -170,7 +170,7 @@ robot's value standing in; "—" = no value yet. Where: `dims` = `robot_dimensio
 | Wheel mass (motor + tyre) | 2.5 kg | — | dims | scale |
 | Axle height above floor | 0.085 m | cart, about, 2026-11-01 | dims | ruler; only places the model, wheel_radius comes from the circumference |
 | Base pitch (front deck vs rear) | 0.0 rad | cart, essentially level, 2026-11-01 | dims | ruler: deck height at front and rear, over their distance |
-| Caster diameter | 0.055 m | ref | dims | calipers |
+| Caster diameter | 0.0745 m | cart, 2026-11-01 | dims, nav2 footprint | calipers |
 | Caster positions (swivel screws: x, y) | -0.53, ±0.20 m | cart, rear pair, about, 2026-11-01 | dims, nav2 footprint | from the drive axle line and the centreline |
 | Cart body: length, width, height | 0.340, 0.405, 0.780 m | ref (RÅSKOG nominal) | dims | tape |
 | Top basket rims from the axle line (front, rear) | — | — | dims (`body_x_offset`, mesh scale) | tape; the reference was 22 mm ahead / 260 mm behind |

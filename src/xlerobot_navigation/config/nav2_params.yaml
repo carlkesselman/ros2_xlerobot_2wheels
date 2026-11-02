@@ -11,8 +11,8 @@
 # body_width chassis box: wheels stick out past the basket on y, and the rear caster sticks
 # out past the chassis box on x. The front is +x, the drive-wheel end. Derived from
 # robot_dimensions.yaml (wheel_radius 0.0824 at the front, wheel_separation 0.527 and wheel_width
-# 0.046 on y, rear casters' swivel screws at x -0.53 plus about 7 cm for the trail and the wheel,
-# TODO check once the caster diameter is measured), duplicated here by hand same as
+# 0.046 on y, rear casters' swivel screws at x -0.53, plus the caster wheel's 37 mm radius and
+# about 3 cm of trail, TODO measure the trail), duplicated here by hand same as
 # controllers.yaml's wheel_radius/wheel_separation.
 #
 # Velocity/acceleration limits match robot_dimensions.yaml's limits section exactly - don't
