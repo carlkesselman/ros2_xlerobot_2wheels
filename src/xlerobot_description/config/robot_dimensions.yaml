@@ -111,16 +111,18 @@ xlerobot:
     #    part, 1.118 m. In the upstream head meshes that junction is 0.073 m above the
     #    pan joint origin, which puts the origin 0.325 m above the top base, upstream
     #    has 0.323, so the neck matches upstream's (see head_pantilt.xacro).
-    # camera_x: measured, the lens centre is 65 mm behind the front rim, 5 mm ahead of the
-    #    pan axis (tilt frame, see head_pantilt.xacro).
-    # camera_z: measured, floor to the head camera lens centre, 1.183 m, upstream's
-    #    camera position gives 1.173. It is a plain USB camera, not the depth camera
-    #    that URDF's head is made for.
+    # camera_x: the D415's front glass ahead of the tilt axis, tilt frame (see
+    #    head_pantilt.xacro). Upstream's 0.025, its head is made for a RealSense in the RGBD
+    #    gimbal holder (hardware/step/RGBD_Gimbal/Gimbal_Pitch_Holder_d435_d415.step). TODO check.
+    # camera_z: cart, floor to the centre of the D415's front glass with the head level, 1.20 m
+    #    (2026-11-01). Cross-check: upstream puts its top base 45 mm below the top of the basket
+    #    rim and the camera 0.451 m above the top base, which on this cart's 0.780 m rim gives
+    #    1.186, 14 mm under the measurement.
     mount_x: 0.309
     mount_y: 0.0
     mount_z: 1.118
-    camera_x: 0.004             # m in the tilt frame, upstream has 0.025
-    camera_z: 1.183
+    camera_x: 0.025             # m in the tilt frame, upstream's
+    camera_z: 1.200
     # that URDF's limits, TODO check against the mechanical stops
     pan_limit_lower: -3.2       # rad
     pan_limit_upper:  3.2

@@ -200,7 +200,7 @@ robot's value standing in; "—" = no value yet. Where: `dims` = `robot_dimensio
 |---|---|---|---|
 | Mast (pan axis) x from the axle line | 0.309 m behind | cart, 2026-11-01: stock 0.4.0 neck, plate 70 mm past the rear rim, axis 77 mm in from its edge (upstream mesh), by eye over the rear rim | tape |
 | Pan servo top height above floor | 1.118 m | ref (6 mm lower now the spacer is gone) | tape |
-| D415 mount on the tilt bracket (lens position) | — | — | the D415 holder isn't upstream's; measure or take from its CAD |
+| D415 front glass: height, x ahead of the tilt axis | 1.200 m, 0.025 m | height cart, head level, 2026-11-01 (CAD from the 0.780 m rim gives 1.186); x upstream's | dims (`head.camera_z`, `camera_x`) | tape; x from the gimbal holder CAD |
 | Pan/tilt zero steps and directions | ref values | ref | `tools/calibrate_arm.py --arm head` |
 | Pan/tilt mechanical limits | upstream URDF | ref | move to the stops |
 | D415 intrinsics and depth scale | factory | vendor | check: `tools/depth_scale.py`, ChArUco |
