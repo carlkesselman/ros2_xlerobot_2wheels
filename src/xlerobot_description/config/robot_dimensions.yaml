@@ -243,8 +243,12 @@ xlerobot:
   # --- LD19 2D lidar, low on the cart frame ---
   # Carl's cart: on the centreline over the drive axle, in the gap between the bottom basket's rim and the
   # middle basket's underside, scan plane about 0.30-0.35 m (docs/rosie-port-plan.md, section 2.4).
-  # TODO measure all of these on the cart once it is mounted; until then they are the reference robot's,
-  # which hangs its LD19 upside down from the second basket, the same kind of mount.
+  # The mount is XLeRobot/hardware/lidar_bracket (ld19_basket_mount_*, 2026-11-01 design, not printed
+  # yet): a two-piece clamp on the middle basket's mesh floor with an arm reaching forward past the
+  # front wall, the LD19 hung upside down from its tip with its axis over the drive axle. x, y,
+  # scan_below_mount (6 mm plate + 27 mm), upside_down and yaw (arrow to the robot's left) are that
+  # design's. TODO mount_z, floor to the middle basket's underside (0.420 is the reference robot's),
+  # and check yaw in RViz once it is mounted.
   # x, y: base_link frame (front is +x), the drive axle is x=0.
   # mount_z: floor to the housing's mounting surface.
   # scan_below_mount: distance between the mounting surface and the scan plane (0.033 m on an LD19),
