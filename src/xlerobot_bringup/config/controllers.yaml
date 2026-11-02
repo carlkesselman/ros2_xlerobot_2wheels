@@ -50,7 +50,7 @@ diff_drive_controller:
     # here. For now keep in sync by hand. Cart-measured values, see
     # robot_dimensions.yaml (6.5 in hub wheels, 527 mm track).
     wheel_separation: 0.527
-    wheel_radius: 0.0825
+    wheel_radius: 0.0828
 
     # Calibrate with tools/calibrate_wheel_odometry.py, see ARCHITECTURE §6.
     # 1.0 until measured on this cart (the servo base's 0.9412 doesn't carry over).
