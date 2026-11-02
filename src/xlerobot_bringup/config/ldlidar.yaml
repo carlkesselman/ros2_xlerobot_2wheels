@@ -17,8 +17,10 @@
       units: 'M'
       frame_id: 'ldlidar_link'
       bins: 455  # fixed size, what slam_toolbox wants
-      # the cart's own posts show up at 0.21-0.27 m, at y = +-0.2 m from the lidar; everything
-      # inside 0.30 m is the robot itself, its footprint is bigger than that anyway
+      # the front posts are about 0.20 m from the lidar (axis over the drive axle, posts 18 mm
+      # behind it at y = +-0.2), inside this. The rear posts are about 0.40 m away, behind at
+      # about +-150 deg, and do show; TODO filter them (laser_filters box filter), the single
+      # angle crop below would blind the whole rear.
       range_min: 0.30
       range_max: 12.0
       enable_angle_crop: false

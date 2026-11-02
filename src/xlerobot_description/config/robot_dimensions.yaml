@@ -53,12 +53,15 @@ xlerobot:
     # cart: two passive casters at the rear, in the stock RASKOG mounting place; the drive wheels
     # are at the front and there are no front casters. Larger than stock, chosen to level the cart.
     # No encoder on either, so each is a fixed sphere in the URDF. Positions are the swivel screws:
-    # 53 cm behind the axle, about 40 cm apart; wheels 74.5 mm diameter, trail (screw to caster
+    # 34 cm behind the axle along the floor (re-measured 2026-11-01; a first reading of 53 cm was
+    # not along the floor), about 40 cm apart. Cross-check: the axle clamp's bore is about 18 mm
+    # ahead of the front rail's centre and the RASKOG frame is 35 cm deep, so the rear rail's centre
+    # is about 0.35 behind the axle. Wheels 74.5 mm diameter, trail (screw to caster
     # axle) equal to the caster radius (2026-11-01). The URDF puts the sphere under the screw.
     caster_radius: 0.03725
     # base_link frame, front is +x (the drive-wheel end, where the arms and the
     # head camera face).
-    caster_rear_x_offset: -0.53
+    caster_rear_x_offset: -0.34
     caster_y_offset: 0.20
 
     # cart: 17.2 kg complete (38 lb, new casters), weighed. base_link carries what the URDF has

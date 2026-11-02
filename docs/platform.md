@@ -171,10 +171,10 @@ robot's value standing in; "—" = no value yet. Where: `dims` = `robot_dimensio
 | Axle height above floor | 0.085 m | cart, about, 2026-11-01 | dims | ruler; only places the model, wheel_radius comes from the circumference |
 | Base pitch (front deck vs rear) | 0.0 rad | cart, level: front and rear heights within 1-2 mm (under 0.005 rad), 2026-11-01 | dims | ruler: deck height at front and rear, over their distance |
 | Caster diameter | 0.0745 m, trail = radius | cart, 2026-11-01 | dims, nav2 footprint | calipers |
-| Caster positions (swivel screws: x, y) | -0.53, ±0.20 m | cart, rear pair, about, 2026-11-01 | dims, nav2 footprint | from the drive axle line and the centreline |
+| Caster positions (swivel screws: x, y) | -0.34, ±0.20 m | cart, rear pair, along the floor, 2026-11-01 (axle clamp 18 mm ahead of the front rail + 35 cm RÅSKOG frame gives about 0.35) | dims, nav2 footprint | from the drive axle line and the centreline |
 | Cart body: length, width, height | **0.295**, **0.425**, **0.780** m | length, width and height (floor to the top rim) measured 2026-11-01, width across the outside of the vertical side rails (the top basket alone is 0.405) | dims | tape, outside of the rim |
 | Overall width (outer edges of the drive wheels) | 0.573 m (0.527 track + 0.046 tyre) | cart, 2026-11-01: nothing else is wider | nav2 footprint (±0.29) | — |
-| Neck overhang past the top basket's rear rim | 0.07 m, so the neck box reaches 0.386 m behind the axle, inside the nav2 footprint (-0.61) | cart, 2026-11-01: arms and neck are on the rear (caster-side) edge of the top basket, the arms reach forward over it | head and arm mounts | horizontal, outside of the rim to the neck's edge |
+| Neck overhang past the top basket's rear rim | 0.07 m, so the neck box reaches 0.386 m behind the axle, inside the nav2 footprint (-0.42) | cart, 2026-11-01: arms and neck are on the rear (caster-side) edge of the top basket, the arms reach forward over it | head and arm mounts | horizontal, outside of the rim to the neck's edge |
 | Top basket rims from the axle line (front, rear) | 0.021 / 0.316 m behind | cart, front rim 20-22 mm behind, 2026-11-01; rear from the 295 mm length | dims (`body_x_offset`, mesh placement) | tape; the reference notes had 22 mm ahead / 260 mm behind |
 | Total mass | 17.2 kg | cart | dims (`body_mass` 9.2 = 17.2 less the other links' 7.97) | scale |
 | CoM height | 0.35 m | — | dims (tip-over limit) | tilt test, or estimate from component heights |
@@ -192,7 +192,7 @@ robot's value standing in; "—" = no value yet. Where: `dims` = `robot_dimensio
 | Scan plane to mounting surface | 0.033 m | bracket design: 6 mm plate + 27 mm (LD19 base to scan plane); head bottom 40.8 mm under the basket | |
 | Upside down | true | bracket design | as mounted |
 | Yaw (forward arrow vs robot front) | +90° | bracket design (arrow to the robot's left, connector to the rear) | checked in RViz against a wall ahead |
-| Angle crops for the four corner posts | — | — | RViz, scan against the posts |
+| Angle crops for the four corner posts | — | front posts (about 0.20 m away) fall under range_min 0.30; the rear ones are about 0.40 m away, at about ±150°, and will show in the scan. TODO filter them | RViz, scan against the posts |
 
 ### 6.3 Head and D415
 
