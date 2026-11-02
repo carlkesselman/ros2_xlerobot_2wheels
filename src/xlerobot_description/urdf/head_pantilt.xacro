@@ -99,6 +99,30 @@
           <mesh filename="package://xlerobot_description/meshes/cart/pi_case.stl" scale="0.001 0.001 0.001"/>
         </geometry>
       </collision>
+      <!-- Head base and the pan servo's holder on top of the neck, also from the Fusion model:
+           they fill the neck top (1.067 m) up to where upstream's head meshes start, the measured
+           head: mount_z. The holder is 67k triangles, so it has no collision of its own; the
+           head base's covers nearly all of it. -->
+      <visual>
+        <origin xyz="${cart_mesh_xyz}" rpy="0 0 ${pi}"/>
+        <geometry>
+          <mesh filename="package://xlerobot_description/meshes/cart/head_base.stl" scale="0.001 0.001 0.001"/>
+        </geometry>
+        <material name="xle_part"/>
+      </visual>
+      <collision>
+        <origin xyz="${cart_mesh_xyz}" rpy="0 0 ${pi}"/>
+        <geometry>
+          <mesh filename="package://xlerobot_description/meshes/cart/head_base.stl" scale="0.001 0.001 0.001"/>
+        </geometry>
+      </collision>
+      <visual>
+        <origin xyz="${cart_mesh_xyz}" rpy="0 0 ${pi}"/>
+        <geometry>
+          <mesh filename="package://xlerobot_description/meshes/cart/head_base_motor_holder.stl" scale="0.001 0.001 0.001"/>
+        </geometry>
+        <material name="xle_motor"/>
+      </visual>
       <xacro:if value="${neck_ext > 0.01}">
         <visual>
           <origin xyz="-0.103 0 ${0.323 + neck_ext / 2.0}" rpy="0 0 0"/>
