@@ -34,7 +34,7 @@
          with the pan axis at x -0.103 and the arm bases' bottom at arms: mount_z. -->
     <xacro:property name="top_base_z" value="${dims['arms']['mount_z'] - 0.045}"/>
     <xacro:property name="cart_mesh_xyz" value="${-0.103 + f_pan_x} ${f_pan_y} ${0.045 - f_arm_z}"/>
-    <!-- pan joint at the pan horn's face, 1.1225 m above the floor (tape: 1.118) -->
+    <!-- pan joint at the pan horn's face, 1.1178 m above the floor -->
     <xacro:property name="pan_dz" value="${0.045 + f_pan_z - f_arm_z}"/>
     <joint name="top_base_joint" type="fixed">
       <parent link="${parent}"/>

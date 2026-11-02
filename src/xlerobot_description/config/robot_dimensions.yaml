@@ -121,8 +121,8 @@ xlerobot:
     #    (x -244.3) reaches 63 mm past the rim's lip (the tape gave about 70). Upstream's URDF has
     #    the head 61 mm inside the opposite rim (0.048), which the XLeRobot assembly renders
     #    don't support.
-    # The Fusion heights check out against the tape: pan horn face 1.1225 m (tape 1.118 to
-    # the top of the pan servo), D415 front glass centre 1.201 (tape 1.200).
+    # Heights follow the CAD (arms: mount_z): pan horn face 1.1178 m (tape 1.118 to the top of
+    # the pan servo), D415 front glass centre 1.1964 (tape 1.200).
     mount_x: 0.328
     mount_y: 0.0
     # that URDF's limits, TODO check against the mechanical stops
@@ -157,7 +157,9 @@ xlerobot:
   # mount_y: pan axis position. The Fusion model has them 265.7 mm apart (y +138.1 and -127.6,
   #   centred 0.75 mm from the head's axis). Earlier notes had 273 (0.4.0 CAD) and upstream's
   #   URDF 310. TODO check on this cart.
-  # mount_z: measured, floor to the bottom of the arm base (its origin), 0.765 m.
+  # mount_z: floor to the bottom of the arm base (its origin), from CAD (2026-11-02): the neck box's slot
+  #   (Fusion z 774.0 at its top) rests on the top basket's rim, 0.775 in the cart mesh, and the arm
+  #   bases' bottom is 14.7 mm below that, 0.7603. The tape gave 0.765.
   # left_yaw, right_yaw: rotation of each arm base about z, the 0.4.0 arm base can be
   #   mounted in any direction. At the zero pose the stretched arm points to the
   #   front with -1.5708, sideways with 0 or 3.14159, to the back with 1.5708. The
@@ -166,7 +168,7 @@ xlerobot:
   arms:
     mount_x: 0.239
     mount_y: 0.1329
-    mount_z: 0.765
+    mount_z: 0.7603
     right_yaw: -1.57079633
     left_yaw: -1.57079633
 
@@ -215,14 +217,18 @@ xlerobot:
     # frame_correction: the arms' frame relative to the body (equal-and-opposite to the head-vs-arm
     # difference, the data cannot say which of the two is off). wrist_camera: the optical frame's
     # position and rotation as measured.
-    frame_correction: {xyz: "0.023183 -0.006399 -0.008623", rpy: "0.010156 -0.050829 0.004562"}
+    # frame_correction and mount_correction reset to zero for the cart (2026-11-02), the CAD places the
+    # arms; the reference robot's fits were frame xyz "0.023183 -0.006399 -0.008623" rpy "0.010156
+    # -0.050829 0.004562", left xyz "0.012111 0.007711 0.002646" rpy "-0.006927 -0.024701 -0.003282",
+    # right xyz "0.067248 0.090929 0.016046" rpy "0.096916 -0.072291 -0.024834". Refit on this cart.
+    frame_correction: {xyz: "0 0 0", rpy: "0 0 0"}
     # mount_correction: each arm's base relative to the arms' frame, fitted in the table workspace with
     # tools/arm_accuracy.py --fit (the hand's real pose from the wrist camera against the placement sheet). It absorbs
     # what the calibration above, done with the arms in the air, misses near the table: sag at full stretch and wrist
     # errors that the clustered calibration poses could not separate.
     mount_correction:
-      left:  {xyz: "0.012111 0.007711 0.002646", rpy: "-0.006927 -0.024701 -0.003282"}
-      right: {xyz: "0.067248 0.090929 0.016046", rpy: "0.096916 -0.072291 -0.024834"}
+      left:  {xyz: "0 0 0", rpy: "0 0 0"}
+      right: {xyz: "0 0 0", rpy: "0 0 0"}
     wrist_camera:
       left:  {xyz: "-0.015770 0.015190 0.003387", rpy: "0.376871 -1.549444 2.303024"}
       right: {xyz: "0.004451 0.026293 0.013168", rpy: "-0.319586 -1.544162 3.034952"}
