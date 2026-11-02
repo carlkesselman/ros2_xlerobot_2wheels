@@ -113,13 +113,12 @@ xlerobot:
     # degrees about z, front is -x), the frame of the shared upstream URDF. The neck
     # and head parts are the ones in simulation/xlerobot/xlerobot.urdf of the
     # XLeRobot repo (xlerobot_urdf.zip).
-    # x: cart (2026-11-01), from the Fusion model "XLeRobot 0.3 Upper Body": the head pan axis is
-    #    2.7 mm ahead of the arms' shoulder pan axes (Fusion x -184.4 vs -187.1 mm), and the arm
-    #    base plates end 61.3 mm behind those (x -248.4). The arm bases do not reach past the top
-    #    basket's rear rim (0.316), so the arm axes are at 0.316 - 0.061 = 0.255 and the head's at
-    #    0.252. In that model the box behind the neck reaches 53.5 mm past the rim; the tape gave
-    #    about 70 mm. Upstream's URDF has the head 61 mm inside the opposite rim (0.048), which the
-    #    XLeRobot assembly renders don't support.
+    # x: cart (2026-11-02), from the Fusion model "XLeRobot 0.3 Upper Body" after its alignment
+    #    was fixed: the shoulders' rear faces (x -171.3 mm), where they clip onto the top basket's
+    #    rear rim, are the rim (0.316). From there the head pan axis (x -184.4, the pan bracket's
+    #    bearing) is 13.1 mm further back, 0.329, and the box behind the neck reaches 73 mm past
+    #    the rim (x -244.3; the tape gave about 70). Upstream's URDF has the head 61 mm inside the
+    #    opposite rim (0.048), which the XLeRobot assembly renders don't support.
     # z: measured, floor to the top of the pan servo where its axis meets the printed
     #    part, 1.118 m. In the upstream head meshes that junction is 0.073 m above the
     #    pan joint origin, which puts the origin 0.325 m above the top base, upstream
@@ -131,7 +130,7 @@ xlerobot:
     #    (2026-11-01). Cross-check: upstream puts its top base 45 mm below the top of the basket
     #    rim and the camera 0.451 m above the top base, which on this cart's 0.780 m rim gives
     #    1.186, 14 mm under the measurement.
-    mount_x: 0.252
+    mount_x: 0.329
     mount_y: 0.0
     mount_z: 1.118
     camera_x: 0.025             # m in the tilt frame, upstream's
@@ -162,10 +161,12 @@ xlerobot:
   # The arm meshes, links and joints are those in simulation/xlerobot/xlerobot.urdf
   # of the XLeRobot repo (xlerobot_urdf.zip), zero pose stretched straight. All of
   # this is in the body frame, front is -x, the robot's left is +y there.
-  # mount_x: cart (2026-11-01): 2.7 mm behind the head's pan axis, base plates flush with the top
-  #   basket's rear rim, see head.mount_x (Fusion model "XLeRobot 0.3 Upper Body").
-  # mount_y: pan axis position, 273 mm apart (CAD, confirmed on the robot). That URDF
-  #   has them 310 mm apart, the Fusion 0.3 upper body 295 (TODO check on this cart).
+  # mount_x: cart (2026-11-02), Fusion model "XLeRobot 0.3 Upper Body": the shoulder pan axes
+  #   (servo horn centres, x -104.3 mm) are 67 mm ahead of the shoulders' rear faces on the rim,
+  #   0.316 - 0.067 = 0.249; the arm base plates end 5.7 mm inside the rim. See head.mount_x.
+  # mount_y: pan axis position. The Fusion model has them 265.7 mm apart (y +138.1 and -127.6,
+  #   centred 0.75 mm from the head's axis). Earlier notes had 273 (0.4.0 CAD) and upstream's
+  #   URDF 310. TODO check on this cart.
   # mount_z: measured, floor to the bottom of the arm base (its origin), 0.765 m.
   # left_yaw, right_yaw: rotation of each arm base about z, the 0.4.0 arm base can be
   #   mounted in any direction. At the zero pose the stretched arm points to the
@@ -173,8 +174,8 @@ xlerobot:
   #   shared URDF has the arms sideways (right 0, left 3.14159), the real robot has
   #   both pointing forward (official assembly video, confirmed by the user).
   arms:
-    mount_x: 0.255
-    mount_y: 0.1365
+    mount_x: 0.249
+    mount_y: 0.1329
     mount_z: 0.765
     right_yaw: -1.57079633
     left_yaw: -1.57079633

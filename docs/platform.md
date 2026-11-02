@@ -200,7 +200,7 @@ robot's value standing in; "—" = no value yet. Where: `dims` = `robot_dimensio
 
 | Measurement | Value | Status | How |
 |---|---|---|---|
-| Mast (pan axis) x from the axle line | 0.252 m behind | cart, 2026-11-01: Fusion "XLeRobot 0.3 Upper Body", 2.7 mm ahead of the arm axes, which sit 61 mm inside the rear rim | tape |
+| Mast (pan axis) x from the axle line | 0.329 m behind | cart, 2026-11-02: Fusion "XLeRobot 0.3 Upper Body" (alignment fixed), 13 mm behind the shoulders' rear faces on the rear rim; the box behind the neck reaches 73 mm past the rim (tape about 70) | tape |
 | Pan servo top height above floor | 1.118 m | ref (6 mm lower now the spacer is gone) | tape |
 | D415 front glass: height, x ahead of the tilt axis | 1.200 m, 0.025 m | height cart, head level, 2026-11-01 (CAD from the 0.780 m rim gives 1.186); x upstream's | dims (`head.camera_z`, `camera_x`) | tape; x from the gimbal holder CAD |
 | Pan/tilt zero steps and directions | ref values | ref | `tools/calibrate_arm.py --arm head` |
@@ -212,7 +212,7 @@ robot's value standing in; "—" = no value yet. Where: `dims` = `robot_dimensio
 
 | Measurement | Value | Status | How |
 |---|---|---|---|
-| Arm mount x, y (pan axes), z (base bottom), yaw | 0.255 behind, ±0.1365, 0.765 m, forward | x: cart, arm base plates flush with the rear rim, 61.3 mm behind the pan axes (Fusion upper body), 2026-11-01; y: CAD 273 mm, the Fusion model has 295, TODO check; rest ref | tape; 0.4.0 CAD for y |
+| Arm mount x, y (pan axes), z (base bottom), yaw | 0.249 behind, ±0.1329, 0.765 m, forward | x, y: cart, Fusion upper body (alignment fixed), 2026-11-02: pan axes 67 mm ahead of the shoulders' rear faces on the rear rim, 265.7 mm apart (earlier notes 273), TODO check y; rest ref | tape across the two shoulder servo horns |
 | Servo calibration (`zero_step` per joint) | ref values | ref; lerobot JSONs exist on elroy | `tools/calibrate_arm.py`, arms held straight |
 | Model offsets, frame and mount corrections | ref values | ref | `tools/calibrate_arm_camera.py` (ChArUco, 20 poses per arm), `tools/arm_accuracy.py --fit` |
 | Wrist camera extrinsics | ref values | ref | `calibrate_arm_camera.py` |
