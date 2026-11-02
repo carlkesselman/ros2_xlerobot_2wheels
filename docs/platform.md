@@ -169,7 +169,7 @@ robot's value standing in; "—" = no value yet. Where: `dims` = `robot_dimensio
 | Wheel width (tyre) | 0.046 m | cart, 2026-11-01 | dims | calipers |
 | Wheel mass (motor + tyre) | 3.0 kg | vendor (L-faster 6.5 in hub motor wheel: 350 W, 36 V rated, 800 rpm) | dims | scale |
 | Axle height above floor | 0.085 m | cart, about, 2026-11-01 | dims | ruler; only places the model, wheel_radius comes from the circumference |
-| Base pitch (front deck vs rear) | 0.0 rad | cart, essentially level, 2026-11-01 | dims | ruler: deck height at front and rear, over their distance |
+| Base pitch (front deck vs rear) | 0.0 rad | cart, level: front and rear heights within 1-2 mm (under 0.005 rad), 2026-11-01 | dims | ruler: deck height at front and rear, over their distance |
 | Caster diameter | 0.0745 m, trail = radius | cart, 2026-11-01 | dims, nav2 footprint | calipers |
 | Caster positions (swivel screws: x, y) | -0.53, ±0.20 m | cart, rear pair, about, 2026-11-01 | dims, nav2 footprint | from the drive axle line and the centreline |
 | Cart body: length, width, height | **0.295**, **0.425**, **0.780** m | length, width and height (floor to the top rim) measured 2026-11-01, width across the outside of the vertical side rails (the top basket alone is 0.405) | dims | tape, outside of the rim |
