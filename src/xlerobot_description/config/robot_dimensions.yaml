@@ -113,14 +113,17 @@ xlerobot:
     # degrees about z, front is -x), the frame of the shared upstream URDF. The neck, head,
     # servos and D415 are the cart's Fusion model "XLeRobot 0.3 Upper Body"; heights, the
     # tilt axis and the camera position come from that model, see head_pantilt.xacro.
-    # x: cart (2026-11-02): the shoulders' rear faces (Fusion x -171.3 mm), where they clip onto
-    #    the top basket's rear rim, are the rim (0.316). The pan servo's horn (x -193.66) is
-    #    22.4 mm further back, 0.338, and the box behind the neck reaches 73 mm past the rim
-    #    (x -244.3; the tape gave about 70). Upstream's URDF has the head 61 mm inside the
-    #    opposite rim (0.048), which the XLeRobot assembly renders don't support.
+    # x: cart (2026-11-02): the neck box's slot (Fusion x -176..-170 mm) goes over the top basket's
+    #    rear rim and the shoulders' backs (x -171.3) butt against the inside of the rear wall. In
+    #    the cart mesh that wall is 5.9 mm thick, its inside 0.3058 behind the axle (the rolled lip
+    #    on top reaches 0.316, the measured outside of the rim). The pan servo's horn
+    #    (x -193.66) is 22.4 mm behind the shoulders' backs, 0.328, and the box behind the neck
+    #    (x -244.3) reaches 63 mm past the rim's lip (the tape gave about 70). Upstream's URDF has
+    #    the head 61 mm inside the opposite rim (0.048), which the XLeRobot assembly renders
+    #    don't support.
     # The Fusion heights check out against the tape: pan horn face 1.1225 m (tape 1.118 to
     # the top of the pan servo), D415 front glass centre 1.201 (tape 1.200).
-    mount_x: 0.338
+    mount_x: 0.328
     mount_y: 0.0
     # that URDF's limits, TODO check against the mechanical stops
     pan_limit_lower: -3.2       # rad
@@ -149,8 +152,8 @@ xlerobot:
   # of the XLeRobot repo (xlerobot_urdf.zip), zero pose stretched straight. All of
   # this is in the body frame, front is -x, the robot's left is +y there.
   # mount_x: cart (2026-11-02), Fusion model "XLeRobot 0.3 Upper Body": the shoulder pan axes
-  #   (servo horn centres, x -104.3 mm) are 67 mm ahead of the shoulders' rear faces on the rim,
-  #   0.316 - 0.067 = 0.249; the arm base plates end 5.7 mm inside the rim. See head.mount_x.
+  #   (servo horn centres, x -104.3 mm) are 67 mm ahead of the shoulders' backs, which butt against
+  #   the inside of the top basket's rear wall (0.3058): 0.239. See head.mount_x.
   # mount_y: pan axis position. The Fusion model has them 265.7 mm apart (y +138.1 and -127.6,
   #   centred 0.75 mm from the head's axis). Earlier notes had 273 (0.4.0 CAD) and upstream's
   #   URDF 310. TODO check on this cart.
@@ -161,7 +164,7 @@ xlerobot:
   #   shared URDF has the arms sideways (right 0, left 3.14159), the real robot has
   #   both pointing forward (official assembly video, confirmed by the user).
   arms:
-    mount_x: 0.249
+    mount_x: 0.239
     mount_y: 0.1329
     mount_z: 0.765
     right_yaw: -1.57079633

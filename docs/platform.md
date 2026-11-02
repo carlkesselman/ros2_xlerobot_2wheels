@@ -200,7 +200,7 @@ robot's value standing in; "—" = no value yet. Where: `dims` = `robot_dimensio
 
 | Measurement | Value | Status | How |
 |---|---|---|---|
-| Mast (pan axis) x from the axle line | 0.338 m behind | cart, 2026-11-02: Fusion "XLeRobot 0.3 Upper Body" (with servos and D415), pan horn 22.4 mm behind the shoulders' rear faces on the rear rim; the box behind the neck reaches 73 mm past the rim (tape about 70) | tape |
+| Mast (pan axis) x from the axle line | 0.328 m behind | cart, 2026-11-02: Fusion "XLeRobot 0.3 Upper Body" (with servos and D415), pan horn 22.4 mm behind the shoulders' backs, which butt against the inside of the top basket's rear wall (0.3058, the neck box's slot over the rim); the box behind the neck reaches 63 mm past the rim (tape about 70) | tape |
 | Pan servo horn face above floor | 1.1225 m | cart, Fusion; tape 1.118 | tape |
 | Tilt axis from the pan axis (forward, up) | 0.031 m, 0.052 m | cart, Fusion (tilt servo horn) | CAD |
 | D415 front glass centre: height, ahead of the tilt axis, left of the pan axis | 1.201 m, 0.034 m, 0.003 m | cart, Fusion, head level; tape 1.200 high | tape |
@@ -213,7 +213,7 @@ robot's value standing in; "—" = no value yet. Where: `dims` = `robot_dimensio
 
 | Measurement | Value | Status | How |
 |---|---|---|---|
-| Arm mount x, y (pan axes), z (base bottom), yaw | 0.249 behind, ±0.1329, 0.765 m, forward | x, y: cart, Fusion upper body (alignment fixed), 2026-11-02: pan axes 67 mm ahead of the shoulders' rear faces on the rear rim, 265.7 mm apart (earlier notes 273), TODO check y; rest ref | tape across the two shoulder servo horns |
+| Arm mount x, y (pan axes), z (base bottom), yaw | 0.239 behind, ±0.1329, 0.765 m, forward | x, y: cart, Fusion upper body (alignment fixed), 2026-11-02: pan axes 67 mm ahead of the shoulders' backs against the inside of the rear wall, 265.7 mm apart (earlier notes 273), TODO check y; rest ref | tape across the two shoulder servo horns |
 | Servo calibration (`zero_step` per joint) | ref values | ref; lerobot JSONs exist on elroy | `tools/calibrate_arm.py`, arms held straight |
 | Model offsets, frame and mount corrections | ref values | ref | `tools/calibrate_arm_camera.py` (ChArUco, 20 poses per arm), `tools/arm_accuracy.py --fit` |
 | Wrist camera extrinsics | ref values | ref | `calibrate_arm_camera.py` |
