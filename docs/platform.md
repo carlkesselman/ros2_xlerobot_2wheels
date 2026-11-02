@@ -200,9 +200,10 @@ robot's value standing in; "—" = no value yet. Where: `dims` = `robot_dimensio
 
 | Measurement | Value | Status | How |
 |---|---|---|---|
-| Mast (pan axis) x from the axle line | 0.329 m behind | cart, 2026-11-02: Fusion "XLeRobot 0.3 Upper Body" (alignment fixed), 13 mm behind the shoulders' rear faces on the rear rim; the box behind the neck reaches 73 mm past the rim (tape about 70) | tape |
-| Pan servo top height above floor | 1.118 m | ref (6 mm lower now the spacer is gone) | tape |
-| D415 front glass: height, x ahead of the tilt axis | 1.200 m, 0.025 m | height cart, head level, 2026-11-01 (CAD from the 0.780 m rim gives 1.186); x upstream's | dims (`head.camera_z`, `camera_x`) | tape; x from the gimbal holder CAD |
+| Mast (pan axis) x from the axle line | 0.338 m behind | cart, 2026-11-02: Fusion "XLeRobot 0.3 Upper Body" (with servos and D415), pan horn 22.4 mm behind the shoulders' rear faces on the rear rim; the box behind the neck reaches 73 mm past the rim (tape about 70) | tape |
+| Pan servo horn face above floor | 1.1225 m | cart, Fusion; tape 1.118 | tape |
+| Tilt axis from the pan axis (forward, up) | 0.031 m, 0.052 m | cart, Fusion (tilt servo horn) | CAD |
+| D415 front glass centre: height, ahead of the tilt axis, left of the pan axis | 1.201 m, 0.034 m, 0.003 m | cart, Fusion, head level; tape 1.200 high | tape |
 | Pan/tilt zero steps and directions | ref values | ref | `tools/calibrate_arm.py --arm head` |
 | Pan/tilt mechanical limits | upstream URDF | ref | move to the stops |
 | D415 intrinsics and depth scale | factory | vendor | check: `tools/depth_scale.py`, ChArUco |

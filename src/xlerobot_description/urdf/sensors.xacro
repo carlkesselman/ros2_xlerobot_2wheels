@@ -48,15 +48,10 @@
       </joint>
     </xacro:if>
 
+    <!-- The D415 itself is drawn and collides as part of head_tilt_link (the Fusion model, see
+         head_pantilt.xacro), head_camera_mount is its front glass centre. -->
     <xacro:if value="${sensor == 'realsense'}">
       <link name="head_camera_link">
-        <visual>
-          <geometry><box size="0.025 0.090 0.025"/></geometry>
-          <material name="xle_black"/>
-        </visual>
-      <collision>
-          <geometry><box size="0.025 0.090 0.025"/></geometry>
-        </collision>
         <inertial>
           <mass value="0.072"/>
           <inertia ixx="1e-5" ixy="0" ixz="0" iyy="1e-5" iyz="0" izz="1e-5"/>

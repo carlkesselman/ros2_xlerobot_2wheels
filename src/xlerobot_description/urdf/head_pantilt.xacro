@@ -2,31 +2,40 @@
 <!--
   Neck and head pan/tilt, IDs 7 and 8 on bus1.
 
-  Converted from simulation/xlerobot/xlerobot.urdf of the XLeRobot repo
-  (xlerobot_urdf.zip): the head meshes (meshes/upstream), link frames, joint
-  origins and axes. The shoulders, neck and the box behind it are this cart's,
-  from the Fusion model (meshes/cart), see top_base_link. The pan axis position
-  in base_link comes from robot_dimensions.yaml (head: mount_x/y/z), the top base
-  and everything above it follows from that. The head tilt link is turned 180
-  degrees about z, as in upstream, so its x axis points backwards; the camera
-  mount frame accounts for that. Pan/tilt limits are upstream's, TODO check them
+  Shoulders, neck, box, head and D415 are this cart's, from the Fusion model
+  "XLeRobot 0.3 Upper Body" (meshes/cart, exported in Fusion's frame, mm: +x is
+  the robot's front, +z up). The link frames and joint axes follow the upstream
+  URDF (simulation/xlerobot/xlerobot.urdf of the XLeRobot repo): top_base_link
+  and head_pan_link in the body frame (front is -x), head_tilt_link turned 180
+  degrees about z so its x points to the front, which keeps the calibrated
+  pan/tilt directions. Where the axes are comes from the servos in the Fusion
+  model; the whole assembly is placed by head: mount_x/y (pan axis) and arms:
+  mount_z (arm bases' bottom). Pan/tilt limits are upstream's, TODO check them
   against the mechanical stops.
 -->
 <robot xmlns:xacro="http://www.ros.org/wiki/xacro">
   <xacro:macro name="xlerobot_head" params="dims parent sensor">
     <xacro:property name="h" value="${dims['head']}"/>
 
-    <!-- The top base sits on the arm mounting surface, 0.045 m below it as in the
-         upstream URDF, and 0.103 m ahead of the pan axis. head: mount_z is the
-         measured height of the junction where the pan servo's axis meets the head's
-         printed part, that is 0.073 m above the pan joint origin in the upstream
-         head meshes, so the origin is at mount_z - 0.073. That gives 0.325 m above
-         the top base, upstream has 0.323. If the neck were longer than upstream's,
-         neck_ext is the difference and a plain rod fills it. -->
+    <!-- Fusion model points, mm in its frame, from the servo horns (the STS3215's output is
+         12.5 mm off its body centre, 20.2 mm above it, in each servo's own frame):
+         pan axis vertical through x -193.66, y 6.02, the pan horn's face at z 1116.80; tilt axis
+         along y through x -162.81, z 1169.24; the D415's front glass centred at x -128.4, y 9.25,
+         z 1195.4; the arm bases' bottom at z 759.3. -->
+    <xacro:property name="f_pan_x" value="-0.19366"/>
+    <xacro:property name="f_pan_y" value="0.00602"/>
+    <xacro:property name="f_pan_z" value="1.11680"/>
+    <xacro:property name="f_tilt_x" value="-0.16281"/>
+    <xacro:property name="f_tilt_z" value="1.16924"/>
+    <xacro:property name="f_arm_z" value="0.7593"/>
+
+    <!-- The top base sits 0.045 m below the arm mounting surface and 0.103 m ahead of the
+         pan axis, as in the upstream URDF. Fusion's frame is turned 180 degrees about z into it
+         with the pan axis at x -0.103 and the arm bases' bottom at arms: mount_z. -->
     <xacro:property name="top_base_z" value="${dims['arms']['mount_z'] - 0.045}"/>
-    <xacro:property name="pan_z" value="${h['mount_z'] - 0.073}"/>
-    <xacro:property name="pan_dz" value="${pan_z - top_base_z}"/>
-    <xacro:property name="neck_ext" value="${pan_dz - 0.323}"/>
+    <xacro:property name="cart_mesh_xyz" value="${-0.103 + f_pan_x} ${f_pan_y} ${0.045 - f_arm_z}"/>
+    <!-- pan joint at the pan horn's face, 1.1225 m above the floor (tape: 1.118) -->
+    <xacro:property name="pan_dz" value="${0.045 + f_pan_z - f_arm_z}"/>
     <joint name="top_base_joint" type="fixed">
       <parent link="${parent}"/>
       <child link="top_base_link"/>
@@ -39,14 +48,9 @@
         <mass value="0.2542"/>
         <inertia ixx="0.0045" ixy="0" ixz="0" iyy="0.005" iyz="0" izz="0.0045"/>
       </inertial>
-      <!-- The cart's own shoulders (two clips sitting in the top basket against its rear wall,
-           the arm bases on top), neck and the box behind the neck, exported from the Fusion model
-           "XLeRobot 0.3 Upper Body" (meshes/cart, mm, Fusion's frame: +x is the way the arms
-           point, +z up). Fusion has the head pan axis at x -184.4, y 6.0 mm and the arm bases'
-           bottom at z 759.3 mm. Turned 180 degrees about z into this frame (body frame, front is
-           -x) so the pan axis lands at x -0.103, and lifted so the arm bases' bottom is at the
-           measured arms: mount_z, 0.045 above this link. -->
-      <xacro:property name="cart_mesh_xyz" value="-0.2874 0.006 ${0.045 - 0.7593}"/>
+      <!-- Shoulders (two clips on the top basket's rear rim, the arm bases on top), the box
+           behind the neck, the neck, the head base and the pan servo with its holder. The
+           holder is 67k triangles and inside the head base, so it has no collision. -->
       <visual>
         <origin xyz="${cart_mesh_xyz}" rpy="0 0 ${pi}"/>
         <geometry>
@@ -71,19 +75,6 @@
         <origin xyz="${cart_mesh_xyz}" rpy="0 0 ${pi}"/>
         <geometry>
           <mesh filename="package://xlerobot_description/meshes/cart/shoulder_right.stl" scale="0.001 0.001 0.001"/>
-        </geometry>
-      </collision>
-      <visual>
-        <origin xyz="${cart_mesh_xyz}" rpy="0 0 ${pi}"/>
-        <geometry>
-          <mesh filename="package://xlerobot_description/meshes/cart/neck.stl" scale="0.001 0.001 0.001"/>
-        </geometry>
-        <material name="xle_part"/>
-      </visual>
-      <collision>
-        <origin xyz="${cart_mesh_xyz}" rpy="0 0 ${pi}"/>
-        <geometry>
-          <mesh filename="package://xlerobot_description/meshes/cart/neck.stl" scale="0.001 0.001 0.001"/>
         </geometry>
       </collision>
       <visual>
@@ -99,10 +90,19 @@
           <mesh filename="package://xlerobot_description/meshes/cart/pi_case.stl" scale="0.001 0.001 0.001"/>
         </geometry>
       </collision>
-      <!-- Head base and the pan servo's holder on top of the neck, also from the Fusion model:
-           they fill the neck top (1.067 m) up to where upstream's head meshes start, the measured
-           head: mount_z. The holder is 67k triangles, so it has no collision of its own; the
-           head base's covers nearly all of it. -->
+      <visual>
+        <origin xyz="${cart_mesh_xyz}" rpy="0 0 ${pi}"/>
+        <geometry>
+          <mesh filename="package://xlerobot_description/meshes/cart/neck.stl" scale="0.001 0.001 0.001"/>
+        </geometry>
+        <material name="xle_part"/>
+      </visual>
+      <collision>
+        <origin xyz="${cart_mesh_xyz}" rpy="0 0 ${pi}"/>
+        <geometry>
+          <mesh filename="package://xlerobot_description/meshes/cart/neck.stl" scale="0.001 0.001 0.001"/>
+        </geometry>
+      </collision>
       <visual>
         <origin xyz="${cart_mesh_xyz}" rpy="0 0 ${pi}"/>
         <geometry>
@@ -123,17 +123,19 @@
         </geometry>
         <material name="xle_motor"/>
       </visual>
-      <xacro:if value="${neck_ext > 0.01}">
-        <visual>
-          <origin xyz="-0.103 0 ${0.323 + neck_ext / 2.0}" rpy="0 0 0"/>
-          <geometry><cylinder radius="0.03" length="${neck_ext}"/></geometry>
-          <material name="xle_motor"/>
-        </visual>
+      <visual>
+        <origin xyz="${cart_mesh_xyz}" rpy="0 0 ${pi}"/>
+        <geometry>
+          <mesh filename="package://xlerobot_description/meshes/cart/head_pan_servo.stl" scale="0.001 0.001 0.001"/>
+        </geometry>
+        <material name="xle_black"/>
+      </visual>
       <collision>
-          <origin xyz="-0.103 0 ${0.323 + neck_ext / 2.0}" rpy="0 0 0"/>
-          <geometry><cylinder radius="0.03" length="${neck_ext}"/></geometry>
-        </collision>
-      </xacro:if>
+        <origin xyz="${cart_mesh_xyz}" rpy="0 0 ${pi}"/>
+        <geometry>
+          <mesh filename="package://xlerobot_description/meshes/cart/head_pan_servo.stl" scale="0.001 0.001 0.001"/>
+        </geometry>
+      </collision>
     </link>
 
     <link name="head_pan_link">
@@ -142,31 +144,31 @@
         <mass value="0.2556"/>
         <inertia ixx="0.0129" ixy="0" ixz="0" iyy="0.0095" iyz="0" izz="0.0184"/>
       </inertial>
+      <!-- pan bracket, tilt servo holder and tilt servo; one box for collision -->
       <visual>
-        <origin xyz="-0.335 -0.005 -0.923" rpy="0 0 0"/>
+        <origin xyz="${f_pan_x} ${f_pan_y} ${-f_pan_z}" rpy="0 0 ${pi}"/>
         <geometry>
-          <mesh filename="package://xlerobot_description/meshes/upstream/tophead1.stl" scale="0.001 0.001 0.001"/>
+          <mesh filename="package://xlerobot_description/meshes/cart/head_pan_bracket.stl" scale="0.001 0.001 0.001"/>
         </geometry>
         <material name="xle_part"/>
       </visual>
-      <collision>
-        <origin xyz="-0.335 -0.005 -0.923" rpy="0 0 0"/>
-        <geometry>
-          <mesh filename="package://xlerobot_description/meshes/upstream/tophead1.stl" scale="0.001 0.001 0.001"/>
-        </geometry>
-      </collision>
       <visual>
-        <origin xyz="1.17 -0.009 0.262" rpy="-3.141592 -1.57 -3.141592"/>
+        <origin xyz="${f_pan_x} ${f_pan_y} ${-f_pan_z}" rpy="0 0 ${pi}"/>
         <geometry>
-          <mesh filename="package://xlerobot_description/meshes/upstream/tophead4.stl" scale="0.001 0.001 0.001"/>
+          <mesh filename="package://xlerobot_description/meshes/cart/head_tilt_motor_holder.stl" scale="0.001 0.001 0.001"/>
         </geometry>
-        <material name="xle_motor"/>
+        <material name="xle_part"/>
+      </visual>
+      <visual>
+        <origin xyz="${f_pan_x} ${f_pan_y} ${-f_pan_z}" rpy="0 0 ${pi}"/>
+        <geometry>
+          <mesh filename="package://xlerobot_description/meshes/cart/head_tilt_servo.stl" scale="0.001 0.001 0.001"/>
+        </geometry>
+        <material name="xle_black"/>
       </visual>
       <collision>
-        <origin xyz="1.17 -0.009 0.262" rpy="-3.141592 -1.57 -3.141592"/>
-        <geometry>
-          <mesh filename="package://xlerobot_description/meshes/upstream/tophead4.stl" scale="0.001 0.001 0.001"/>
-        </geometry>
+        <origin xyz="-0.0191 -0.0012 0.0074" rpy="0 0 0"/>
+        <geometry><box size="0.0635 0.055 0.1107"/></geometry>
       </collision>
     </link>
 
@@ -184,53 +186,45 @@
         <mass value="0.02087"/>
         <inertia ixx="0.0061" ixy="0" ixz="0" iyy="0.0014" iyz="0" izz="0.0061"/>
       </inertial>
+      <!-- camera mount and the D415, a box each for collision -->
       <visual>
-        <origin xyz="0.16265 -0.006 -1.16815" rpy="0 0 0"/>
+        <origin xyz="${-f_tilt_x} ${-f_pan_y} ${-f_tilt_z}" rpy="0 0 0"/>
         <geometry>
-          <mesh filename="package://xlerobot_description/meshes/upstream/tophead5.stl" scale="0.001 0.001 0.001"/>
+          <mesh filename="package://xlerobot_description/meshes/cart/head_tilt_camera_mount.stl" scale="0.001 0.001 0.001"/>
         </geometry>
         <material name="xle_part"/>
       </visual>
-      <collision>
-        <origin xyz="0.16265 -0.006 -1.16815" rpy="0 0 0"/>
+      <visual>
+        <origin xyz="${-f_tilt_x} ${-f_pan_y} ${-f_tilt_z}" rpy="0 0 0"/>
         <geometry>
-          <mesh filename="package://xlerobot_description/meshes/upstream/tophead5.stl" scale="0.001 0.001 0.001"/>
+          <mesh filename="package://xlerobot_description/meshes/cart/d415.stl" scale="0.001 0.001 0.001"/>
         </geometry>
-      </collision>
-      <!-- tophead6 is the bar for the depth cameras, the plain USB camera has its own
-           shell, see sensors.xacro -->
-      <xacro:unless value="${sensor == 'usbcam'}">
-        <visual>
-          <origin xyz="0.16265 -0.006 -1.16815" rpy="0 0 0"/>
-          <geometry>
-            <mesh filename="package://xlerobot_description/meshes/upstream/tophead6.stl" scale="0.001 0.001 0.001"/>
-          </geometry>
-          <material name="xle_motor"/>
-        </visual>
+        <material name="xle_black"/>
+      </visual>
       <collision>
-          <origin xyz="0.16265 -0.006 -1.16815" rpy="0 0 0"/>
-          <geometry>
-            <mesh filename="package://xlerobot_description/meshes/upstream/tophead6.stl" scale="0.001 0.001 0.001"/>
-          </geometry>
-        </collision>
-      </xacro:unless>
+        <origin xyz="0.0004 0.0024 0.0114" rpy="0 0 0"/>
+        <geometry><box size="0.0247 0.0636 0.0473"/></geometry>
+      </collision>
+      <collision>
+        <origin xyz="0.0228 0.0032 0.0262" rpy="0 0 0"/>
+        <geometry><box size="0.0233 0.0989 0.0232"/></geometry>
+      </collision>
     </link>
 
     <joint name="head_tilt_joint" type="revolute">
       <parent link="head_pan_link"/>
       <child link="head_tilt_link"/>
-      <origin xyz="0.001 0.002 0.09815" rpy="0 0 3.1415927"/>
+      <origin xyz="${-(f_tilt_x - f_pan_x)} 0 ${f_tilt_z - f_pan_z}" rpy="0 0 3.1415927"/>
       <axis xyz="0 ${h['tilt_direction']} 0"/>
       <limit lower="${min(-h['tilt_direction'] * h['tilt_limit_lower'], -h['tilt_direction'] * h['tilt_limit_upper'])}" upper="${max(-h['tilt_direction'] * h['tilt_limit_lower'], -h['tilt_direction'] * h['tilt_limit_upper'])}" effort="2.0" velocity="${h['max_velocity']}"/>
     </joint>
 
-    <!-- sensor gets attached here, in sensors.xacro -->
+    <!-- sensor gets attached here, in sensors.xacro: the D415's front glass centre -->
     <link name="head_camera_mount"/>
     <joint name="head_camera_mount_joint" type="fixed">
       <parent link="head_tilt_link"/>
       <child link="head_camera_mount"/>
-      <!-- z puts the lens centre at head: camera_z above the floor -->
-      <origin xyz="${h['camera_x']} 0 ${h['camera_z'] - pan_z - 0.09815}" rpy="0 0 0"/>
+      <origin xyz="${-0.1284 - f_tilt_x} ${0.00925 - f_pan_y} ${1.1954 - f_tilt_z}" rpy="0 0 0"/>
     </joint>
   </xacro:macro>
 </robot>
