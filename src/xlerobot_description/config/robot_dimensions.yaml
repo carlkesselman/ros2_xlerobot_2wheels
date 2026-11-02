@@ -35,7 +35,7 @@ xlerobot:
     # --- chassis ---
     # IKEA RASKOG nominal and the reference robot's fit, TODO check against this cart.
     body_length: 0.340
-    body_width:  0.405
+    body_width:  0.405          # cart: top basket, outside of the rim, measured 2026-11-01
     body_height: 0.780
     # x of the body box centre in base_link (drive axle is x=0), matched to the
     # centre of raskogbody.stl's footprint (x=-0.048 to 0.344). TODO check
