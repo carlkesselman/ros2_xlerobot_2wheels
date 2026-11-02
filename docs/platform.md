@@ -75,7 +75,7 @@ breaks its name silently. The D415 needs librealsense's `99-realsense-libusb.rul
 
 | Item | Detail |
 |---|---|
-| Motors | two 6.5 in brushless hub motors, hoverboard-class, Hall sensors, KV ~22, torque constants 0.371 (right) / 0.379 (left) Nm/A from back-EMF |
+| Motors | two L-faster 6.5 in brushless hub motor wheels (hoverboard replacement: 350 W, 36 V rated, 800 rpm, 3 kg each), 15 pole pairs, Hall sensors, KV ~22 (800 rpm / 36 V agrees; about 440 rpm, 3.8 m/s no-load on the 20 V battery), torque constants 0.371 (right) / 0.379 (left) Nm/A from back-EMF |
 | Controller | ODESC (ODrive v3 clone), firmware 0.5.1, USB `1209:0d32` (`0d31` = DFU), libusb, udev `99-odrive.rules` |
 | Wiring | M0 = axis0 = **right** wheel, M1 = axis1 = **left** wheel; the left motor is the mirrored one |
 | Tuning (saved on the board) | vel gain 5.2, integrator 16.3, encoder bandwidth 50, current limit 10.5 A |
@@ -167,7 +167,7 @@ robot's value standing in; "—" = no value yet. Where: `dims` = `robot_dimensio
 | Track (contact patch to contact patch) | 0.527 m | cart, 2026-10-21 | dims, ctrl | then `rotate-in-place` for `wheel_separation_multiplier` |
 | Per-wheel radius scale | 1.0 | — | dims, ctrl | UMBmark square |
 | Wheel width (tyre) | 0.046 m | cart, 2026-11-01 | dims | calipers |
-| Wheel mass (motor + tyre) | 2.5 kg | — | dims | scale |
+| Wheel mass (motor + tyre) | 3.0 kg | vendor (L-faster 6.5 in hub motor wheel: 350 W, 36 V rated, 800 rpm) | dims | scale |
 | Axle height above floor | 0.085 m | cart, about, 2026-11-01 | dims | ruler; only places the model, wheel_radius comes from the circumference |
 | Base pitch (front deck vs rear) | 0.0 rad | cart, essentially level, 2026-11-01 | dims | ruler: deck height at front and rear, over their distance |
 | Caster diameter | 0.0745 m, trail = radius | cart, 2026-11-01 | dims, nav2 footprint | calipers |
@@ -176,7 +176,7 @@ robot's value standing in; "—" = no value yet. Where: `dims` = `robot_dimensio
 | Overall width (outer edges of the drive wheels) | 0.573 m (0.527 track + 0.046 tyre) | cart, 2026-11-01: nothing else is wider | nav2 footprint (±0.29) | — |
 | Neck overhang past the top basket's rear rim | 0.07 m, so the neck box reaches 0.386 m behind the axle, inside the nav2 footprint (-0.61) | cart, 2026-11-01: arms and neck are on the rear (caster-side) edge of the top basket, the arms reach forward over it | head and arm mounts | horizontal, outside of the rim to the neck's edge |
 | Top basket rims from the axle line (front, rear) | 0.021 / 0.316 m behind | cart, front rim 20-22 mm behind, 2026-11-01; rear from the 295 mm length | dims (`body_x_offset`, mesh placement) | tape; the reference notes had 22 mm ahead / 260 mm behind |
-| Total mass | 17.2 kg | cart | dims (`body_mass`, less arms/head) | scale |
+| Total mass | 17.2 kg | cart | dims (`body_mass` 9.2 = 17.2 less the other links' 7.97) | scale |
 | CoM height | 0.35 m | — | dims (tip-over limit) | tilt test, or estimate from component heights |
 | Footprint polygon for Nav2 | derived | — | `nav2_params.yaml` | from the dimensions above |
 | Torque constants | 0.371 / 0.379 Nm/A | cart, 2026-10-25 | ODESC | `base-characterize.sh blocks` |

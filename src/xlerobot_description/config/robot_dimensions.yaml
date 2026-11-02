@@ -30,7 +30,7 @@ xlerobot:
     wheel_radius_scale_right: 1.0
 
     wheel_width: 0.046          # cart: tyre width, measured 2026-11-01
-    wheel_mass: 2.5             # TODO weigh, hub motor and tyre
+    wheel_mass: 3.0             # cart: L-faster 6.5 in hub motor wheel with tyre, vendor spec 3 kg
 
     # --- chassis ---
     # IKEA RASKOG nominal and the reference robot's fit, TODO check against this cart.
@@ -62,9 +62,10 @@ xlerobot:
     caster_y_offset: 0.20
 
     # cart: 17.2 kg complete (38 lb, new casters), weighed. base_link carries what the URDF has
-    # no other link for: chassis, battery, ODESC, Jetson. TODO subtract the arm and head link
-    # masses once those are checked; 16 kg until then.
-    body_mass: 16.0
+    # no other link for: chassis, battery, ODESC, Jetson. The other links add up to 7.97 kg (wheels
+    # 2 x 3.0, casters, top base, head, arms and lidar as upstream has them, 2026-11-01), so 9.2
+    # here keeps the model at 17.2. Upstream's arm and camera masses are on the light side.
+    body_mass: 9.2
     com_height: 0.35            # TODO, this sets the tip over limits
 
     # --- ODrive (ODESC, ODrive v3 / firmware 0.5.1, USB) ---
