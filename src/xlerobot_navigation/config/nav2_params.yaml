@@ -12,7 +12,7 @@
 # out past the chassis box on x. The front is +x, the drive-wheel end. Derived from
 # robot_dimensions.yaml (wheel_radius 0.0824 at the front, wheel_separation 0.527 and wheel_width
 # 0.046 on y; at the rear the casters' swivel screws at x -0.325 plus 37 mm of trail (equal to the
-# caster radius) and the 37 mm radius, -0.40 with the casters trailing, the neck box at -0.386 and
+# caster radius) and the 37 mm radius, -0.40 with the casters trailing, the box behind the neck at about -0.37 to -0.39 and
 # the rear rails, -0.41 with a centimetre to spare), duplicated here by hand same as
 # controllers.yaml's wheel_radius/wheel_separation.
 #

@@ -3,8 +3,9 @@
   Neck and head pan/tilt, IDs 7 and 8 on bus1.
 
   Converted from simulation/xlerobot/xlerobot.urdf of the XLeRobot repo
-  (xlerobot_urdf.zip): the printed top base, neck and head meshes
-  (meshes/upstream), link frames, joint origins and axes. The pan axis position
+  (xlerobot_urdf.zip): the head meshes (meshes/upstream), link frames, joint
+  origins and axes. The shoulders, neck and the box behind it are this cart's,
+  from the Fusion model (meshes/cart), see top_base_link. The pan axis position
   in base_link comes from robot_dimensions.yaml (head: mount_x/y/z), the top base
   and everything above it follows from that. The head tilt link is turned 180
   degrees about z, as in upstream, so its x axis points backwards; the camera
@@ -38,30 +39,64 @@
         <mass value="0.2542"/>
         <inertia ixx="0.0045" ixy="0" ixz="0" iyy="0.005" iyz="0" izz="0.0045"/>
       </inertial>
+      <!-- The cart's own shoulders (two clips sitting in the top basket against its rear wall,
+           the arm bases on top), neck and the box behind the neck, exported from the Fusion model
+           "XLeRobot 0.3 Upper Body" (meshes/cart, mm, Fusion's frame: +x is the way the arms
+           point, +z up). Fusion has the head pan axis at x -184.4, y 6.0 mm and the arm bases'
+           bottom at z 759.3 mm. Turned 180 degrees about z into this frame (body frame, front is
+           -x) so the pan axis lands at x -0.103, and lifted so the arm bases' bottom is at the
+           measured arms: mount_z, 0.045 above this link. -->
+      <xacro:property name="cart_mesh_xyz" value="-0.2874 0.006 ${0.045 - 0.7593}"/>
       <visual>
-        <origin xyz="-0.44 -0.005 -0.6" rpy="0 0 0"/>
+        <origin xyz="${cart_mesh_xyz}" rpy="0 0 ${pi}"/>
         <geometry>
-          <mesh filename="package://xlerobot_description/meshes/upstream/topbase1.stl" scale="0.001 0.001 0.001"/>
+          <mesh filename="package://xlerobot_description/meshes/cart/shoulder_left.stl" scale="0.001 0.001 0.001"/>
         </geometry>
         <material name="xle_part"/>
       </visual>
       <collision>
-        <origin xyz="-0.44 -0.005 -0.6" rpy="0 0 0"/>
+        <origin xyz="${cart_mesh_xyz}" rpy="0 0 ${pi}"/>
         <geometry>
-          <mesh filename="package://xlerobot_description/meshes/upstream/topbase1.stl" scale="0.001 0.001 0.001"/>
+          <mesh filename="package://xlerobot_description/meshes/cart/shoulder_left.stl" scale="0.001 0.001 0.001"/>
         </geometry>
       </collision>
       <visual>
-        <origin xyz="-0.298 0.006 -0.715" rpy="0 0 3.14"/>
+        <origin xyz="${cart_mesh_xyz}" rpy="0 0 ${pi}"/>
         <geometry>
-          <mesh filename="package://xlerobot_description/meshes/upstream/topbase2.stl" scale="0.001 0.001 0.001"/>
+          <mesh filename="package://xlerobot_description/meshes/cart/shoulder_right.stl" scale="0.001 0.001 0.001"/>
+        </geometry>
+        <material name="xle_part"/>
+      </visual>
+      <collision>
+        <origin xyz="${cart_mesh_xyz}" rpy="0 0 ${pi}"/>
+        <geometry>
+          <mesh filename="package://xlerobot_description/meshes/cart/shoulder_right.stl" scale="0.001 0.001 0.001"/>
+        </geometry>
+      </collision>
+      <visual>
+        <origin xyz="${cart_mesh_xyz}" rpy="0 0 ${pi}"/>
+        <geometry>
+          <mesh filename="package://xlerobot_description/meshes/cart/neck.stl" scale="0.001 0.001 0.001"/>
+        </geometry>
+        <material name="xle_part"/>
+      </visual>
+      <collision>
+        <origin xyz="${cart_mesh_xyz}" rpy="0 0 ${pi}"/>
+        <geometry>
+          <mesh filename="package://xlerobot_description/meshes/cart/neck.stl" scale="0.001 0.001 0.001"/>
+        </geometry>
+      </collision>
+      <visual>
+        <origin xyz="${cart_mesh_xyz}" rpy="0 0 ${pi}"/>
+        <geometry>
+          <mesh filename="package://xlerobot_description/meshes/cart/pi_case.stl" scale="0.001 0.001 0.001"/>
         </geometry>
         <material name="xle_motor"/>
       </visual>
       <collision>
-        <origin xyz="-0.298 0.006 -0.715" rpy="0 0 3.14"/>
+        <origin xyz="${cart_mesh_xyz}" rpy="0 0 ${pi}"/>
         <geometry>
-          <mesh filename="package://xlerobot_description/meshes/upstream/topbase2.stl" scale="0.001 0.001 0.001"/>
+          <mesh filename="package://xlerobot_description/meshes/cart/pi_case.stl" scale="0.001 0.001 0.001"/>
         </geometry>
       </collision>
       <xacro:if value="${neck_ext > 0.01}">

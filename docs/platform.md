@@ -176,7 +176,7 @@ robot's value standing in; "—" = no value yet. Where: `dims` = `robot_dimensio
 | Caster positions (swivel screws: x, y) | -0.325, ±0.20 m | cart, rear pair, along the floor, about, 2026-11-01 (axle clamp 18 mm ahead of the front rail + 35 cm RÅSKOG frame gives about 0.35) | dims, nav2 footprint | from the drive axle line and the centreline |
 | Cart body: length, width, height | **0.295**, **0.425**, **0.780** m | length, width and height (floor to the top rim) measured 2026-11-01, width across the outside of the vertical side rails (the top basket alone is 0.405) | dims | tape, outside of the rim |
 | Overall width (outer edges of the drive wheels) | 0.573 m (0.527 track + 0.046 tyre) | cart, 2026-11-01: nothing else is wider | nav2 footprint (±0.29) | — |
-| Neck overhang past the top basket's rear rim | 0.07 m, so the neck box reaches 0.386 m behind the axle, inside the nav2 footprint (-0.41) | cart, 2026-11-01: arms and neck are on the rear (caster-side) edge of the top basket, the arms reach forward over it | head and arm mounts | horizontal, outside of the rim to the neck's edge |
+| Neck overhang past the top basket's rear rim | about 0.07 m by tape; 0.054 m in the Fusion model, the box ending 0.370 m behind the axle, inside the nav2 footprint (-0.41) | cart, 2026-11-01: arms and neck are on the rear (caster-side) edge of the top basket, the arms reach forward over it | head and arm mounts | horizontal, outside of the rim to the neck's edge |
 | Top basket rims from the axle line (front, rear) | 0.021 / 0.316 m behind | cart, front rim 20-22 mm behind, 2026-11-01; rear from the 295 mm length | dims (`body_x_offset`, mesh placement) | tape; the reference notes had 22 mm ahead / 260 mm behind |
 | Total mass | 17.2 kg | cart | dims (`body_mass` 9.2 = 17.2 less the other links' 7.97) | scale |
 | CoM height | 0.35 m | — | dims (tip-over limit) | tilt test, or estimate from component heights |
@@ -200,7 +200,7 @@ robot's value standing in; "—" = no value yet. Where: `dims` = `robot_dimensio
 
 | Measurement | Value | Status | How |
 |---|---|---|---|
-| Mast (pan axis) x from the axle line | 0.309 m behind | cart, 2026-11-01: stock 0.4.0 neck, plate 70 mm past the rear rim, axis 77 mm in from its edge (upstream mesh), by eye over the rear rim | tape |
+| Mast (pan axis) x from the axle line | 0.252 m behind | cart, 2026-11-01: Fusion "XLeRobot 0.3 Upper Body", 2.7 mm ahead of the arm axes, which sit 61 mm inside the rear rim | tape |
 | Pan servo top height above floor | 1.118 m | ref (6 mm lower now the spacer is gone) | tape |
 | D415 front glass: height, x ahead of the tilt axis | 1.200 m, 0.025 m | height cart, head level, 2026-11-01 (CAD from the 0.780 m rim gives 1.186); x upstream's | dims (`head.camera_z`, `camera_x`) | tape; x from the gimbal holder CAD |
 | Pan/tilt zero steps and directions | ref values | ref | `tools/calibrate_arm.py --arm head` |
@@ -212,7 +212,7 @@ robot's value standing in; "—" = no value yet. Where: `dims` = `robot_dimensio
 
 | Measurement | Value | Status | How |
 |---|---|---|---|
-| Arm mount x, y (pan axes), z (base bottom), yaw | 0.246 behind, ±0.1365, 0.765 m, forward | x: cart, arm bases inside the basket outline with their back edges at the rear rim (base reaches 70 mm behind the pan axis), 2026-11-01; rest ref | tape; 0.4.0 CAD for y |
+| Arm mount x, y (pan axes), z (base bottom), yaw | 0.255 behind, ±0.1365, 0.765 m, forward | x: cart, arm base plates flush with the rear rim, 61.3 mm behind the pan axes (Fusion upper body), 2026-11-01; y: CAD 273 mm, the Fusion model has 295, TODO check; rest ref | tape; 0.4.0 CAD for y |
 | Servo calibration (`zero_step` per joint) | ref values | ref; lerobot JSONs exist on elroy | `tools/calibrate_arm.py`, arms held straight |
 | Model offsets, frame and mount corrections | ref values | ref | `tools/calibrate_arm_camera.py` (ChArUco, 20 poses per arm), `tools/arm_accuracy.py --fit` |
 | Wrist camera extrinsics | ref values | ref | `calibrate_arm_camera.py` |
