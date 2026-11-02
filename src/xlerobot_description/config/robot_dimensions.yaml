@@ -250,8 +250,8 @@ xlerobot:
   # yet): a two-piece clamp on the middle basket's mesh floor with an arm reaching forward past the
   # front wall, the LD19 hung upside down from its tip with its axis over the drive axle. x, y,
   # scan_below_mount (6 mm plate + 27 mm), upside_down and yaw (arrow to the robot's left) are that
-  # design's. TODO mount_z, floor to the middle basket's underside (0.420 is the reference robot's),
-  # and check yaw in RViz once it is mounted.
+  # design's. mount_z: floor to the middle basket's underside, 0.415 (2026-11-01), so the scan plane
+  # is at 0.382 and the LD19's head bottom at 0.374. TODO check yaw in RViz once it is mounted.
   # x, y: base_link frame (front is +x), the drive axle is x=0.
   # mount_z: floor to the housing's mounting surface.
   # scan_below_mount: distance between the mounting surface and the scan plane (0.033 m on an LD19),
@@ -262,7 +262,7 @@ xlerobot:
   lidar:
     x: 0.0
     y: 0.0
-    mount_z: 0.420
+    mount_z: 0.415
     scan_below_mount: 0.033
     upside_down: true
     yaw: 1.5707963

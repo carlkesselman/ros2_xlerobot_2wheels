@@ -190,7 +190,7 @@ robot's value standing in; "—" = no value yet. Where: `dims` = `robot_dimensio
 | Measurement | Value | Status | How |
 |---|---|---|---|
 | x, y from the drive axle / centreline | 0, 0 | bracket design (XLeRobot/hardware/lidar_bracket): axis over the drive axle, on the centreline | plumb line from the LD19 axis to the axle |
-| Mounting surface height (middle basket's underside) | 0.420 m | ref | tape, floor to the underside of the middle basket's mesh floor |
+| Mounting surface height (middle basket's underside) | 0.415 m (scan plane 0.382, head bottom 0.374) | cart, 2026-11-01 | tape, floor to the underside of the middle basket's mesh floor |
 | Scan plane to mounting surface | 0.033 m | bracket design: 6 mm plate + 27 mm (LD19 base to scan plane); head bottom 40.8 mm under the basket | |
 | Upside down | true | bracket design | as mounted |
 | Yaw (forward arrow vs robot front) | +90° | bracket design (arrow to the robot's left, connector to the rear) | checked in RViz against a wall ahead |
