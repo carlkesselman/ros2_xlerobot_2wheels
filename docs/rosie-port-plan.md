@@ -15,7 +15,7 @@ The full inventory, wiring, power and measurement list for Carl's cart is [platf
 | Operator station | gamepad on the robot | **rosie**, Raspberry Pi 5: leader arms + gamepad (8BitDo SF30 Pro), ZMQ to the cart |
 | Base | 2 × STS3215 wheels, ids 9/10 on bus 2 | **2 × brushless hub wheels on an ODESC** (ODrive v3, fw 0.5.1), USB/libusb `1209:0d32`; axis0 = right, axis1 = left; `invert_left_wheel: true` |
 | Bus 2 | right arm 1-6 + wheels 9-10 | **right arm 1-6 only** |
-| Wheel radius / track | 0.0625 / 0.55 m | **0.0828 / 0.527 m** (measured 2026-10-21, radius from the 52 cm circumference 2026-11-01) |
+| Wheel radius / track | 0.0625 / 0.55 m | **0.0824 / 0.527 m** (measured 2026-10-21, radius from the 51.8 cm circumference 2026-11-01) |
 | Mass | 8 kg (TODO) | **17.2 kg**, complete |
 | Speed / accel | 0.25 m/s, 0.3 m/s² | **1.0 m/s, 1.0 m/s²** (validated on rug and hardwood, 2026-10-25) |
 | Base tuning | none (servo) | ODESC gains 5.2 / 16.3, encoder bandwidth 50, current_lim 10.5 A (saved on the board); feed-forward friction 0.36 Nm, inertia 0.419 Nm per turn/s²; board watchdog 0.5 s; VEL_RAMP on the board |

@@ -11,14 +11,14 @@ xlerobot:
   base:
     # --- odometry critical, do these first ---
     #
-    # cart: 6.5 in hub wheel, tyre circumference 52 cm (2026-11-01), 0.52 / 2pi = 0.0828. The
+    # cart: 6.5 in hub wheel, tyre circumference 51.8 cm (2026-11-01), 0.518 / 2pi = 0.0824. The
     # rolling radius under load; an error here scales every velocity and all odometry, so the
     # straight-line odometry run has the last word.
-    wheel_radius: 0.0828
+    wheel_radius: 0.0824
 
     # Nose-up lean of the whole base, rad, applied as a pitch on base_footprint_joint about the axle
-    # so the arms and the head see gravity correctly. TODO measure on this cart: the hub wheels and
-    # the new casters changed it (the reference robot's was 0.031).
+    # so the arms and the head see gravity correctly. cart: essentially level (2026-11-01), the hub
+    # wheels and casters took out the reference robot's 0.031.
     pitch_up: 0.0
 
     # cart: tyre centre to centre between the contact patches, 20 3/4 in (527 mm), measured
@@ -42,7 +42,7 @@ xlerobot:
     # against the real cart's front and rear edges.
     body_x_offset: 0.119
 
-    # cart: axle height above floor, about 85 mm (ruler, 2026-11-01). 2 mm over wheel_radius,
+    # cart: axle height above floor, about 85 mm (ruler, 2026-11-01). 3 mm over wheel_radius,
     # which comes from the circumference and is the better number; this one only places the
     # model in z.
     axle_height: 0.085
@@ -88,7 +88,7 @@ xlerobot:
   # a brake-from-top-speed test with the arms up. Angular: a pure turn at 1.0 m/s per wheel is
   # 2 * 1.0 / 0.527 = 3.8 rad/s; 2.0 until the turn has been tested with the arms on.
   limits:
-    wheel_max_angular_velocity: 12.08  # rad/s, 1.0 m/s / wheel_radius
+    wheel_max_angular_velocity: 12.14  # rad/s, 1.0 m/s / wheel_radius
     linear_velocity_max: 1.0           # m/s
     angular_velocity_max: 2.0          # rad/s
     linear_acceleration_max: 1.0       # m/s^2
