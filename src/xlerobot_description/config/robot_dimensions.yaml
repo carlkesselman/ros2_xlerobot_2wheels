@@ -82,6 +82,14 @@ xlerobot:
       friction_ff_nm: 0.36      # feed-forward, 90% of the motors' own drag
       inertia_ff: 0.419         # Nm per turn/s^2, the 17.2 kg cart
       watchdog_s: 0.5           # the board drops the wheels to IDLE after this without a command
+      # Set on the board by XLeRobot's config/odrive-check.sh --setup-motors, recorded here for
+      # reference, not sent: 15 pole pairs, Hall encoder cpr 90 = 6 x 15 (config/cart_selftest.py),
+      # so a count is 2pi * 0.0824 / 90 = 5.75 mm of travel. Torque constants from back-EMF
+      # (2026-10-25). TODO read pole_pairs and cpr off the board (odrive-check.sh summary).
+      pole_pairs: 15
+      encoder_cpr: 90
+      torque_constant_right: 0.371   # Nm/A
+      torque_constant_left: 0.379
 
   # --- speed limits ---
   # cart: 1.0 m/s and 1.0 m/s^2 per wheel, validated with `step --candidates` on rug and hardwood

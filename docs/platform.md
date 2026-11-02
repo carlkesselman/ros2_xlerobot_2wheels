@@ -180,7 +180,7 @@ robot's value standing in; "—" = no value yet. Where: `dims` = `robot_dimensio
 | CoM height | 0.35 m | — | dims (tip-over limit) | tilt test, or estimate from component heights |
 | Footprint polygon for Nav2 | derived | — | `nav2_params.yaml` | from the dimensions above |
 | Torque constants | 0.371 / 0.379 Nm/A | cart, 2026-10-25 | ODESC | `base-characterize.sh blocks` |
-| Pole pairs | — | cart (measured, value not in the notes) | ODESC | `odrive-check.sh --halls` |
+| Pole pairs | 15 (Hall cpr 90 = 6 × 15, 5.75 mm of travel per count) | cart, from cpr 90 in XLeRobot's config/cart_selftest.py; not yet read off the board | ODESC | `odrive-check.sh` summary, or `--halls` and one wheel turn |
 | Speed and acceleration limits | 1.0 m/s, 1.0 m/s² | cart, 2026-10-25 | dims, ctrl | `base-characterize.sh step --candidates`; repeat a brake test with the arms up before raising |
 
 ### 6.2 Lidar
