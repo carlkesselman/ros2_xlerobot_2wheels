@@ -198,7 +198,7 @@ robot's value standing in; "—" = no value yet. Where: `dims` = `robot_dimensio
 
 | Measurement | Value | Status | How |
 |---|---|---|---|
-| Mast (pan axis) x from the axle line | 0.048 m | ref | tape |
+| Mast (pan axis) x from the axle line | 0.309 m behind | cart, 2026-11-01: stock 0.4.0 neck, plate 70 mm past the rear rim, axis 77 mm in from its edge (upstream mesh), by eye over the rear rim | tape |
 | Pan servo top height above floor | 1.118 m | ref (6 mm lower now the spacer is gone) | tape |
 | D415 mount on the tilt bracket (lens position) | — | — | the D415 holder isn't upstream's; measure or take from its CAD |
 | Pan/tilt zero steps and directions | ref values | ref | `tools/calibrate_arm.py --arm head` |
@@ -210,7 +210,7 @@ robot's value standing in; "—" = no value yet. Where: `dims` = `robot_dimensio
 
 | Measurement | Value | Status | How |
 |---|---|---|---|
-| Arm mount x, y (pan axes), z (base bottom), yaw | 0.048, ±0.1365, 0.765 m, forward | ref | tape; 0.4.0 CAD for y |
+| Arm mount x, y (pan axes), z (base bottom), yaw | 0.309 behind, ±0.1365, 0.765 m, forward | x: cart, at the mast's x (stock 0.4.0 arm base), 2026-11-01; rest ref | tape; 0.4.0 CAD for y |
 | Servo calibration (`zero_step` per joint) | ref values | ref; lerobot JSONs exist on elroy | `tools/calibrate_arm.py`, arms held straight |
 | Model offsets, frame and mount corrections | ref values | ref | `tools/calibrate_arm_camera.py` (ChArUco, 20 poses per arm), `tools/arm_accuracy.py --fit` |
 | Wrist camera extrinsics | ref values | ref | `calibrate_arm_camera.py` |
