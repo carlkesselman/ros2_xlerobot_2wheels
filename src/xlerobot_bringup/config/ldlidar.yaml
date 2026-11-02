@@ -18,8 +18,8 @@
       frame_id: 'ldlidar_link'
       bins: 455  # fixed size, what slam_toolbox wants
       # the front posts are about 0.20 m from the lidar (axis over the drive axle, posts 18 mm
-      # behind it at y = +-0.2), inside this. The rear posts are about 0.40 m away, behind at
-      # about +-150 deg, and do show; TODO filter them (laser_filters box filter), the single
+      # behind it at y = +-0.2), inside this. The rear posts are about 0.38 m away, behind at
+      # about +-148 deg, and do show; TODO filter them (laser_filters box filter), the single
       # angle crop below would blind the whole rear.
       range_min: 0.30
       range_max: 12.0
