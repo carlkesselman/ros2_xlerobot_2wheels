@@ -81,7 +81,7 @@ breaks its name silently. The D415 needs librealsense's `99-realsense-libusb.rul
 | Tuning (saved on the board) | vel gain 5.2, integrator 16.3, encoder bandwidth 50, current limit 10.5 A |
 | Bus limits (`odrive-check.sh --apply`) | brake resistor 2 Ω / 50 W, `dc_max_positive_current` 10 A, no regen into the supply, undervoltage trip 16.5 V, overvoltage trip 26 V |
 | Power | 20 V (5S) 4 Ah drill battery through an XH-M609 low-voltage cutoff relay, see §5 |
-| Casters | four passive casters on the RÅSKOG legs (new casters, not stock) |
+| Casters | two passive casters at the rear in the stock RÅSKOG mounting place, larger than stock to level the cart; the drive wheels are at the front, no front casters |
 | Chassis | IKEA RÅSKOG cart, 17.2 kg complete |
 
 ### 3.5 Lidar
@@ -171,7 +171,7 @@ robot's value standing in; "—" = no value yet. Where: `dims` = `robot_dimensio
 | Axle height above floor | 0.085 m | cart, about, 2026-11-01 | dims | ruler; only places the model, wheel_radius comes from the circumference |
 | Base pitch (front deck vs rear) | 0.0 rad | cart, essentially level, 2026-11-01 | dims | ruler: deck height at front and rear, over their distance |
 | Caster diameter | 0.055 m | ref | dims | calipers |
-| Caster positions (x front/rear, y) | 0.045 / -0.259, ±0.15 m | ref | dims | from the drive axle line and the centreline |
+| Caster positions (swivel screws: x, y) | -0.53, ±0.20 m | cart, rear pair, about, 2026-11-01 | dims, nav2 footprint | from the drive axle line and the centreline |
 | Cart body: length, width, height | 0.340, 0.405, 0.780 m | ref (RÅSKOG nominal) | dims | tape |
 | Top basket rims from the axle line (front, rear) | — | — | dims (`body_x_offset`, mesh scale) | tape; the reference was 22 mm ahead / 260 mm behind |
 | Total mass | 17.2 kg | cart | dims (`body_mass`, less arms/head) | scale |

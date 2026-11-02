@@ -57,14 +57,11 @@
     </joint>
   </xacro:macro>
 
-  <!-- Four generic casters, not two: the stock RASKOG cart's original four
-       wheels are all still there - the drive wheels are an addition on
-       their own extended axle bar, not a replacement for any of them (see
-       the photo this was built from). A single centered caster, or just a
-       rear pair, would both be wrong - this is front pair + rear pair, all
-       four passive. No encoder on any of them, so each is a fixed sphere
-       and not a joint - a joint would just publish made up numbers. Their
-       scrub when turning in place is part of why yaw needs IMU fusion. -->
+  <!-- Two passive casters at the rear, in the stock RASKOG mounting place; the
+       drive wheels are at the front, with no casters beside them. No encoder on
+       either, so each is a fixed sphere and not a joint - a joint would just
+       publish made up numbers. Their scrub when turning in place is part of why
+       yaw needs IMU fusion. -->
   <xacro:macro name="caster" params="prefix reflect x_offset dims">
     <xacro:property name="b" value="${dims['base']}"/>
 
@@ -176,8 +173,6 @@
 
     <xacro:caster prefix="rear_left"   reflect="1"  x_offset="${b['caster_rear_x_offset']}"  dims="${dims}"/>
     <xacro:caster prefix="rear_right"  reflect="-1" x_offset="${b['caster_rear_x_offset']}"  dims="${dims}"/>
-    <xacro:caster prefix="front_left"  reflect="1"  x_offset="${b['caster_front_x_offset']}" dims="${dims}"/>
-    <xacro:caster prefix="front_right" reflect="-1" x_offset="${b['caster_front_x_offset']}" dims="${dims}"/>
 
   </xacro:macro>
 </robot>

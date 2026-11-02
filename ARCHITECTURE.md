@@ -113,9 +113,9 @@ relative measurement error to hide behind.
 
 ### 1.5 Chassis
 
-IKEA RÅSKOG cart, two driven wheels on their own axle bar plus the stock cart's original
-four generic casters (front and rear pairs), all still there - see `base_2wheels.xacro`.
-None of the casters have an encoder. In the URDF each is a fixed link with a low friction
+IKEA RÅSKOG cart, two driven wheels on their own axle bar at the front and two passive
+casters at the rear, in the stock mounting place but larger than stock to level the cart -
+see `base_2wheels.xacro`. Neither caster has an encoder. In the URDF each is a fixed link with a low friction
 sphere, not a steerable joint, because a joint would only publish invented numbers.
 
 The thing is tall and top heavy, two 6-DOF arms and a head above a narrow track. CoM height

@@ -50,15 +50,16 @@ xlerobot:
     # axle offset from base_link, positive is forward. TODO
     axle_x_offset: 0.0
 
-    # Four passive casters (front left/right, rear left/right). No encoder on any of them, so each
-    # is a fixed sphere in the URDF. TODO measure: this cart has new casters (diameter and
-    # positions below are the reference robot's).
+    # cart: two passive casters at the rear, in the stock RASKOG mounting place; the drive wheels
+    # are at the front and there are no front casters. Larger than stock, chosen to level the cart.
+    # No encoder on either, so each is a fixed sphere in the URDF. Positions are the swivel screws:
+    # 53 cm behind the axle, about 40 cm apart (2026-11-01). TODO caster wheel diameter (the
+    # radius below is the stock caster's).
     caster_radius: 0.0275
     # base_link frame, front is +x (the drive-wheel end, where the arms and the
     # head camera face).
-    caster_rear_x_offset: -0.259
-    caster_front_x_offset: 0.045
-    caster_y_offset: 0.15
+    caster_rear_x_offset: -0.53
+    caster_y_offset: 0.20
 
     # cart: 17.2 kg complete (38 lb, new casters), weighed. base_link carries what the URDF has
     # no other link for: chassis, battery, ODESC, Jetson. TODO subtract the arm and head link
