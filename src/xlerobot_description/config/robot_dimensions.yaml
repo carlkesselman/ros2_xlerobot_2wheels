@@ -117,8 +117,10 @@ xlerobot:
     #    70 mm out past the rear rim (0.386 behind the drive axle line; front rim 0.021 + basket
     #    0.295 = rear rim 0.316). Head and arm base are stock 0.4.0: in upstream's top base mesh
     #    (topbase1.stl) the pan axis is 77 mm in from the plate's edge, so 0.386 - 0.077 = 0.309,
-    #    7 mm inside the rear rim, which matches "directly above the rim" by eye. The 0.048 that
-    #    was here is upstream's placement on the cart (head near the drive wheels), not this cart's.
+    #    7 mm inside the rear rim, which matches "directly above the rim" by eye. This is the stock
+    #    layout of XLeRobot's assembly renders: neck at one edge of the top basket, its foot over the
+    #    rim, arm bases beside it, arms reaching across the basket. Upstream's URDF has the head 61 mm
+    #    inside the opposite rim (the 0.048 that was here), which the renders don't support.
     # z: measured, floor to the top of the pan servo where its axis meets the printed
     #    part, 1.118 m. In the upstream head meshes that junction is 0.073 m above the
     #    pan joint origin, which puts the origin 0.325 m above the top base, upstream
