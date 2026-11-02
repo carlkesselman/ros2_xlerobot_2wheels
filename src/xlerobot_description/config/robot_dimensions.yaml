@@ -35,7 +35,7 @@ xlerobot:
     # --- chassis ---
     # IKEA RASKOG nominal and the reference robot's fit, TODO check against this cart.
     body_length: 0.295          # cart: top basket front to rear, outside of the rim, measured 2026-11-01
-    body_width:  0.405          # cart: top basket, outside of the rim, measured 2026-11-01; NOT the side support rails outside it, TODO width across those
+    body_width:  0.425          # cart: outside of the vertical side rails, measured 2026-11-01 (the top basket alone is 0.405)
     body_height: 0.780          # cart: floor to the top of the top basket rim, measured 2026-11-01
     # x of the body box centre behind the drive axle (body frame, front is -x). cart: the top
     # basket's front rim is 20-22 mm behind the axle line (2026-11-01), so the rims are at 0.021
