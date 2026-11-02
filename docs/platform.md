@@ -212,7 +212,7 @@ robot's value standing in; "—" = no value yet. Where: `dims` = `robot_dimensio
 
 | Measurement | Value | Status | How |
 |---|---|---|---|
-| Arm mount x, y (pan axes), z (base bottom), yaw | 0.309 behind, ±0.1365, 0.765 m, forward | x: cart, at the mast's x (stock 0.4.0 arm base), 2026-11-01; rest ref | tape; 0.4.0 CAD for y |
+| Arm mount x, y (pan axes), z (base bottom), yaw | 0.246 behind, ±0.1365, 0.765 m, forward | x: cart, arm bases inside the basket outline with their back edges at the rear rim (base reaches 70 mm behind the pan axis), 2026-11-01; rest ref | tape; 0.4.0 CAD for y |
 | Servo calibration (`zero_step` per joint) | ref values | ref; lerobot JSONs exist on elroy | `tools/calibrate_arm.py`, arms held straight |
 | Model offsets, frame and mount corrections | ref values | ref | `tools/calibrate_arm_camera.py` (ChArUco, 20 poses per arm), `tools/arm_accuracy.py --fit` |
 | Wrist camera extrinsics | ref values | ref | `calibrate_arm_camera.py` |

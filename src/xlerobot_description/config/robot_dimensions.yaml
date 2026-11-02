@@ -161,9 +161,11 @@ xlerobot:
   # The arm meshes, links and joints are those in simulation/xlerobot/xlerobot.urdf
   # of the XLeRobot repo (xlerobot_urdf.zip), zero pose stretched straight. All of
   # this is in the body frame, front is -x, the robot's left is +y there.
-  # mount_x: the shoulder pan axes are at the mast's x (0.4.0 CAD,
-  #   hardware/step/XLeRobot_040/XLeRobot040_armbase.step), so at the rear rim on this cart,
-  #   0.309 m behind the drive axle, see head.mount_x (2026-11-01).
+  # mount_x: cart (2026-11-01): the arm bases clip into the neck base's notches and sit inside the
+  #   top basket's outline, their back edges at the rear rim (0.316). The base mesh reaches 70 mm
+  #   behind the shoulder pan axis with the arm pointing forward, so the axes are 0.316 - 0.070 =
+  #   0.246 m behind the drive axle, 63 mm ahead of the head's pan axis. Upstream's URDF has them
+  #   13 mm from the head's, which on this cart would put the bases 63 mm past the rim.
   # mount_y: pan axis position, 273 mm apart (CAD, confirmed on the robot). That URDF
   #   has them 310 mm apart.
   # mount_z: measured, floor to the bottom of the arm base (its origin), 0.765 m.
@@ -173,7 +175,7 @@ xlerobot:
   #   shared URDF has the arms sideways (right 0, left 3.14159), the real robot has
   #   both pointing forward (official assembly video, confirmed by the user).
   arms:
-    mount_x: 0.309
+    mount_x: 0.246
     mount_y: 0.1365
     mount_z: 0.765
     right_yaw: -1.57079633
