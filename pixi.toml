@@ -6,14 +6,23 @@
 #   pixi run build        colcon build of the packages listed below
 #   pixi run venv         the uv tools venv (.venv) on this environment's Python
 #   pixi shell            then: source install/setup.zsh
+#
+# Builds use Ninja and ccache on every core (HomeBoy is an M5 Pro, 15 cores, 48 GB): colcon runs
+# one job per core and Ninja fills the rest, so no -j to tune per machine.
 [workspace]
 name = "ros2_xlerobot_2wheels"
 channels = ["https://prefix.dev/conda-forge", "robostack-jazzy"]
 platforms = ["osx-arm64"]
 
+[activation.env]
+CMAKE_GENERATOR = "Ninja"
+CMAKE_C_COMPILER_LAUNCHER = "ccache"
+CMAKE_CXX_COMPILER_LAUNCHER = "ccache"
+CMAKE_EXPORT_COMPILE_COMMANDS = "ON"   # compile_commands.json per package in build/, for clangd
+
 [tasks]
 venv = "tools/setup_venv.sh"
-build = "colcon build --symlink-install --packages-select xlerobot_description xlerobot_teleop xlerobot_bringup"
+build = "colcon build --symlink-install --packages-select xlerobot_description xlerobot_teleop xlerobot_bringup --cmake-args -DCMAKE_BUILD_TYPE=RelWithDebInfo"
 
 [dependencies]
 python = "3.12.*"
@@ -33,4 +42,5 @@ cmake = "*"
 pkg-config = "*"
 make = "*"
 ninja = "*"
+ccache = "*"
 setuptools = "<80"           # colcon builds the ament_python packages with it
