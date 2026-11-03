@@ -75,7 +75,20 @@ and is not used here.
 
 With this hardware interface, the same `controller_manager`,
 `diff_drive_controller`, and Nav2 configuration run unchanged; only the
-hardware plugin differs from the physical-robot configuration.
+hardware plugin and the wheel signs differ from the physical-robot
+configuration. `controllers.yaml` flips the left wheel for the cart's mirrored
+motor; the twin has none, so `bringup.launch.py` loads
+`xlerobot_bringup/config/controllers_sim.yaml` after it under `use_sim:=true`,
+setting both `*_wheel_radius_multiplier` back to 1.0. Without it a forward
+`cmd_vel` spins the twin in place while its odometry reports a straight line.
+
+The cart's chassis mass is on `body_link`, which has the collision box, not on
+`base_link`: the importer keeps each link a separate rigid body
+(`merge_fixed_joints=False`), and PhysX gives a body that has a collider but no
+mass one from the collider's volume at water density, about 98 kg for the cart
+box. `base_link` keeps a token 0.1 kg so the articulation root isn't given
+PhysX's default 1 kg. The two wrist camera links still have no `<inertial>`;
+PhysX makes their mass from their small camera meshes, a few tens of grams.
 
 Selected by `use_sim:=true` in `xlerobot.urdf.xacro`, which loads
 `xlerobot.ros2_control_sim.xacro` — two hardware components, one per

@@ -103,17 +103,15 @@
 
     <!-- base_link origin is on the floor, between the drive wheels, x points to
          the front of the robot: the end with the drive wheels, where the arms
-         and the head camera face and where it drives. Only the inertial is here. -->
+         and the head camera face and where it drives. The chassis mass is on
+         body_link, with the collision box; this keeps a token mass so Isaac Sim
+         doesn't give the massless articulation root its own default of 1 kg. -->
+    <xacro:property name="root_mass" value="0.1"/>
     <link name="base_link">
-      <!-- inertia about the real CoM, not the box centre. Cart is top heavy
-           and this is what sets the accel limits. -->
       <inertial>
         <origin xyz="0 0 ${b['com_height']}" rpy="0 0 0"/>
-        <mass value="${b['body_mass']}"/>
-        <inertia
-          ixx="${b['body_mass']*(b['body_width']**2 + b['body_height']**2)/12.0}" ixy="0" ixz="0"
-          iyy="${b['body_mass']*(b['body_length']**2 + b['body_height']**2)/12.0}" iyz="0"
-          izz="${b['body_mass']*(b['body_length']**2 + b['body_width']**2)/12.0}"/>
+        <mass value="${root_mass}"/>
+        <inertia ixx="1e-4" ixy="0" ixz="0" iyy="1e-4" iyz="0" izz="1e-4"/>
       </inertial>
     </link>
 
@@ -167,6 +165,21 @@
           <box size="${b['body_length']} ${b['body_width']} ${b['body_height']}"/>
         </geometry>
       </collision>
+      <!-- Chassis, battery, ODESC, Jetson (body_mass, less base_link's token mass), on this link
+           because it has the collision box: Isaac Sim imports each link as its own rigid body
+           (merge_fixed_joints=False), and PhysX gives a body with a collider but no mass one from
+           the collider's volume at water density, about 98 kg for this box. Inertia about the
+           real CoM, not the box centre. Cart is top heavy and this is what sets the accel limits.
+           On the z axis, so the half turn of body_joint leaves it where it was on base_link. -->
+      <xacro:property name="chassis_mass" value="${b['body_mass'] - root_mass}"/>
+      <inertial>
+        <origin xyz="0 0 ${b['com_height']}" rpy="0 0 0"/>
+        <mass value="${chassis_mass}"/>
+        <inertia
+          ixx="${chassis_mass*(b['body_width']**2 + b['body_height']**2)/12.0}" ixy="0" ixz="0"
+          iyy="${chassis_mass*(b['body_length']**2 + b['body_height']**2)/12.0}" iyz="0"
+          izz="${chassis_mass*(b['body_length']**2 + b['body_width']**2)/12.0}"/>
+      </inertial>
     </link>
 
     <xacro:drive_wheel prefix="left"  reflect="1"  dims="${dims}"/>

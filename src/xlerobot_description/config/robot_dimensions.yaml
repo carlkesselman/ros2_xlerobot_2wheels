@@ -64,7 +64,7 @@ xlerobot:
     caster_rear_x_offset: -0.325
     caster_y_offset: 0.20
 
-    # cart: 17.2 kg complete (38 lb, new casters), weighed. base_link carries what the URDF has
+    # cart: 17.2 kg complete (38 lb, new casters), weighed. body_link carries what the URDF has
     # no other link for: chassis, battery, ODESC, Jetson. The other links add up to 7.97 kg (wheels
     # 2 x 3.0, casters, top base, head, arms and lidar as upstream has them, 2026-11-01), so 9.2
     # here keeps the model at 17.2. Upstream's arm and camera masses are on the light side.

@@ -117,6 +117,7 @@ def generate_launch_description():
 
     xacro_file = os.path.join(description_share, "urdf", "xlerobot.urdf.xacro")
     controllers_yaml = os.path.join(bringup_share, "config", "controllers.yaml")
+    controllers_sim_yaml = os.path.join(bringup_share, "config", "controllers_sim.yaml")
     teleop_launch_file = os.path.join(teleop_share, "launch", "teleop.launch.py")
     cameras_launch_file = os.path.join(bringup_share, "launch", "cameras.launch.py")
     lidar_launch_file = os.path.join(bringup_share, "launch", "lidar.launch.py")
@@ -145,6 +146,11 @@ def generate_launch_description():
     ])
     head_controller_condition = PythonExpression([
         "'", with_head, "' == 'true' and ('", torque_off, "' == 'false' or '", use_sim, "' == 'true')",
+    ])
+    # The twin's overrides of controllers.yaml (the wheel signs), loaded after it. Without
+    # use_sim the second file is controllers.yaml again, which changes nothing.
+    controllers_override_yaml = PythonExpression([
+        "'", controllers_sim_yaml, "' if '", use_sim, "' == 'true' else '", controllers_yaml, "'",
     ])
     record = LaunchConfiguration("record")
     foxglove = LaunchConfiguration("foxglove")
@@ -214,7 +220,8 @@ def generate_launch_description():
         Node(
             package="controller_manager",
             executable="ros2_control_node",
-            parameters=[{"robot_description": robot_description, "use_sim_time": use_sim_time}, controllers_yaml],
+            parameters=[{"robot_description": robot_description, "use_sim_time": use_sim_time}, controllers_yaml,
+                        controllers_override_yaml],
             output="screen",
         ),
         Node(

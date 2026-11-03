@@ -1,0 +1,10 @@
+# Isaac Sim twin only (use_sim:=true), loaded after controllers.yaml and overriding it.
+#
+# controllers.yaml flips the left wheel because the cart's LEFT motor is bolted on mirrored
+# and the ODrive reports the raw axis. The twin has no mirrored motor: both wheel joints in
+# the URDF turn about +y, and Isaac drives them as given. With the real robot's -1.0 here, a
+# forward cmd_vel spins the twin in place while its odometry reports a straight line.
+diff_drive_controller:
+  ros__parameters:
+    left_wheel_radius_multiplier: 1.0
+    right_wheel_radius_multiplier: 1.0
