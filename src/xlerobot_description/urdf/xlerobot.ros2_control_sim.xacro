@@ -78,7 +78,7 @@
     </joint>
   </xacro:macro>
 
-  <xacro:macro name="xlerobot_ros2_control_sim" params="with_arms dims">
+  <xacro:macro name="xlerobot_ros2_control_sim" params="with_arms dims engine:=isaac">
 
     <!-- Split into two hardware components, one per command-interface type,
          not one combined block like an earlier version of this file had.
@@ -101,26 +101,43 @@
          up each incoming name against its own joints and skips anything it
          doesn't recognize, so one combined state message covering every
          joint is fine to share - only the outgoing command side has the
-         strict per-array-length problem. -->
-    <ros2_control name="xlerobot_sim_wheels" type="system">
+         strict per-array-length problem.
+
+         engine:=mujoco is the MuJoCo twin (sim/mujoco/run_mujoco.py), same split and the same
+         message shapes on /mujoco_* topics. Its plugin is PickNik's topic_based_ros2_control,
+         the package joint_state_topic_hardware_interface grew out of, because RoboStack has it
+         for macOS. Two differences: it only publishes a command when some position command is
+         more than trigger_joint_command_threshold from its state, which for the wheels (no
+         position commands at all) would be never, so the threshold is -1; and MuJoCo's hinge
+         positions don't wrap, so sum_wrapped_joint_states is off. -->
+    <xacro:property name="mujoco" value="${engine == 'mujoco'}"/>
+    <xacro:macro name="sim_hardware" params="commands">
       <hardware>
-        <plugin>joint_state_topic_hardware_interface/JointStateTopicSystem</plugin>
-        <param name="joint_commands_topic">/isaac_wheel_commands</param>
-        <param name="joint_states_topic">/isaac_joint_states</param>
-        <param name="sum_wrapped_joint_states">true</param>
+        <xacro:if value="${mujoco}">
+          <plugin>topic_based_ros2_control/TopicBasedSystem</plugin>
+          <param name="joint_commands_topic">/mujoco_${commands}_commands</param>
+          <param name="joint_states_topic">/mujoco_joint_states</param>
+          <param name="sum_wrapped_joint_states">false</param>
+          <param name="trigger_joint_command_threshold">-1</param>
+        </xacro:if>
+        <xacro:unless value="${mujoco}">
+          <plugin>joint_state_topic_hardware_interface/JointStateTopicSystem</plugin>
+          <param name="joint_commands_topic">/isaac_${commands}_commands</param>
+          <param name="joint_states_topic">/isaac_joint_states</param>
+          <param name="sum_wrapped_joint_states">true</param>
+        </xacro:unless>
       </hardware>
+    </xacro:macro>
+
+    <ros2_control name="xlerobot_sim_wheels" type="system">
+      <xacro:sim_hardware commands="wheel"/>
 
       <xacro:sim_velocity_joint name="left_wheel_joint"/>
       <xacro:sim_velocity_joint name="right_wheel_joint"/>
     </ros2_control>
 
     <ros2_control name="xlerobot_sim_position" type="system">
-      <hardware>
-        <plugin>joint_state_topic_hardware_interface/JointStateTopicSystem</plugin>
-        <param name="joint_commands_topic">/isaac_position_commands</param>
-        <param name="joint_states_topic">/isaac_joint_states</param>
-        <param name="sum_wrapped_joint_states">true</param>
-      </hardware>
+      <xacro:sim_hardware commands="position"/>
 
       <xacro:sim_position_joint name="head_pan_joint"/>
       <xacro:sim_position_joint name="head_tilt_joint"/>

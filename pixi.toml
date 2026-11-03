@@ -22,7 +22,7 @@ CMAKE_EXPORT_COMPILE_COMMANDS = "ON"   # compile_commands.json per package in bu
 
 [tasks]
 venv = "tools/setup_venv.sh"
-build = "colcon build --symlink-install --packages-select xlerobot_description xlerobot_teleop xlerobot_bringup --cmake-args -DCMAKE_BUILD_TYPE=RelWithDebInfo"
+build = "colcon build --symlink-install --packages-select xlerobot_description xlerobot_teleop xlerobot_bringup xlerobot_navigation --cmake-args -DCMAKE_BUILD_TYPE=RelWithDebInfo"
 
 [dependencies]
 python = "3.12.*"
@@ -36,6 +36,14 @@ ros-jazzy-joy = "*"
 ros-jazzy-teleop-twist-joy = "*"
 ros-jazzy-twist-mux = "*"
 ros-jazzy-laser-filters = "*"          # drops the cart's own posts from the LD19 scan
+# MuJoCo twin (sim/mujoco/): MuJoCo's own Python bindings run the physics, and ros2_control
+# talks to it over joint-state topics like the Isaac twin. mujoco_ros2_control has no macOS
+# build in RoboStack; PickNik's topic_based_ros2_control does.
+mujoco = "*"
+ros-jazzy-topic-based-ros2-control = "*"
+ros-jazzy-nav2-bringup = "*"
+ros-jazzy-slam-toolbox = "*"
+ros-jazzy-robot-localization = "*"
 colcon-common-extensions = "*"
 compilers = "*"
 cmake = "*"

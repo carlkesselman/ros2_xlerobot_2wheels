@@ -170,10 +170,13 @@
            (merge_fixed_joints=False), and PhysX gives a body with a collider but no mass one from
            the collider's volume at water density, about 98 kg for this box. Inertia about the
            real CoM, not the box centre. Cart is top heavy and this is what sets the accel limits.
-           On the z axis, so the half turn of body_joint leaves it where it was on base_link. -->
+           Fore and aft it sits at the basket centre (body_x_offset, behind the axle in this
+           frame), where the battery, ODESC and Jetson ride: right over the axle, as it was, the
+           whole robot's CoM ended up 23 mm behind the axle and the MuJoCo twin tipped forward
+           over the wheels braking at 0.7 m/s^2. TODO measure (com_height too). -->
       <xacro:property name="chassis_mass" value="${b['body_mass'] - root_mass}"/>
       <inertial>
-        <origin xyz="0 0 ${b['com_height']}" rpy="0 0 0"/>
+        <origin xyz="${b['body_x_offset']} 0 ${b['com_height']}" rpy="0 0 0"/>
         <mass value="${chassis_mass}"/>
         <inertia
           ixx="${chassis_mass*(b['body_width']**2 + b['body_height']**2)/12.0}" ixy="0" ixz="0"

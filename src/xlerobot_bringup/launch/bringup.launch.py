@@ -168,6 +168,7 @@ def generate_launch_description():
             " use_ros2_control:=true",
             " use_mock_hardware:=", use_mock_hardware,
             " use_sim:=", use_sim,
+            " sim_engine:=", LaunchConfiguration("sim_engine"),
             " bus1_port:=", bus1_port,
             " bus2_port:=", bus2_port,
             " with_arms:=", with_arms,
@@ -183,6 +184,8 @@ def generate_launch_description():
         DeclareLaunchArgument("bus2_port", default_value="/dev/xle-bus2"),
         DeclareLaunchArgument("use_mock_hardware", default_value="false"),
         DeclareLaunchArgument("use_sim", default_value="false"),
+        # isaac | mujoco, which twin use_sim:=true talks to (xlerobot.urdf.xacro)
+        DeclareLaunchArgument("sim_engine", default_value="isaac"),
         # see the module-level use_sim_time comment above
         DeclareLaunchArgument("use_sim_time", default_value="false"),
         DeclareLaunchArgument("teleop", default_value="true"),

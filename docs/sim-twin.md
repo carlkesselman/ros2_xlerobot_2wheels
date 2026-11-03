@@ -4,6 +4,10 @@ An Isaac Sim scene of the base, the head and the two SO-101 arms, wired to the r
 stack over ROS 2 topics, for development and testing without hardware
 attached.
 
+Isaac Sim needs an NVIDIA RTX GPU on Linux or Windows. On the Mac (and anywhere without one) the
+MuJoCo twin below does the same job, plus a simulated LD19 for Nav2; see
+[MuJoCo twin](#mujoco-twin-mac) at the end.
+
 ## Scope
 
 Supports: Nav2, `diff_drive_controller` kinematics and odometry
@@ -314,3 +318,49 @@ Setup:
   placeholder geometry).
 - Extend the scene to include the arms once phase 3 starts.
 - Migrate off the deprecated `ROS2PublishJointState.inputs:targetPrim`.
+
+## MuJoCo twin (Mac)
+
+The same idea on MuJoCo, which runs natively on Apple Silicon: `sim/mujoco/`. MuJoCo's own Python
+bindings run the physics, and `ros2_control` talks to it over joint-state topics exactly as with
+Isaac. `use_sim:=true sim_engine:=mujoco` selects it; the controllers, `controllers_sim.yaml` and
+Nav2 are unchanged.
+
+```bash
+pixi run build
+source install/setup.zsh && source tools/ros_env.sh       # Cyclone DDS, as on the robot
+ros2 launch sim/mujoco/mujoco_twin.launch.py              # viewer:=true opens MuJoCo's window
+ros2 launch xlerobot_navigation navigation.launch.py rviz:=true
+python sim/mujoco/grasp_check.py                          # the gripper holding a cube, no ROS
+```
+
+| File | Purpose |
+|---|---|
+| `sim/mujoco/world.py` | The world: the xacro as a plain URDF, loaded by MuJoCo, plus a free base, actuators, frictionless casters and a room with crates, a table and a 4 cm cube. `python sim/mujoco/world.py` saves it as MJCF in `sim/output/mujoco/`. |
+| `sim/mujoco/run_mujoco.py` | Runs it in real time: `/mujoco_wheel_commands` and `/mujoco_position_commands` in, `/mujoco_joint_states` out, `/ldlidar_node/scan` as the LD19's driver publishes it (455 bins, 10 Hz, `ldlidar_link`), `/mujoco/ground_truth` for checking odometry against. No `/clock`, nothing needs `use_sim_time`. |
+| `sim/mujoco/mujoco_twin.launch.py` | The twin, bringup with arms and head, and the LD19's `laser_filters` chain. |
+| `sim/mujoco/grasp_check.py` | Closes the left gripper on the cube, lets go of it, swings the arm and reports how far the cube slipped. |
+
+The plugin is PickNik's `topic_based_ros2_control` (RoboStack has no macOS build of
+`mujoco_ros2_control` or of `joint_state_topic_hardware_interface`); see the comment in
+`xlerobot.ros2_control_sim.xacro` for its two differences.
+
+What MuJoCo needed beyond the URDF, all in `world.py`:
+
+- The drive wheels collide as spheres of the wheel radius. As the URDF's cylinders they touched
+  the floor at the rim edges, hopped off it a third of the time turning in place, and the cart
+  turned 28% less than its wheels.
+- Wheel friction 2.0 and jaw contacts stiffer than MuJoCo's default (`solref` 0.005): MuJoCo's soft
+  contacts otherwise let a loaded rolling wheel creep (15-28%) and a squeezed cube creep out of the
+  jaws. Neither number is a measurement of the real tyres or jaws.
+- The casters are frictionless with contact priority, or the floor's friction wins the pair and
+  they drag.
+- `body_link`'s collision box starts at `CART_FLOOR_CLEARANCE` (0.08 m, TODO measure) instead of
+  the floor, or the cart stands on it with the wheels in the air.
+
+Checked on the M5 Pro Mac mini (2026-11-03): odometry against ground truth 0.2 cm after a 0.9 m
+reverse and a half turn; every one of the 455 scan points within 0.1 mm of the wall or box it hit,
+through TF (so the upside-down mount is right); Nav2 from the start to the table around the crates
+in 19 s, 4.5 cm from the goal; the gripper holding the cube through the arm's swing (6 mm seated,
+0.4 mm more in 5 s). The physics runs about 100x faster than real time. Grasping with MoveIt, the
+head camera and the "drive, then grasp" sequence are not in the twin yet.

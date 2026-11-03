@@ -21,6 +21,9 @@
        hardware component for all joints since there's no physical bus to
        split by. -->
   <xacro:arg name="use_sim"           default="false"/>
+  <!-- isaac | mujoco, which twin use_sim talks to: the Isaac Sim one (docs/sim-twin.md) or the
+       MuJoCo one that runs on the Mac (sim/mujoco/) -->
+  <xacro:arg name="sim_engine"        default="isaac"/>
   <xacro:arg name="bus1_port"         default="/dev/xle-bus1"/>
   <xacro:arg name="bus2_port"         default="/dev/xle-bus2"/>
   <!-- none | usbcam | vlp16 | gemini | realsense, see ADR-0003. usbcam is a plain webcam,
@@ -106,7 +109,7 @@
     </xacro:unless>
     <xacro:if value="$(arg use_sim)">
       <xacro:include filename="$(find xlerobot_description)/urdf/xlerobot.ros2_control_sim.xacro"/>
-      <xacro:xlerobot_ros2_control_sim with_arms="$(arg with_arms)" dims="${dims}"/>
+      <xacro:xlerobot_ros2_control_sim with_arms="$(arg with_arms)" dims="${dims}" engine="$(arg sim_engine)"/>
     </xacro:if>
   </xacro:if>
 
