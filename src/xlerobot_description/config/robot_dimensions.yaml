@@ -38,8 +38,8 @@ xlerobot:
     body_width:  0.425          # cart: outside of the vertical side rails, measured 2026-11-01 (the top basket alone is 0.405)
     body_height: 0.780          # cart: floor to the top of the top basket rim, measured 2026-11-01
     # Rim to the top basket's floor, inside. Only the collision model uses it (an open basket the
-    # arms can reach into). TODO measure, 0.10 is a guess.
-    top_basket_depth: 0.10
+    # arms can reach into). Measured 2026-11-03.
+    top_basket_depth: 0.09
     # x of the body box centre behind the drive axle (body frame, front is -x). cart: the top
     # basket's front rim is 20-22 mm behind the axle line (2026-11-01), so the rims are at 0.021
     # and 0.316 and the centre at 0.1685. The reference notes had the front rim 22 mm ahead.

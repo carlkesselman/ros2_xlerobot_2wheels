@@ -400,7 +400,7 @@ The skills it uses are `grasp` and `place` (`xlerobot_skills`), and `navigate_to
   there, then Nav2's `drive_on_heading` straight in. The table did not need it (the lidar sees only
   its legs), the crate did.
 - **The top basket** is a collision model of its own now (`body_link`: a solid box to the basket's
-  floor, four walls to the rim, `top_basket_depth` 0.10 m, TODO measure), so MoveIt lets the arms
+  floor, four walls to the rim, `top_basket_depth` 0.09 m, measured), so MoveIt lets the arms
   reach into it and the twin's cube lands on its floor.
 - **Grasping** comes down along the claw onto the object with the jaws square to it (the wrist roll),
   closes, and judges holding by where the gripper stopped. Before coming down it corrects for the

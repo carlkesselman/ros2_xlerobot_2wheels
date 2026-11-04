@@ -48,7 +48,7 @@ skill_server:
     place_inset_m: 0.05           # placing on an object: this far in from the edges of its top
     place_gap_m: 0.004            # placing: the held object's bottom this far above the surface at release
     # Named drop points (the held object's centre at release, base_footprint) for place's `location`.
-    # basket: over the top basket (rim 0.78 m, floor 0.68), on the arm's own side, released 6 cm above the rim.
+    # basket: over the top basket (rim 0.78 m, floor 0.69), on the arm's own side, released 6 cm above the rim.
     place_locations: [basket]
     place_basket_left: [-0.13, 0.06, 0.86]
     place_basket_right: [-0.13, -0.06, 0.86]
