@@ -213,7 +213,7 @@ robot's value standing in; "—" = no value yet. Where: `dims` = `robot_dimensio
 
 | Measurement | Value | Status | How |
 |---|---|---|---|
-| Arm mount x, y (pan axes), z (base bottom), yaw | 0.239 behind, ±0.1329, 0.760 m, forward | cart, CAD (Fusion upper body), 2026-11-02: pan axes 67 mm ahead of the shoulders' backs against the inside of the rear wall, 265.7 mm apart; z from the neck box's slot resting on the rim (tape 0.765); yaw ref. The reference robot's mount and frame corrections are reset | CAD |
+| Arm mount x, y (pan axes), z (base bottom), yaw | **model: 0.0578 behind, ±0.136, 0.760 m, forward (`shoulders: front_corners`, planned, not built; measure once the split shoulders are clamped in, see docs/arm-layouts)**. Built today: 0.239 behind, ±0.1329, 0.760 m, forward | rear values: cart, CAD (Fusion upper body), 2026-11-02: pan axes 67 mm ahead of the shoulders' backs against the inside of the rear wall, 265.7 mm apart; z from the neck box's slot resting on the rim (tape 0.765); yaw ref. The reference robot's mount and frame corrections are reset | CAD |
 | Servo calibration (`zero_step` per joint) | ref values | ref; lerobot JSONs exist on elroy | `tools/calibrate_arm.py`, arms held straight |
 | Model offsets, frame and mount corrections | ref values | ref | `tools/calibrate_arm_camera.py` (ChArUco, 20 poses per arm), `tools/arm_accuracy.py --fit` |
 | Wrist camera extrinsics | ref values | ref | `calibrate_arm_camera.py` |

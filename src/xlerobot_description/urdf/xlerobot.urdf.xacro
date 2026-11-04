@@ -93,6 +93,35 @@
     <xacro:so101_arm prefix="right_arm" parent="right_arm_correction" side="right" cam_xyz="${a['wrist_camera']['right']['xyz']}" cam_rpy="${a['wrist_camera']['right']['rpy']}" joints="${a['joints']}" margin="${a['limit_margin']}"
         xyz="${a['mount_x'] - pan_off * sin(a['right_yaw'])}  ${a['mount_y'] + pan_off * cos(a['right_yaw'])} ${a['mount_z']}"
         rpy="0 0 ${a['right_yaw']}"/>
+    <!-- shoulders: front_corners - each arm sits on its own clamped shoulder piece in a front corner
+         of the top basket. No CAD yet: a placeholder block under the arm base's footprint (Base.stl,
+         x +-0.0555, y -0.071..0.0249 in the base's frame) down to the basket's floor. -->
+    <xacro:if value="${dims.get('shoulders', 'rear') == 'front_corners'}">
+      <xacro:property name="ped_h" value="${a['mount_z'] - (dims['base']['body_height'] - dims['base']['top_basket_depth'])}"/>
+      <xacro:macro name="shoulder_pedestal" params="side">
+        <joint name="${side}_shoulder_mount_joint" type="fixed">
+          <parent link="${side}_base_link"/>
+          <child link="${side}_shoulder_mount_link"/>
+          <origin xyz="0 -0.02305 ${-ped_h / 2}" rpy="0 0 0"/>
+        </joint>
+        <link name="${side}_shoulder_mount_link">
+          <inertial>
+            <origin xyz="0 0 0" rpy="0 0 0"/>
+            <mass value="0.15"/>
+            <inertia ixx="0.0002" ixy="0" ixz="0" iyy="0.0002" iyz="0" izz="0.0003"/>
+          </inertial>
+          <visual>
+            <geometry><box size="0.111 0.0959 ${ped_h}"/></geometry>
+            <material name="xle_part"/>
+          </visual>
+          <collision>
+            <geometry><box size="0.111 0.0959 ${ped_h}"/></geometry>
+          </collision>
+        </link>
+      </xacro:macro>
+      <xacro:shoulder_pedestal side="left_arm"/>
+      <xacro:shoulder_pedestal side="right_arm"/>
+    </xacro:if>
   </xacro:if>
 
   <xacro:if value="$(arg use_ros2_control)">

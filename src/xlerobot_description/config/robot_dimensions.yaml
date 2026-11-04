@@ -168,9 +168,20 @@ xlerobot:
   #   front with -1.5708, sideways with 0 or 3.14159, to the back with 1.5708. The
   #   shared URDF has the arms sideways (right 0, left 3.14159), the real robot has
   #   both pointing forward (official assembly video, confirmed by the user).
+  # shoulders: rear | front_corners. rear is the one-piece "XLeRobot 0.3 Upper Body" shoulders
+  #   against the top basket's rear wall (mount_x 0.239, mount_y 0.1329, the Fusion values above).
+  #   front_corners (2026-11-04, layout B of docs/arm-layouts): the shoulder assembly split into the
+  #   neck box, which stays at the rear rim (head.mount_x unchanged), and a left and a right shoulder
+  #   clamped into the basket's front corners, arms facing forward. The pan axes are where the
+  #   upstream Base.stl footprint sits 5 mm inside the front corner (inside of the front wall 0.027
+  #   behind the axle, side walls 0.1965 from the centreline). Planned, not built: no CAD for the
+  #   new shoulder pieces yet, so the model has a placeholder pedestal under each arm base.
+  #   Measure mount_x/mount_y on the cart once built, and refit frame_correction/mount_correction.
+  #   Reach study: docs/arm-layouts/README.md (0.32 m past a table edge vs 0.14 m for rear).
+  shoulders: front_corners
   arms:
-    mount_x: 0.239
-    mount_y: 0.1329
+    mount_x: 0.0578
+    mount_y: 0.136
     mount_z: 0.7603
     right_yaw: -1.57079633
     left_yaw: -1.57079633

@@ -51,6 +51,10 @@
       <!-- Shoulders (two clips on the top basket's rear rim, the arm bases on top), the box
            behind the neck, the neck, the head base and the pan servo with its holder. The
            holder is 67k triangles and inside the head base, so it has no collision. -->
+      <!-- The one-piece rear shoulders only with shoulders: rear; with front_corners the arms sit on
+           their own pedestals in the front corners (xlerobot.urdf.xacro) and this link keeps the
+           neck box, neck and head base. -->
+      <xacro:if value="${dims.get('shoulders', 'rear') == 'rear'}">
       <visual>
         <origin xyz="${cart_mesh_xyz}" rpy="0 0 ${pi}"/>
         <geometry>
@@ -77,6 +81,7 @@
           <mesh filename="package://xlerobot_description/meshes/cart/shoulder_right.stl" scale="0.001 0.001 0.001"/>
         </geometry>
       </collision>
+      </xacro:if>
       <visual>
         <origin xyz="${cart_mesh_xyz}" rpy="0 0 ${pi}"/>
         <geometry>
