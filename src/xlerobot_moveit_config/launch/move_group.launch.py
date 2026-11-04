@@ -43,7 +43,9 @@ def launch_setup(context):
         MoveItConfigsBuilder("xlerobot", package_name="xlerobot_moveit_config")
         .robot_description(
             file_path=os.path.join(description_share, "urdf", "xlerobot.urdf.xacro"),
-            mappings={"with_arms": "true", "with_head": "true", "use_ros2_control": "true"},
+            # no ros2_control block: MoveIt needs kinematics and collision only, and the base's
+            # hardware choice (real, mock, sim) would otherwise have to be passed here too
+            mappings={"with_arms": "true", "with_head": "true", "use_ros2_control": "false"},
         )
         .robot_description_semantic(
             file_path="config/xlerobot.srdf.xacro",

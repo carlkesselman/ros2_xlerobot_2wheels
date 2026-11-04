@@ -28,14 +28,14 @@ from rclpy.executors import MultiThreadedExecutor
 from rclpy.node import Node
 from sensor_msgs.msg import JointState
 from std_msgs.msg import Bool
-from xlerobot_skill_msgs.action import Approach, Detect, LookAt, MoveArm, NavigateTo, Touch
+from xlerobot_skill_msgs.action import Approach, Detect, Grasp, LookAt, MoveArm, NavigateTo, Place, Touch
 from xlerobot_skill_msgs.msg import ObjectRef
 from xlerobot_skill_msgs.srv import ExecutionControl, SubmitPlan, WaitForEvent
 
 from . import plan as P
 
 ACTIONS = {"navigate_to": NavigateTo, "look_at": LookAt, "detect": Detect, "move_arm": MoveArm, "approach": Approach,
-           "touch": Touch}
+           "touch": Touch, "grasp": Grasp, "place": Place}
 CODE_NAMES = P.CODES                                  # SkillResult code number -> name (same order as the message)
 
 
@@ -239,6 +239,7 @@ class Executive(Node):
                 g.pose.pose.position.x, g.pose.pose.position.y = float(x), float(y)
                 g.pose.pose.orientation.z, g.pose.pose.orientation.w = float(np.sin(yaw / 2)), float(np.cos(yaw / 2))
             g.timeout_s = float(params.get("timeout_s", 0.0))
+            g.final_straight_m = float(params.get("final_straight_m", 0.0))
         elif skill == "look_at":
             g.named_position = params.get("named_position", "")
             if "target" in params:
@@ -262,6 +263,16 @@ class Executive(Node):
             g.arm, g.object = params["arm"], self._ref(params["object"])
             g.max_travel_m, g.step_m = float(params.get("max_travel_m", 0.0)), float(params.get("step_m", 0.0))
             g.stay = bool(params.get("stay", False))
+        elif skill == "grasp":
+            g.arm, g.object = params["arm"], self._ref(params["object"])
+            g.lift_m, g.scaling = float(params.get("lift_m", 0.0)), float(params.get("scaling", 0.0))
+        elif skill == "place":
+            g.arm, g.location = params["arm"], params.get("location", "")
+            if "object" in params:
+                g.object = self._ref(params["object"])
+            if "point" in params:
+                self._point(g.point, params["point"], params.get("frame", "base_footprint"))
+            g.held_size_m, g.scaling = float(params.get("held_size_m", 0.0)), float(params.get("scaling", 0.0))
         return g
 
     def _bind(self, name, result):

@@ -124,13 +124,13 @@ def planner():
         for pr in procs:
             try:
                 os.killpg(pr.pid, signal.SIGINT)
-            except ProcessLookupError:
+            except (ProcessLookupError, PermissionError):   # macOS: EPERM once the group has only exited members
                 pass
         time.sleep(3.0)
         for pr in procs:
             try:
                 os.killpg(pr.pid, signal.SIGKILL)
-            except ProcessLookupError:
+            except (ProcessLookupError, PermissionError):   # macOS: EPERM once the group has only exited members
                 pass
 
 

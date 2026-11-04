@@ -53,6 +53,8 @@ PATTERNS = [
     "move_group",
     "ldlidar_container",
     "ldlidar_lifecycle_manager",
+    "laser_filters/scan_to_scan_filter_chain",  # the LD19's filter chain, robot and MuJoCo twin
+    "sim/mujoco/run_mujoco.py",        # the MuJoCo twin (python, or mjpython with its viewer)
     "nav2_map_server",
     "nav2_amcl",
     "nav2_controller",

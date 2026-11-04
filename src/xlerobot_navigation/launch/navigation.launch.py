@@ -11,6 +11,7 @@ already publishing. rviz:=true opens RViz with Nav2's default view plus the robo
 """
 
 import os
+import sys
 
 from ament_index_python.packages import get_package_share_directory
 from launch import LaunchDescription
@@ -52,12 +53,13 @@ def launch_setup(context):
             # session's QT_AUTO_SCREEN_SCALE_FACTOR=1 (set for native Wayland apps), which
             # against XWayland's own DPI reporting doubles up into huge UI text and a
             # mouse/viewport coordinate mismatch (the 3D view jitters when orbiting).
+            # Linux only: macOS Qt has no xcb plugin (cocoa only) and RViz aborts with it.
             additional_env={
                 "QT_QPA_PLATFORM": "xcb",
                 "QT_AUTO_SCREEN_SCALE_FACTOR": "0",
                 "QT_SCALE_FACTOR": "1",
                 "QT_ENABLE_HIGHDPI_SCALING": "0",
-            },
+            } if sys.platform.startswith("linux") else {},
         ),
         IncludeLaunchDescription(
             PythonLaunchDescriptionSource(os.path.join(nav_share, "launch", "slam.launch.py")),

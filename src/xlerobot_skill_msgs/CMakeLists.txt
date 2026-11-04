@@ -16,6 +16,8 @@ rosidl_generate_interfaces(${PROJECT_NAME}
   "action/MoveArm.action"
   "action/Approach.action"
   "action/Touch.action"
+  "action/Grasp.action"
+  "action/Place.action"
   "srv/SubmitPlan.srv"
   "srv/WaitForEvent.srv"
   "srv/ExecutionControl.srv"

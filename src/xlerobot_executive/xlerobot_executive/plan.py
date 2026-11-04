@@ -32,7 +32,8 @@ ARMS = ("left", "right")
 
 # skill -> parameter -> (type, required)
 SKILLS = {
-    "navigate_to": {"waypoint": (str, False), "pose": (list, False), "frame": (str, False), "timeout_s": (float, False)},
+    "navigate_to": {"waypoint": (str, False), "pose": (list, False), "frame": (str, False), "timeout_s": (float, False),
+                    "final_straight_m": (float, False)},
     "look_at": {"named_position": (str, False), "target": (list, False), "frame": (str, False), "object": (str, False),
                 "tolerance_deg": (float, False)},
     "detect": {"prompt": (str, True), "label": (str, False), "size_m": (float, False), "bind": (str, False)},
@@ -41,6 +42,9 @@ SKILLS = {
     "approach": {"arm": (str, True), "object": (str, True), "height_m": (float, False), "scaling": (float, False)},
     "touch": {"arm": (str, True), "object": (str, True), "max_travel_m": (float, False), "step_m": (float, False),
               "stay": (bool, False)},
+    "grasp": {"arm": (str, True), "object": (str, True), "lift_m": (float, False), "scaling": (float, False)},
+    "place": {"arm": (str, True), "location": (str, False), "object": (str, False), "point": (list, False),
+              "frame": (str, False), "held_size_m": (float, False), "scaling": (float, False)},
 }
 PREDICATES = ("detected", "joint_near")
 
@@ -123,7 +127,9 @@ def validate(plan, known_positions=None, known_waypoints=None):
         for p in ("object", "bind"):
             if p in params and params[p] not in objects:
                 errors.append(f"{where}: {p} {params[p]!r} names no object in the plan")
-        if skill in ("approach", "touch", "look_at") and "object" in params and "pose" not in objects.get(params["object"], {}) \
+        if skill == "place" and sum(p in params for p in ("location", "object", "point")) != 1:
+            errors.append(f"{where}: place needs exactly one of location, object or point")
+        if skill in ("approach", "touch", "look_at", "grasp", "place") and "object" in params and "pose" not in objects.get(params["object"], {}) \
                 and not any(isinstance(t, dict) and t.get("skill") == "detect" and t.get("params", {}).get("bind") == params["object"]
                             for t in steps[:k]):
             errors.append(f"{where}: object {params['object']!r} has no pose and no earlier detect binds it")

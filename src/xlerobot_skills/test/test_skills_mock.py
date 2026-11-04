@@ -118,13 +118,13 @@ def robot():
         for p in procs:
             try:
                 os.killpg(p.pid, signal.SIGINT)
-            except ProcessLookupError:
+            except (ProcessLookupError, PermissionError):   # macOS: EPERM once the group has only exited members
                 pass
         time.sleep(3.0)
         for p in procs:
             try:
                 os.killpg(p.pid, signal.SIGKILL)
-            except ProcessLookupError:
+            except (ProcessLookupError, PermissionError):   # macOS: EPERM once the group has only exited members
                 pass
 
 

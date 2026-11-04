@@ -4,7 +4,7 @@
   ros2 launch xlerobot_skills skills.launch.py
   ros2 action send_goal /skills/look_at xlerobot_skill_msgs/action/LookAt "{named_position: head_look_down}" --feedback
 
-Actions under /skills: navigate_to, look_at, detect, move_arm, approach. Every motion checks the operator presence
+Actions under /skills: navigate_to, look_at, detect, move_arm, approach, touch, grasp, place. Every motion checks the operator presence
 heartbeat (/mcp_presence_ok) and the safety supervisor's /e_stop while it runs: either one stops it, e-stops the servo
 bus it uses and returns SAFETY_STOP. A cancel returns PREEMPTED. Two motions on one servo bus (or two base motions)
 at once are refused.
@@ -24,7 +24,7 @@ from shape_msgs.msg import SolidPrimitive
 from moveit_msgs.action import ExecuteTrajectory, MoveGroup
 from moveit_msgs.msg import AllowedCollisionEntry, CollisionObject, PlanningOptions, PlanningScene, PlanningSceneComponents, RobotState
 from moveit_msgs.srv import ApplyPlanningScene, GetPlanningScene, GetPositionFK, GetPositionIK, GetStateValidity
-from nav2_msgs.action import NavigateToPose
+from nav2_msgs.action import DriveOnHeading, NavigateToPose, Spin
 from rclpy.action import ActionClient, ActionServer, CancelResponse, GoalResponse
 from rclpy.callback_groups import MutuallyExclusiveCallbackGroup, ReentrantCallbackGroup
 from rclpy.duration import Duration
@@ -39,7 +39,7 @@ from tf2_ros import Buffer, TransformListener
 from trajectory_msgs.msg import JointTrajectoryPoint
 from vision_msgs.msg import Detection3DArray
 from xlerobot_object_perception.srv import DetectObjects
-from xlerobot_skill_msgs.action import Approach, Detect, LookAt, MoveArm, NavigateTo, Touch
+from xlerobot_skill_msgs.action import Approach, Detect, Grasp, LookAt, MoveArm, NavigateTo, Place, Touch
 from xlerobot_skill_msgs.msg import SkillResult
 
 from . import geometry as geo
@@ -86,6 +86,25 @@ class SkillServer(Node):
         self.load_jump = float(P("touch_load_jump", 0.2).value)
         self.loads = {}
         self.tip = {a: [float(v) for v in P(f"tip_offset_{a}", [0.0, 0.0, 0.0]).value] for a in ("left", "right")}
+        # grasp and place (see _grasp_offset for the jaw geometry)
+        self.fixed_jaw_x = {a: float(P(f"grasp_fixed_jaw_x_{a}", 0.008).value) for a in ("left", "right")}
+        self.grip_open = float(P("grasp_open_rad", -0.6).value)
+        self.grip_close = float(P("grasp_close_rad", 0.35).value)
+        self.grip_holding_max = float(P("grasp_holding_max_rad", 0.15).value)
+        self.grasp_gap = float(P("grasp_side_gap_m", 0.004).value)
+        self.grasp_tip_clear = float(P("grasp_tip_clear_m", 0.008).value)
+        self.grasp_depth = float(P("grasp_max_depth_m", 0.035).value)
+        self.grasp_pre = float(P("grasp_pre_height_m", 0.08).value)
+        self.grasp_lift = float(P("grasp_lift_m", 0.08).value)
+        self.grasp_size = float(P("grasp_default_size_m", 0.028).value)
+        self.max_lean = math.radians(float(P("grasp_max_lean_deg", 25.0).value))
+        self.place_inset = float(P("place_inset_m", 0.05).value)
+        self.place_gap = float(P("place_gap_m", 0.004).value)
+        self.places = {}
+        for loc in P("place_locations", ["basket"]).value:
+            for a in ("left", "right"):
+                self.places[(loc, a)] = [float(v) for v in P(f"place_{loc}_{a}", [0.0, 0.0, 0.0]).value]
+        self._chains = {}
 
         self.joints = {}
         self.presence_ok = False
@@ -123,10 +142,14 @@ class SkillServer(Node):
         self.get_scene = self.create_client(GetPlanningScene, "/get_planning_scene", callback_group=self.cb)
         self.apply_scene = self.create_client(ApplyPlanningScene, "/apply_planning_scene", callback_group=self.cb)
         self.nav = ActionClient(self, NavigateToPose, "/navigate_to_pose", callback_group=self.cb)
+        self.spin = ActionClient(self, Spin, "/spin", callback_group=self.cb)
+        self.drive_on_heading = ActionClient(self, DriveOnHeading, "/drive_on_heading", callback_group=self.cb)
         self.arm_ctl = {a: ActionClient(self, FollowJointTrajectory, f"/{a}_arm_controller/follow_joint_trajectory",
                                         callback_group=self.cb) for a in ("left", "right")}
         self.head_ctl = ActionClient(self, FollowJointTrajectory, "/head_controller/follow_joint_trajectory",
                                      callback_group=self.cb)
+        self.grip_ctl = {a: ActionClient(self, FollowJointTrajectory, f"/{a}_gripper_controller/follow_joint_trajectory",
+                                         callback_group=self.cb) for a in ("left", "right")}
         self.perception = self.create_client(DetectObjects, "/perception/detect", callback_group=self.cb)
         self.estop_clients = {b: self.create_client(SetBool, f"/emergency_stop_{b}", callback_group=self.cb)
                               for b in ("xlerobot_bus1", "xlerobot_bus2")}
@@ -134,11 +157,12 @@ class SkillServer(Node):
 
         for name, action, fn in (("navigate_to", NavigateTo, self.navigate_to), ("look_at", LookAt, self.look_at),
                                  ("detect", Detect, self.detect), ("move_arm", MoveArm, self.move_arm),
-                                 ("approach", Approach, self.approach), ("touch", Touch, self.touch)):
+                                 ("approach", Approach, self.approach), ("touch", Touch, self.touch),
+                                 ("grasp", Grasp, self.grasp), ("place", Place, self.place)):
             ActionServer(self, action, f"/skills/{name}", execute_callback=self._wrap(name, action, fn),
                          goal_callback=lambda g: GoalResponse.ACCEPT,
                          cancel_callback=lambda g: CancelResponse.ACCEPT, callback_group=self.cb)
-        self.get_logger().info("skills ready: /skills/{navigate_to, look_at, detect, move_arm, approach, touch}")
+        self.get_logger().info("skills ready: /skills/{navigate_to, look_at, detect, move_arm, approach, touch, grasp, place}")
 
     # ---- state ----
     def _on_joints(self, m):
@@ -647,6 +671,16 @@ class SkillServer(Node):
             if not pose.header.frame_id:
                 raise SkillError(R.FAILED, "neither a waypoint nor a pose with a frame")
         pose.header.stamp = self.get_clock().now().to_msg()
+        straight = float(g.final_straight_m)
+        o = pose.pose.orientation
+        goal_yaw = geo.yaw_of_matrix(geo.quat_to_matrix(o.x, o.y, o.z, o.w))
+        nav_pose = pose
+        if straight > 0.0:                                   # the staging pose, `straight` back along the heading
+            nav_pose = PoseStamped()
+            nav_pose.header = pose.header
+            nav_pose.pose.orientation = pose.pose.orientation
+            nav_pose.pose.position = Point(x=pose.pose.position.x - straight * math.cos(goal_yaw),
+                                           y=pose.pose.position.y - straight * math.sin(goal_yaw), z=0.0)
         self._require_safe()
         self._claim("navigate_to", ["base"])
         fb = NavigateTo.Feedback()
@@ -656,9 +690,9 @@ class SkillServer(Node):
 
             def on_fb(m):
                 fb.phase = "recovering" if m.feedback.number_of_recoveries else "driving"
-                fb.distance_remaining_m = float(m.feedback.distance_remaining)
+                fb.distance_remaining_m = float(m.feedback.distance_remaining) + straight
                 goal_handle.publish_feedback(fb)
-            handle = self._send(self.nav, NavigateToPose.Goal(pose=pose), "Nav2 (/navigate_to_pose)", feedback=on_fb)
+            handle = self._send(self.nav, NavigateToPose.Goal(pose=nav_pose), "Nav2 (/navigate_to_pose)", feedback=on_fb)
 
             def stop(unsafe):
                 handle.cancel_goal_async()
@@ -668,21 +702,69 @@ class SkillServer(Node):
                 err = getattr(res.result, "error_msg", "") or getattr(res.result, "error_code", "")
                 raise SkillError(R.PREEMPTED if res.status == GoalStatus.STATUS_CANCELED else R.NOT_REACHABLE,
                                  f"Nav2 ended with status {res.status} {err}".strip())
-            result.result.message = f"arrived at {g.waypoint or 'the pose'}"
+            if straight > 0.0:
+                self._straight_in(goal_handle, pose, goal_yaw, fb)
+            result.result.message = f"arrived at {g.waypoint or 'the pose'}" + (" (straight in)" if straight > 0 else "")
         finally:
             self._release(["base"])
 
-    def _joints_to(self, goal_handle, client, joints, q, duration, bus, what):
-        """Send one point straight to a joint trajectory controller (no planning) and wait for it."""
-        goal = FollowJointTrajectory.Goal()
-        goal.trajectory.joint_names = list(joints)
-        goal.trajectory.points = [JointTrajectoryPoint(positions=[float(v) for v in q],
-                                                       time_from_start=DurationMsg(sec=int(duration), nanosec=int((duration % 1) * 1e9)))]
+    def _straight_in(self, goal_handle, pose, goal_yaw, fb):
+        """From the staging pose: turn to the goal's exact heading, then drive straight to the goal (Nav2's spin and
+        drive_on_heading behaviors, both collision checked on the local costmap)."""
+        frame = pose.header.frame_id
+        T = self._lookup(frame, BASE_FRAME)
+        yaw_err = math.atan2(math.sin(goal_yaw - geo.yaw_of_matrix(T[:3, :3])), math.cos(goal_yaw - geo.yaw_of_matrix(T[:3, :3])))
+        if abs(yaw_err) > 0.01:
+            fb.phase = "aligning"
+            goal_handle.publish_feedback(fb)
+            self._behavior(goal_handle, self.spin, Spin.Goal(target_yaw=float(yaw_err), time_allowance=DurationMsg(sec=15)),
+                           "Nav2 spin (/spin)", 20.0)
+            time.sleep(0.3)
+            T = self._lookup(frame, BASE_FRAME)
+        # what is left along the heading; across it, the staging pose's error stays (Nav2's goal tolerance)
+        d = np.array([pose.pose.position.x, pose.pose.position.y]) - T[:2, 3]
+        along = float(d @ [math.cos(goal_yaw), math.sin(goal_yaw)])
+        across = float(d @ [-math.sin(goal_yaw), math.cos(goal_yaw)])
+        self.get_logger().info(f"navigate_to: straight in {along:.3f} m, {across * 100:+.1f} cm to the side of the line")
+        if along > 0.01:
+            fb.phase = "straight_in"
+            goal_handle.publish_feedback(fb)
+            self._behavior(goal_handle, self.drive_on_heading,
+                           DriveOnHeading.Goal(target=Point(x=along), speed=0.1,
+                                               time_allowance=DurationMsg(sec=int(along / 0.1) + 10)),
+                           "Nav2 drive_on_heading (/drive_on_heading)", along / 0.1 + 15.0)
+
+    def _behavior(self, goal_handle, client, goal, what, timeout):
         handle = self._send(client, goal, what)
 
         def stop(unsafe):
             handle.cancel_goal_async()
-        res = self._wait(handle.get_result_async(), duration + 5.0, goal_handle, on_stop=stop)
+            self._stop_base()
+        res = self._wait(handle.get_result_async(), timeout, goal_handle, on_stop=stop)
+        if res.status != GoalStatus.STATUS_SUCCEEDED:
+            code = getattr(res.result, "error_code", "")
+            raise SkillError(R.PREEMPTED if res.status == GoalStatus.STATUS_CANCELED else
+                             (R.COLLISION if code in (703, 723) else R.NOT_REACHABLE),
+                             f"{what} ended with status {res.status} {code}".strip())
+
+    def _joints_to(self, goal_handle, client, joints, q, duration, bus, what):
+        """Send one point straight to a joint trajectory controller (no planning) and wait for it."""
+        self._joints_path(goal_handle, client, joints, [q], duration, what)
+
+    def _joints_path(self, goal_handle, client, joints, path, dt, what):
+        """Send points `dt` apart straight to a joint trajectory controller (no planning) and wait for the end."""
+        goal = FollowJointTrajectory.Goal()
+        goal.trajectory.joint_names = list(joints)
+        t = 0.0
+        for q in path:
+            t += dt
+            goal.trajectory.points.append(JointTrajectoryPoint(
+                positions=[float(v) for v in q], time_from_start=DurationMsg(sec=int(t), nanosec=int((t % 1) * 1e9))))
+        handle = self._send(client, goal, what)
+
+        def stop(unsafe):
+            handle.cancel_goal_async()
+        res = self._wait(handle.get_result_async(), t + 5.0, goal_handle, on_stop=stop)
         if res.result.error_code != FollowJointTrajectory.Result.SUCCESSFUL:
             raise SkillError(R.FAILED, f"{what} error {res.result.error_code} {res.result.error_string}")
 
@@ -858,6 +940,25 @@ class SkillServer(Node):
             raise SkillError(R.NOT_FOUND, f"no '{prompt}' found ({', '.join(codes) or 'no detections'})")
         return res
 
+    def _find(self, goal_handle, ref):
+        """Re-detect the object a reference names: (4x4 of its centre in base_footprint, the detection). NOT_FOUND when
+        nothing matches within the gate, AMBIGUOUS when more than one does."""
+        expected = self._point_in(BASE_FRAME, ref.pose)
+        res = self._detect(goal_handle, ref.prompt, ref.prompt, ref.size_m, 0)
+        gate = ref.gate_m or self.gate
+        found = []
+        for d in res.detections.detections:
+            T = self._lookup(BASE_FRAME, d.header.frame_id or res.detections.header.frame_id)
+            M = T @ geo.pose_to_matrix(d.bbox.center)
+            found.append((float(np.linalg.norm(M[:2, 3] - expected[:2])), M, d))
+        near = sorted([f for f in found if f[0] <= gate], key=lambda f: f[0])
+        if not near:
+            closest = min(f[0] for f in found)
+            raise SkillError(R.NOT_FOUND, f"no '{ref.prompt}' within {gate * 100:.0f} cm of the reference (closest {closest * 100:.0f} cm)")
+        if len(near) > 1:
+            raise SkillError(R.AMBIGUOUS, f"{len(near)} '{ref.prompt}' within {gate * 100:.0f} cm of the reference")
+        return near[0][1], near[0][2]
+
     def detect(self, goal_handle, result):
         g = goal_handle.request
         fb = Detect.Feedback(phase="detecting")
@@ -936,21 +1037,7 @@ class SkillServer(Node):
         ref = g.object
         fb = Approach.Feedback(phase="detecting")
         goal_handle.publish_feedback(fb)
-        expected = self._point_in(BASE_FRAME, ref.pose)
-        res = self._detect(goal_handle, ref.prompt, ref.prompt, ref.size_m, 0)
-        gate = ref.gate_m or self.gate
-        found = []
-        for d in res.detections.detections:
-            T = self._lookup(BASE_FRAME, d.header.frame_id or res.detections.header.frame_id)
-            M = T @ geo.pose_to_matrix(d.bbox.center)
-            found.append((float(np.linalg.norm(M[:2, 3] - expected[:2])), M, d))
-        near = sorted([f for f in found if f[0] <= gate], key=lambda f: f[0])
-        if not near:
-            closest = min(f[0] for f in found)
-            raise SkillError(R.NOT_FOUND, f"no '{ref.prompt}' within {gate * 100:.0f} cm of the reference (closest {closest * 100:.0f} cm)")
-        if len(near) > 1:
-            raise SkillError(R.AMBIGUOUS, f"{len(near)} '{ref.prompt}' within {gate * 100:.0f} cm of the reference")
-        _, M, d = near[0]
+        M, d = self._find(goal_handle, ref)
         top = M[2, 3] + d.bbox.size.z / 2.0
         target = (M[0, 3], M[1, 3], top + (g.height_m or self.approach_height))
         fb.phase = "planning"
@@ -978,6 +1065,312 @@ class SkillServer(Node):
         result.result.message = (f"{g.arm} claw tip {target[2] - top:.3f} m above the object, "
                                  f"{residual * 1000:.0f} mm from the goal by the joint encoders, wrist camera "
                                  f"{abs(above) * 100:.0f} cm {'above' if above > 0 else 'below'} the hand")
+
+    # ---- grasp and place ----
+    ARM4 = ("shoulder_pan", "shoulder_lift", "elbow_flex", "wrist_flex")
+    # reaching postures (shoulder lift, elbow, wrist flex) to start the claw IK from, besides the current joints
+    POSTURES = ((0.73, -0.96, -1.34), (1.0, -1.2, 1.0), (2.0, -1.8, -1.7), (1.3, -2.4, -0.4), (0.15, -0.2, -1.6),
+                (1.5, -1.5, 0.0))
+
+    def _arm_chain(self, arm):
+        """(URDF chain base_footprint -> gripper link, {joint: (lower, upper)}), cached per robot description."""
+        if self.urdf is None:
+            raise SkillError(R.FAILED, "no robot description yet")
+        cached = self._chains.get(arm)
+        if cached is None or cached[0] is not self.urdf:
+            names = [f"{arm}_arm_{j}_joint" for j in (*self.ARM4, "wrist_roll")]
+            info = geo.joint_info(self.urdf, names)
+            cached = (self.urdf, geo.chain(self.urdf, BASE_FRAME, motion.GROUP_TIP_LINK[f"{arm}_arm"]),
+                      {n: (info[n]["lower"], info[n]["upper"]) for n in names})
+            self._chains[arm] = cached
+        return cached[1], cached[2]
+
+    def _grasp_offset(self, arm, size):
+        """Where a held object's centre is in the gripper link frame. The claw points along the link's -y and the moving
+        jaw closes along +x onto the fixed jaw, whose inner face is at x = grasp_fixed_jaw_x. The object sits
+        grasp_side_gap off the fixed jaw before closing, with the claw tips grasp_tip_clear above its bottom (or, for an
+        object taller than the jaws, gripped grasp_max_depth down from its top)."""
+        tip_rel = max(-size / 2.0 + self.grasp_tip_clear, size / 2.0 - self.grasp_depth)    # tip height - centre height
+        return np.array([self.fixed_jaw_x[arm] - size / 2.0 - self.grasp_gap, float(self.tip[arm][1]) - tip_rel, 0.0])
+
+    def _claw_ik(self, arm, G, target, lean, roll, seed, iterations=80):
+        """Shoulder pan, lift, elbow and wrist flex putting gripper-link point G at `target` (base frame) with the claw
+        `lean` rad from straight down, wrist roll held at `roll`. The arm's links move in one vertical plane, so position
+        and the claw's angle from vertical are four conditions for four joints. Damped least squares on the URDF chain.
+        Returns (joints with the roll, position error m, the claw's angle from down rad, claw direction)."""
+        ch, lim = self._arm_chain(arm)
+        names = [f"{arm}_arm_{j}_joint" for j in self.ARM4]
+        q = {n: float(seed.get(n, 0.0)) for n in names}
+        q[f"{arm}_arm_wrist_roll_joint"] = float(roll)
+        target = np.asarray(target, float)
+        c = math.cos(lean)
+
+        def resid(qd):
+            T = geo.chain_fk(ch, qd)
+            return np.append(T[:3, :3] @ G + T[:3, 3] - target, 0.1 * (c - T[2, 1]))   # claw = -y, claw_z = -cos(lean)
+
+        for _ in range(iterations):
+            r = resid(q)
+            if float(np.linalg.norm(r)) < 2e-5:
+                break
+            J = np.zeros((4, 4))
+            for k, n in enumerate(names):
+                qd = dict(q)
+                qd[n] += 1e-6
+                J[:, k] = (resid(qd) - r) / 1e-6
+            dq = np.clip(-np.linalg.solve(J.T @ J + 1e-5 * np.eye(4), J.T @ r), -0.3, 0.3)
+            for k, n in enumerate(names):
+                q[n] = float(np.clip(q[n] + dq[k], *lim[n]))
+        T = geo.chain_fk(ch, q)
+        claw = -T[:3, 1]
+        return (q, float(np.linalg.norm(T[:3, :3] @ G + T[:3, 3] - target)),
+                math.acos(max(-1.0, min(1.0, -float(claw[2])))), claw)
+
+    def _outward(self, arm, target):
+        """Horizontal unit vector from the arm's shoulder towards the target (base frame)."""
+        sh = self._lookup(BASE_FRAME, f"{arm}_arm_shoulder_link")[:3, 3]
+        v = np.array([target[0] - sh[0], target[1] - sh[1], 0.0])
+        n = float(np.linalg.norm(v))
+        return v / n if n > 1e-6 else np.array([1.0, 0.0, 0.0])
+
+    def _claw_solve(self, arm, G, target, roll, lean=None):
+        """Joints for G at `target` with the claw straight down if the arm reaches that way, else leaning outward (away
+        from the shoulder) a little more at a time up to grasp_max_lean; with `lean` given, only that. (joints, lean)."""
+        ch, lim = self._arm_chain(arm)
+        names = [f"{arm}_arm_{j}_joint" for j in self.ARM4]
+        out = self._outward(arm, target)
+        sh = self._lookup(BASE_FRAME, f"{arm}_arm_shoulder_link")[:3, 3]
+        cur = {n: float(self.joints.get(n, 0.0)) for n in names}
+        reach = dict(zip(names[1:], self.POSTURES[1]))
+
+        def wrist_az(pan):
+            v = geo.chain_fk(ch, {**reach, names[0]: pan})[:2, 3] - sh[:2]
+            return math.atan2(v[1], v[0])
+
+        def wrap(a):
+            return (a + math.pi) % (2 * math.pi) - math.pi
+        # the pan that turns the arm's plane through the target, from how the wrist's azimuth follows the pan
+        p0 = cur[names[0]]
+        slope = wrap(wrist_az(p0 + 0.1) - wrist_az(p0)) / 0.1
+        pan = p0 + wrap(math.atan2(out[1], out[0]) - wrist_az(p0)) / slope if abs(slope) > 0.1 else p0
+        pan = float(np.clip(pan, *lim[names[0]]))
+        seeds = [cur] + [{names[0]: pan, **dict(zip(names[1:], p))} for p in self.POSTURES]
+        leans = [lean] if lean is not None else [0.0] + [self.max_lean * f for f in (0.33, 0.66, 1.0)]
+        best = math.inf
+        for ln in leans:
+            for s in seeds:
+                q, err, got, claw = self._claw_ik(arm, G, target, ln, roll, s)
+                best = min(best, err)
+                if err < 0.002 and abs(got - ln) < 0.02 and (ln < 0.03 or float(claw @ out) > 0.0):
+                    return q, got
+        raise SkillError(R.NOT_REACHABLE, f"out of reach with the claw down or leaning out up to "
+                                          f"{math.degrees(self.max_lean):.0f} deg ({best * 1000:.0f} mm short)")
+
+    def _jaw_roll(self, arm, q, dirs):
+        """The wrist roll that turns the jaws' closing axis (gripper link x) onto one of the directions `dirs` (either
+        sense), the one nearest the current roll and inside its limits. Rolling turns x about the claw axis (-y):
+        x(r0 + t) = cos(t) x0 + sin(t) x90."""
+        ch, lim = self._arm_chain(arm)
+        rj = f"{arm}_arm_wrist_roll_joint"
+        r0 = q[rj]
+        x0 = geo.chain_fk(ch, q)[:3, 0]
+        x90 = geo.chain_fk(ch, {**q, rj: r0 + math.pi / 2})[:3, 0]
+        best = None
+        for h in dirs:
+            for s in (1.0, -1.0):
+                t = math.atan2(s * float(h @ x90), s * float(h @ x0))
+                for k in (-1, 0, 1):
+                    r = r0 + t + 2 * math.pi * k
+                    if lim[rj][0] <= r <= lim[rj][1] and (best is None or abs(r - r0) < abs(best - r0)):
+                        best = r
+        return r0 if best is None else best
+
+    def _down_solution(self, arm, G, target, yaw=None):
+        """Joints for G at `target`, claw down or leaning out. With `yaw` (an object's, base frame) the jaws are also
+        turned square to the object's faces; with the claw leaning they close across the lean instead, the only
+        horizontal direction square to the claw. Without `yaw` the wrist roll stays where it is. (joints, lean)."""
+        rj = f"{arm}_arm_wrist_roll_joint"
+        roll = float(self.joints.get(rj, 0.0)) if yaw is None else self.camera_up_roll[arm]
+        q, lean = self._claw_solve(arm, G, target, roll)
+        if yaw is None:
+            return q, lean
+        for _ in range(2):                                   # G is off the roll axis: rolling moves it, so solve again
+            if lean > 0.03:
+                out = self._outward(arm, target)
+                dirs = [np.array([-out[1], out[0], 0.0])]
+            else:
+                dirs = [np.array([math.cos(yaw), math.sin(yaw), 0.0]), np.array([-math.sin(yaw), math.cos(yaw), 0.0])]
+            q, lean = self._claw_solve(arm, G, target, self._jaw_roll(arm, q, dirs))
+        return q, lean
+
+    def _claw_path(self, arm, G, start, end, roll, lean, steps, partial=False):
+        """Joints along the straight line start -> end (G's path), claw angle and roll held. partial: stop where the
+        line leaves the arm's reach instead of failing."""
+        names = [f"{arm}_arm_{j}_joint" for j in self.ARM4]
+        seed = {n: float(self.joints.get(n, 0.0)) for n in names}
+        path = []
+        for s in np.linspace(0.0, 1.0, steps + 1)[1:]:
+            q, err, _, _ = self._claw_ik(arm, G, np.asarray(start) + s * (np.asarray(end) - np.asarray(start)), lean, roll, seed)
+            if err > 0.003:
+                if partial:
+                    break
+                raise SkillError(R.NOT_REACHABLE, f"the straight path leaves the arm's reach ({err * 1000:.0f} mm off)")
+            path.append(q)
+            seed = q
+        return path
+
+    def _measured_point(self, arm, G):
+        """Where G is by the joint encoders (base frame)."""
+        ch, _ = self._arm_chain(arm)
+        T = geo.chain_fk(ch, self.joints)
+        return T[:3, :3] @ G + T[:3, 3]
+
+    def _gripper_to(self, goal_handle, arm, position, duration=0.8):
+        self._joints_to(goal_handle, self.grip_ctl[arm], [f"{arm}_arm_gripper_joint"], [position], duration,
+                        motion.GROUP_BUS[f"{arm}_gripper"], f"{arm}_gripper_controller")
+
+    def _arm_path(self, goal_handle, arm, path, dt):
+        joints = motion.GROUP_JOINTS[f"{arm}_arm"]
+        self._joints_path(goal_handle, self.arm_ctl[arm], joints, [[q[j] for j in joints] for q in path], dt,
+                          f"{arm}_arm_controller")
+
+    def _down_to(self, skill, goal_handle, arm, G, target, q, lean, scaling, fb, descend=True):
+        """Move G above `target` (back along the claw by grasp_pre_height) with MoveIt, correct for the sag there, then
+        come straight down along the claw. Returns the offset added to targets for the sag (base frame)."""
+        group = f"{arm}_arm"
+        rj = f"{arm}_arm_wrist_roll_joint"
+        ch, _ = self._arm_chain(arm)
+        claw = -geo.chain_fk(ch, q)[:3, 1]
+        pre = np.asarray(target) - claw * self.grasp_pre if descend else np.asarray(target)
+        q_pre, _, _, _ = self._claw_ik(arm, G, pre, lean, q[rj], q)
+        fb.phase = "above"
+        goal_handle.publish_feedback(fb)
+        self._move_group(skill, goal_handle, motion.joint_goal_request(group, q_pre, scaling), group)
+        bus = motion.GROUP_BUS[group]
+        self._claim(skill, [bus])
+        try:
+            offset = np.zeros(3)
+            for _ in range(2):                                # the servos stop short under gravity: aim past it
+                time.sleep(0.4)
+                err = pre - self._measured_point(arm, G)
+                self.get_logger().info(f"{skill}: {np.round(err * 1000).astype(int).tolist()} mm short above the target")
+                if float(np.linalg.norm(err)) < 0.003:
+                    break
+                offset = offset + err
+                q_pre, e, _, _ = self._claw_ik(arm, G, pre + offset, lean, q[rj], q_pre)
+                if e > 0.003:
+                    break
+                self._arm_path(goal_handle, arm, [q_pre], 0.6)
+            if descend:
+                fb.phase = "descending"
+                goal_handle.publish_feedback(fb)
+                path = self._claw_path(arm, G, pre + offset, np.asarray(target) + offset, q[rj], lean,
+                                       max(2, int(self.grasp_pre / 0.02)))
+                self._arm_path(goal_handle, arm, path, 0.35)
+                time.sleep(0.3)
+        finally:
+            self._release([bus])
+        return offset, claw
+
+    def _lift(self, goal_handle, arm, G, start, height, roll, lean, partial=False):
+        """Straight up by `height`; partial: as far up as the arm reaches (after letting go, any clearance will do)."""
+        bus = motion.GROUP_BUS[f"{arm}_arm"]
+        self._claim("lift", [bus])
+        try:
+            path = self._claw_path(arm, G, start, np.asarray(start) + [0.0, 0.0, height], roll, lean,
+                                   max(2, int(height / 0.02)), partial)
+            if path:
+                self._arm_path(goal_handle, arm, path, 0.3)
+        finally:
+            self._release([bus])
+
+    def grasp(self, goal_handle, result):
+        g = goal_handle.request
+        arm = g.arm
+        if arm not in ("left", "right"):
+            raise SkillError(R.FAILED, "arm must be left or right")
+        gj, rj = f"{arm}_arm_gripper_joint", f"{arm}_arm_wrist_roll_joint"
+        fb = Grasp.Feedback(phase="detecting")
+        goal_handle.publish_feedback(fb)
+        M, d = self._find(goal_handle, g.object)
+        size = float(g.object.size_m or d.bbox.size.z or self.grasp_size)
+        G = self._grasp_offset(arm, size)
+        centre = M[:3, 3].copy()
+        q, lean = self._down_solution(arm, G, centre, yaw=geo.yaw_of_matrix(M[:3, :3]))
+        self._require_safe()
+        fb.phase = "opening"
+        goal_handle.publish_feedback(fb)
+        self._gripper_to(goal_handle, arm, self.grip_open)
+        offset, _ = self._down_to("grasp", goal_handle, arm, G, centre, q, lean, g.scaling, fb)
+        fb.phase = "closing"
+        goal_handle.publish_feedback(fb)
+        self._gripper_to(goal_handle, arm, self.grip_close, 1.0)
+        time.sleep(0.6)
+        result.gripper_position = float(self.joints.get(gj, float("nan")))
+        result.claw_lean_deg = math.degrees(lean)
+        if not result.gripper_position <= self.grip_holding_max:
+            self._gripper_to(goal_handle, arm, self.grip_open)
+            raise SkillError(R.LOST_OBJECT, f"the gripper closed to {result.gripper_position:+.2f} rad: nothing between the jaws")
+        fb.phase = "lifting"
+        goal_handle.publish_feedback(fb)
+        self._lift(goal_handle, arm, G, centre + offset, g.lift_m or self.grasp_lift, q[rj], lean)
+        time.sleep(0.3)
+        now = float(self.joints.get(gj, float("nan")))
+        if not now <= self.grip_holding_max:
+            raise SkillError(R.LOST_OBJECT, f"dropped while lifting (gripper at {now:+.2f} rad)")
+        out = PoseStamped()
+        out.header.frame_id = g.object.pose.header.frame_id or BASE_FRAME
+        Mo = self._lookup(out.header.frame_id, BASE_FRAME) @ M
+        out.pose.position = Point(x=float(Mo[0, 3]), y=float(Mo[1, 3]), z=float(Mo[2, 3]))
+        o = out.pose.orientation
+        o.x, o.y, o.z, o.w = geo.yaw_quat(geo.yaw_of_matrix(Mo[:3, :3]))
+        result.object_pose = out
+        result.result.message = (f"{arm} gripper holding it at {result.gripper_position:+.2f} rad, claw "
+                                 f"{result.claw_lean_deg:.0f} deg from straight down")
+
+    def place(self, goal_handle, result):
+        g = goal_handle.request
+        arm = g.arm
+        if arm not in ("left", "right"):
+            raise SkillError(R.FAILED, "arm must be left or right")
+        given = [bool(g.location), bool(g.object.prompt), bool(g.point.header.frame_id)]
+        if sum(given) != 1:
+            raise SkillError(R.FAILED, "place needs exactly one of location, object or point")
+        size = float(g.held_size_m or self.grasp_size)
+        G = self._grasp_offset(arm, size)
+        fb = Place.Feedback(phase="detecting")
+        goal_handle.publish_feedback(fb)
+        drop = False
+        if g.location:
+            p = self.places.get((g.location, arm))
+            if p is None or not any(p):
+                raise SkillError(R.NOT_FOUND, f"no place '{g.location}' for the {arm} arm (place_{g.location}_{arm})")
+            centre, drop = np.array(p), True
+        elif g.object.prompt:
+            M, d = self._find(goal_handle, g.object)
+            half = np.array([d.bbox.size.x, d.bbox.size.y]) / 2.0
+            sh = self._lookup(BASE_FRAME, f"{arm}_arm_shoulder_link")[:3, 3]
+            # the point of the object's top face nearest the shoulder, place_inset in from its edges
+            local = (M[:3, :3].T @ (np.array([sh[0], sh[1], M[2, 3]]) - M[:3, 3]))[:2]
+            local = np.clip(local, -np.maximum(half - self.place_inset, 0.0), np.maximum(half - self.place_inset, 0.0))
+            centre = M[:3, :3] @ np.array([local[0], local[1], 0.0]) + M[:3, 3]
+            centre[2] = M[2, 3] + d.bbox.size.z / 2.0 + size / 2.0 + self.place_gap
+        else:
+            centre = self._point_in(BASE_FRAME, g.point)
+        q, lean = self._down_solution(arm, G, centre)
+        self._require_safe()
+        offset, _ = self._down_to("place", goal_handle, arm, G, centre, q, lean, g.scaling, fb, descend=not drop)
+        fb.phase = "releasing"
+        goal_handle.publish_feedback(fb)
+        self._gripper_to(goal_handle, arm, self.grip_open)
+        time.sleep(0.4)
+        fb.phase = "lifting"
+        goal_handle.publish_feedback(fb)
+        self._lift(goal_handle, arm, G, centre + offset, self.grasp_lift, q[f"{arm}_arm_wrist_roll_joint"], lean, partial=True)
+        result.placed_at.header.frame_id = BASE_FRAME
+        result.placed_at.point = Point(x=float(centre[0]), y=float(centre[1]), z=float(centre[2]))
+        result.result.message = (f"released {'over' if drop else 'on'} {g.location or g.object.prompt or 'the point'}, claw "
+                                 f"{math.degrees(lean):.0f} deg from straight down")
 
 
 def main():

@@ -31,3 +31,24 @@ skill_server:
     touch_early_margin_m: 0.015   # contact this far above the expected top is something in the way
     touch_stall_ratio: 0.4        # a step that moves less than this share of the command is a stall
     touch_load_jump: 0.2          # effort change between steps on shoulder lift, elbow or wrist flex
+    # grasp and place. In the gripper link frame the claw points along -y and the moving jaw closes along +x onto the
+    # fixed jaw, whose inner face is at x = grasp_fixed_jaw_x (the CAD's, 2026-11-03; the claw tip is tip_offset).
+    grasp_fixed_jaw_x_left: 0.008
+    grasp_fixed_jaw_x_right: 0.008
+    grasp_open_rad: -0.6          # about 7 cm between the jaws
+    grasp_close_rad: 0.35         # commanded closed; on an object the servo stops on it
+    grasp_holding_max_rad: 0.15   # after closing, a gripper past this closed on nothing (LOST_OBJECT)
+    grasp_side_gap_m: 0.004       # object off the fixed jaw before closing
+    grasp_tip_clear_m: 0.008      # claw tips above the object's bottom (the table)
+    grasp_max_depth_m: 0.035      # a taller object is gripped this far down from its top
+    grasp_pre_height_m: 0.08      # come down onto it along the claw from this far
+    grasp_lift_m: 0.08
+    grasp_default_size_m: 0.028
+    grasp_max_lean_deg: 25.0      # the claw leans outward this far at most, for objects beyond a straight-down reach
+    place_inset_m: 0.05           # placing on an object: this far in from the edges of its top
+    place_gap_m: 0.004            # placing: the held object's bottom this far above the surface at release
+    # Named drop points (the held object's centre at release, base_footprint) for place's `location`.
+    # basket: over the top basket (rim 0.78 m, floor 0.68), on the arm's own side, released 6 cm above the rim.
+    place_locations: [basket]
+    place_basket_left: [-0.13, 0.06, 0.86]
+    place_basket_right: [-0.13, -0.06, 0.86]

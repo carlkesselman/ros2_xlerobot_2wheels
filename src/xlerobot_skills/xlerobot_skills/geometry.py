@@ -67,6 +67,58 @@ def joint_info(urdf_xml, names):
     return out
 
 
+def rpy_matrix(r, p, y):
+    """URDF rpy (fixed axes x, y, z) -> 3x3."""
+    cr, sr, cp, sp, cy, sy = math.cos(r), math.sin(r), math.cos(p), math.sin(p), math.cos(y), math.sin(y)
+    return np.array([[cy * cp, cy * sp * sr - sy * cr, cy * sp * cr + sy * sr],
+                     [sy * cp, sy * sp * sr + cy * cr, sy * sp * cr - cy * sr],
+                     [-sp, cp * sr, cp * cr]])
+
+
+def axis_angle(axis, angle):
+    a = np.asarray(axis, float) / np.linalg.norm(axis)
+    K = np.array([[0, -a[2], a[1]], [a[2], 0, -a[0]], [-a[1], a[0], 0]])
+    return np.eye(3) + math.sin(angle) * K + (1 - math.cos(angle)) * K @ K
+
+
+def chain(urdf_xml, base, tip):
+    """The joints from link `base` down to link `tip`: [(name, type, origin 4x4, axis)], base first. For forward
+    kinematics without a MoveIt round trip per evaluation (an IK solve takes thousands)."""
+    root = ET.fromstring(urdf_xml)
+    by_child = {j.find("child").get("link"): j for j in root.findall("joint") if j.find("child") is not None}
+    out, link = [], tip
+    while link != base:
+        j = by_child.get(link)
+        if j is None:
+            raise ValueError(f"no joint chain from {base} to {tip}")
+        o = j.find("origin")
+        T = np.eye(4)
+        if o is not None:
+            T[:3, :3] = rpy_matrix(*[float(v) for v in o.get("rpy", "0 0 0").split()])
+            T[:3, 3] = [float(v) for v in o.get("xyz", "0 0 0").split()]
+        axis = j.find("axis")
+        a = np.array([float(v) for v in axis.get("xyz").split()]) if axis is not None else np.array([1.0, 0, 0])
+        out.append((j.get("name"), j.get("type"), T, a))
+        link = j.find("parent").get("link")
+    return out[::-1]
+
+
+def chain_fk(ch, q):
+    """4x4 of the chain's tip link in its base link, for joint values q {name: value} (missing joints at 0)."""
+    T = np.eye(4)
+    for name, kind, origin, axis in ch:
+        T = T @ origin
+        if kind in ("revolute", "continuous"):
+            M = np.eye(4)
+            M[:3, :3] = axis_angle(axis, q.get(name, 0.0))
+            T = T @ M
+        elif kind == "prismatic":
+            M = np.eye(4)
+            M[:3, 3] = np.asarray(axis, float) * q.get(name, 0.0)
+            T = T @ M
+    return T
+
+
 def aim_step(cam_origin, cam_axis, target, joint_axes, max_step=0.6):
     """Joint changes (one per axis) that turn the camera's optical axis towards the target, linearised:
     rotating about a joint axis `a` by dq moves the viewing direction by (a x c) dq. All vectors in one frame.

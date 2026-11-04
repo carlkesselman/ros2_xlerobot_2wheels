@@ -14,6 +14,11 @@ name = "ros2_xlerobot_2wheels"
 channels = ["https://prefix.dev/conda-forge", "robostack-jazzy"]
 platforms = ["osx-arm64"]
 
+# macOS 14 minimum: pick_ik's build needs it, and pixi solves for 13 unless told. (pixi calls this table
+# deprecated, but its replacement, a virtual package on the platform entry, needs a renamed platform.)
+[system-requirements]
+macos = "14.0"
+
 [activation.env]
 CMAKE_GENERATOR = "Ninja"
 CMAKE_C_COMPILER_LAUNCHER = "ccache"
@@ -22,7 +27,7 @@ CMAKE_EXPORT_COMPILE_COMMANDS = "ON"   # compile_commands.json per package in bu
 
 [tasks]
 venv = "tools/setup_venv.sh"
-build = "colcon build --symlink-install --packages-select xlerobot_description xlerobot_teleop xlerobot_bringup xlerobot_navigation --cmake-args -DCMAKE_BUILD_TYPE=RelWithDebInfo"
+build = "colcon build --symlink-install --packages-select xlerobot_description xlerobot_teleop xlerobot_bringup xlerobot_navigation xlerobot_moveit_config xlerobot_skill_msgs xlerobot_object_perception xlerobot_skills xlerobot_executive --cmake-args -DCMAKE_BUILD_TYPE=RelWithDebInfo"
 
 [dependencies]
 python = "3.12.*"
@@ -44,6 +49,10 @@ ros-jazzy-topic-based-ros2-control = "*"
 ros-jazzy-nav2-bringup = "*"
 ros-jazzy-slam-toolbox = "*"
 ros-jazzy-robot-localization = "*"
+# Arms: MoveIt (move_group, OMPL, pick_ik) for xlerobot_moveit_config and the skill server.
+ros-jazzy-moveit = "*"
+ros-jazzy-pick-ik = "*"
+ros-jazzy-vision-msgs = "*"
 colcon-common-extensions = "*"
 compilers = "*"
 cmake = "*"

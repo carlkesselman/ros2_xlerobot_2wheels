@@ -35,7 +35,7 @@ JSON, schema version 1 (full rules in `xlerobot_executive/plan.py`):
 }
 ```
 
-- **Skills**: `navigate_to`, `look_at`, `detect`, `move_arm`, `approach`, `touch` with their parameters (see the
+- **Skills**: `navigate_to`, `look_at`, `detect`, `move_arm`, `approach`, `touch`, `grasp`, `place` with their parameters (see the
   skill server's README). Objects are named in `objects`; `detect` with `bind` sets an object's pose from the detection
   nearest to its previous pose, and later steps refer to the object by name.
 - **Checks**: `pre` before a step and `expect` after it, from a fixed list: `{"detected": object}`,

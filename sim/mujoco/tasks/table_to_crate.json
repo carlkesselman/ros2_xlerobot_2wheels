@@ -1,0 +1,25 @@
+{
+  "schema_version": 1,
+  "task": "take the cube from the table to the cart's basket, drive to the crate, and put the cube on the crate",
+  "objects": {
+    "cube": {"prompt": "a cube", "pose": [1.76, 1.2, 0.74], "frame": "map", "size_m": 0.04, "gate_m": 0.1},
+    "crate": {"prompt": "a box", "pose": [2.8, -1.2, 0.3], "frame": "map", "gate_m": 0.15}
+  },
+  "steps": [
+    {"id": "to_table", "skill": "navigate_to", "params": {"pose": [1.36, 1.0, -1.5708]},
+     "on_failure": {"codes": ["NOT_REACHABLE"], "action": "retry", "max_retries": 2}},
+    {"id": "find_cube", "skill": "detect", "params": {"prompt": "a cube", "bind": "cube"},
+     "on_failure": {"codes": ["NOT_FOUND"], "action": "retry", "max_retries": 1}},
+    {"id": "pick", "skill": "grasp", "params": {"arm": "left", "object": "cube"},
+     "on_failure": {"codes": ["LOST_OBJECT"], "action": "goto", "step": "find_cube", "max_retries": 1}},
+    {"id": "stow", "skill": "place", "params": {"arm": "left", "location": "basket", "held_size_m": 0.04}},
+    {"id": "rest_1", "skill": "move_arm", "params": {"arm": "left", "named_position": "left_rest"}},
+    {"id": "to_crate", "skill": "navigate_to", "params": {"pose": [2.6, -0.66, 3.1416], "final_straight_m": 1.0},
+     "on_failure": {"codes": ["NOT_REACHABLE"], "action": "retry", "max_retries": 2}},
+    {"id": "find_cube_in_basket", "skill": "detect", "params": {"prompt": "a cube", "bind": "cube"}},
+    {"id": "unstow", "skill": "grasp", "params": {"arm": "left", "object": "cube"}},
+    {"id": "find_crate", "skill": "detect", "params": {"prompt": "a box", "bind": "crate"}},
+    {"id": "put", "skill": "place", "params": {"arm": "left", "object": "crate", "held_size_m": 0.04}},
+    {"id": "rest_2", "skill": "move_arm", "params": {"arm": "left", "named_position": "left_rest"}}
+  ]
+}

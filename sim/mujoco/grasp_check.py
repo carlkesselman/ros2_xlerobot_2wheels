@@ -111,6 +111,8 @@ def main():
     if args.viewer:
         from mujoco import viewer as mj_viewer
         viewer = mj_viewer.launch_passive(m, d)
+        with viewer.lock():
+            viewer.opt.geomgroup[world.ROBOT_GROUP] = 1      # hidden by default (groups 0-2 only)
 
     grip = m.body(f"{ARM}_gripper_link").id
     cube_id = m.body("cube").id

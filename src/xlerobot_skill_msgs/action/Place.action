@@ -1,0 +1,17 @@
+# Put down what an arm holds (after grasp), at one of:
+#   location   a named drop point in the skill server's config (place_<location>_<arm>, base_footprint): the gripper
+#              opens there, above it, and the object drops in; e.g. "basket" for the cart's top basket
+#   object     on top of another object, re-detected: the reachable point of its top face nearest the arm, set down
+#   point      a point (the held object's centre at release), set down
+# The arm comes down with the claw pointing down, opens, and lifts back up.
+string arm                            # left or right
+string location
+xlerobot_skill_msgs/ObjectRef object
+geometry_msgs/PointStamped point
+float32 held_size_m                   # edge of the held object; 0 = the skill's default
+float32 scaling
+---
+xlerobot_skill_msgs/SkillResult result
+geometry_msgs/PointStamped placed_at  # the held object's centre at release, base_footprint
+---
+string phase                          # detecting, above, descending, releasing, lifting

@@ -18,6 +18,11 @@ Topics, matching xlerobot.ros2_control_sim.xacro's engine:=mujoco:
                                    counter-clockwise in ldlidar_link; laser_filters makes /scan
   /mujoco/ground_truth        out  nav_msgs/Odometry, base_footprint in the world, for checking
                                    odometry and Nav2 against; nothing in the stack reads it
+  /perception/detect          srv  xlerobot_object_perception/DetectObjects from the world's truth, in
+                                   place of the camera pipeline (no camera in the twin yet): what
+                                   matches the prompt within DETECT_RANGE of the robot, in base_footprint
+  /mcp_presence_ok            out  with --presence, always true: the skill server moves only while
+                                   an operator's heartbeat says someone is watching; the twin stands in
 No /clock: the twin keeps to the wall clock, so nothing needs use_sim_time.
 """
 
@@ -35,6 +40,9 @@ from nav_msgs.msg import Odometry
 from rclpy.node import Node
 from rclpy.qos import qos_profile_sensor_data
 from sensor_msgs.msg import JointState, LaserScan
+from std_msgs.msg import Bool
+from vision_msgs.msg import Detection3D, ObjectHypothesisWithPose
+from xlerobot_object_perception.srv import DetectObjects
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 import world  # noqa: E402
@@ -49,9 +57,15 @@ SCAN_RANGE_MAX = 12.0
 # Rays see the environment (geom groups 0-2), not the robot (world.ROBOT_GROUP).
 SCAN_GEOMGROUP = np.array([1, 1, 1, 0, 0, 0], dtype=np.uint8)
 
+# Ground-truth detection: prompt word -> what in the world it finds. Boxes are geoms (crates, the table
+# top), cubes are free bodies. Only what is this close to the robot (horizontally) is reported.
+DETECT_RANGE = 1.5
+DETECT_GEOMS = {"box": ("crate_",), "crate": ("crate_",), "table": ("table_top",)}
+DETECT_BODIES = {"cube": ("cube",), "block": ("cube",)}
+
 
 class MujocoTwin(Node):
-    def __init__(self, model, data, lock):
+    def __init__(self, model, data, lock, presence=False):
         super().__init__("mujoco_twin")
         self.m, self.d, self.lock = model, data, lock
         self.joints = [model.joint(j).name for j in range(model.njnt)
@@ -65,6 +79,10 @@ class MujocoTwin(Node):
         self.state_pub = self.create_publisher(JointState, "/mujoco_joint_states", 10)
         self.scan_pub = self.create_publisher(LaserScan, "/ldlidar_node/scan", qos_profile_sensor_data)
         self.truth_pub = self.create_publisher(Odometry, "/mujoco/ground_truth", 10)
+        self.create_service(DetectObjects, "/perception/detect", self.on_detect)
+        if presence:
+            pub = self.create_publisher(Bool, "/mcp_presence_ok", 10)
+            self.create_timer(0.2, lambda: pub.publish(Bool(data=True)))
 
         self.lidar = model.body("ldlidar_link").id
         self.base = model.body("base_footprint").id
@@ -114,6 +132,55 @@ class MujocoTwin(Node):
         t.angular.x, t.angular.y, t.angular.z = map(float, vel[3:6])
         self.truth_pub.publish(odom)
 
+    def on_detect(self, req, res):
+        """Everything in the world the prompt names, within DETECT_RANGE of the robot: its centre, yaw and size in
+        base_footprint, as the camera pipeline would report it. A stand-in for perception, exact."""
+        words = req.prompt.lower()
+        geoms = [p for w, ps in DETECT_GEOMS.items() if w in words for p in ps]
+        bodies = [p for w, ps in DETECT_BODIES.items() if w in words for p in ps]
+        res.detections.header.frame_id = "base_footprint"
+        res.detections.header.stamp = self.get_clock().now().to_msg()
+        if not (geoms or bodies):
+            res.codes = ["BAD_PROMPT"]
+            return res
+        found = []
+        with self.lock:
+            Tb = np.eye(4)
+            Tb[:3, :3], Tb[:3, 3] = self.d.xmat[self.base].reshape(3, 3), self.d.xpos[self.base]
+            for g in range(self.m.ngeom):
+                name = self.m.geom(g).name
+                if name and any(name.startswith(p) for p in geoms):
+                    found.append((name, self.d.geom_xpos[g].copy(), self.d.geom_xmat[g].reshape(3, 3).copy(),
+                                  2 * self.m.geom_size[g].copy()))
+            for b in range(self.m.nbody):
+                name = self.m.body(b).name
+                if name and any(name.startswith(p) for p in bodies):
+                    size = 2 * self.m.geom_size[self.m.body_geomadr[b]].copy()
+                    found.append((name, self.d.xpos[b].copy(), self.d.xmat[b].reshape(3, 3).copy(), size))
+        Tinv = np.linalg.inv(Tb)
+        label = req.label or req.prompt
+        for name, pos, R, size in found:
+            if np.hypot(*(pos[:2] - Tb[:2, 3])) > DETECT_RANGE:
+                continue
+            p = Tinv[:3, :3] @ pos + Tinv[:3, 3]
+            Rr = Tinv[:3, :3] @ R
+            yaw = math.atan2(Rr[1, 0], Rr[0, 0])
+            d = Detection3D()
+            d.header = res.detections.header
+            d.id = name
+            h = ObjectHypothesisWithPose()
+            h.hypothesis.class_id, h.hypothesis.score = label, 1.0
+            h.pose.pose.position.x, h.pose.pose.position.y, h.pose.pose.position.z = map(float, p)
+            h.pose.pose.orientation.z, h.pose.pose.orientation.w = math.sin(yaw / 2), math.cos(yaw / 2)
+            d.results.append(h)
+            d.bbox.center = h.pose.pose
+            d.bbox.size.x, d.bbox.size.y, d.bbox.size.z = map(float, size)
+            res.detections.detections.append(d)
+            res.heights_m.append(float(size[2]))
+        res.success = bool(res.detections.detections)
+        res.codes = [] if res.success else ["NO_DET"]
+        return res
+
     def publish_scan(self):
         with self.lock:
             origin = self.d.xpos[self.lidar].copy()
@@ -152,19 +219,23 @@ def make_world():
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--viewer", action="store_true", help="open MuJoCo's viewer (run with mjpython on macOS)")
+    ap.add_argument("--presence", action="store_true", help="publish /mcp_presence_ok true, for the skill server")
     # known args only: the launch file passes an empty argument when the viewer is off
     args, _ = ap.parse_known_args(rclpy.utilities.remove_ros_args(sys.argv)[1:])
 
     model, data = make_world()
     lock = threading.Lock()
     rclpy.init()
-    node = MujocoTwin(model, data, lock)
+    node = MujocoTwin(model, data, lock, presence=args.presence)
     threading.Thread(target=rclpy.spin, args=(node,), daemon=True).start()
 
     viewer = None
     if args.viewer:
         from mujoco import viewer as mj_viewer
         viewer = mj_viewer.launch_passive(model, data)
+        # The viewer shows geom groups 0-2 by default; the robot is in world.ROBOT_GROUP (3).
+        with viewer.lock():
+            viewer.opt.geomgroup[world.ROBOT_GROUP] = 1
 
     dt = model.opt.timestep
     start = time.monotonic()

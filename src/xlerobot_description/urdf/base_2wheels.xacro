@@ -159,12 +159,33 @@
         </geometry>
         <material name="xle_grey"/>
       </visual>
+      <!-- Collision: the cart below the top basket as one solid box, and the top basket as four walls
+           on it, open on top, so the arms can reach into the basket (MoveIt, the MuJoCo twin). The
+           solid box's top is the basket's floor. Isaac Sim builds its collision from the mesh instead. -->
+      <xacro:property name="basket_floor" value="${b['body_height'] - b['top_basket_depth']}"/>
+      <xacro:property name="basket_wall" value="0.01"/>
       <collision>
-        <origin xyz="${b['body_x_offset']} 0 ${b['body_height']/2.0}" rpy="0 0 0"/>
+        <origin xyz="${b['body_x_offset']} 0 ${basket_floor/2.0}" rpy="0 0 0"/>
         <geometry>
-          <box size="${b['body_length']} ${b['body_width']} ${b['body_height']}"/>
+          <box size="${b['body_length']} ${b['body_width']} ${basket_floor}"/>
         </geometry>
       </collision>
+      <xacro:macro name="basket_wall_box" params="x y sx sy">
+        <collision>
+          <origin xyz="${x} ${y} ${basket_floor + b['top_basket_depth']/2.0}" rpy="0 0 0"/>
+          <geometry>
+            <box size="${sx} ${sy} ${b['top_basket_depth']}"/>
+          </geometry>
+        </collision>
+      </xacro:macro>
+      <xacro:basket_wall_box x="${b['body_x_offset'] - b['body_length']/2.0 + basket_wall/2.0}" y="0"
+                             sx="${basket_wall}" sy="${b['body_width']}"/>
+      <xacro:basket_wall_box x="${b['body_x_offset'] + b['body_length']/2.0 - basket_wall/2.0}" y="0"
+                             sx="${basket_wall}" sy="${b['body_width']}"/>
+      <xacro:basket_wall_box x="${b['body_x_offset']}" y="${b['body_width']/2.0 - basket_wall/2.0}"
+                             sx="${b['body_length'] - 2*basket_wall}" sy="${basket_wall}"/>
+      <xacro:basket_wall_box x="${b['body_x_offset']}" y="${-b['body_width']/2.0 + basket_wall/2.0}"
+                             sx="${b['body_length'] - 2*basket_wall}" sy="${basket_wall}"/>
       <!-- Chassis, battery, ODESC, Jetson (body_mass, less base_link's token mass), on this link
            because it has the collision box: Isaac Sim imports each link as its own rigid body
            (merge_fixed_joints=False), and PhysX gives a body with a collider but no mass one from

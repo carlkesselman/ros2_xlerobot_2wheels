@@ -17,6 +17,12 @@ ros2 action send_goal --feedback /skills/look_at xlerobot_skill_msgs/action/Look
 | `/skills/move_arm` | Moves an arm to a saved position, puts its gripper link at a point, or (`tool_point`) its claw tip at a point with the wrist camera on top. |
 | `/skills/approach` | Re-detects an object near a reference pose (`NOT_FOUND`, `AMBIGUOUS` instead of guessing) and puts the claw tip above it. |
 | `/skills/touch` | From above an object, moves the claw tip straight down until contact (a stall or a load jump), then backs up. |
+| `/skills/grasp` | Re-detects an object, comes down on it along the claw (straight down, or leaning out up to `grasp_max_lean_deg` beyond that reach) with the jaws square to it, closes and lifts. A gripper that closes past `grasp_holding_max_rad` caught nothing: `LOST_OBJECT`. |
+| `/skills/place` | Puts the held object down at a named drop point (`place_<location>_<arm>`, e.g. `basket`), on top of a re-detected object (the reachable part of its top), or at a point; opens and lifts. |
+
+`navigate_to` with `final_straight_m` parks by driving the last stretch straight in: Nav2 to a staging pose that far back
+along the goal heading, a turn to the exact heading there, then Nav2's `drive_on_heading`. For parking alongside a table
+or a box, where turning in place at the goal would swing the cart's rear into it.
 
 Motions need the operator presence heartbeat (`/mcp_presence_ok`). Losing it, or the safety supervisor's `/e_stop`,
 stops a motion with `SAFETY_STOP`: the arm holds where it is with torque on. Two motions on one servo bus at once are

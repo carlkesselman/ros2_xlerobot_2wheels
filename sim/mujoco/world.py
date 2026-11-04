@@ -30,7 +30,7 @@ DIMS = os.path.join(DESCRIPTION, "config", "robot_dimensions.yaml")
 
 # Geom groups. The lidar's rays see groups 0-2 only, so the robot's own geoms (group 3) never
 # block it; the real LD19 sees the cart's posts and laser_filters removes them, nothing to remove
-# here. Group 3 is shown in the viewer like any other.
+# here. MuJoCo's viewer hides group 3 by default; run_mujoco.py turns it on (key 3 toggles it).
 ENV_GROUP = 0
 ROBOT_GROUP = 3
 
@@ -54,6 +54,7 @@ TABLE_POS = (2.0, 1.2)
 TABLE_SIZE = (0.30, 0.45, 0.72)       # half x, half y, height
 CUBE_SIZE = 0.04
 CUBE_MASS = 0.03
+CUBE_EDGE_INSET = 0.06
 
 
 def render_urdf(with_arms):
@@ -91,11 +92,12 @@ def build_spec(with_arms=True):
 
     for g in spec.geoms:
         g.group = ROBOT_GROUP
-    # body_link's collision box runs from the floor to the top rim (body_height), so the cart would
-    # stand on it with the wheels in the air. Isaac never sees it (collision_from_visuals uses the
-    # cart mesh); here its bottom moves up to the cart's ground clearance.
+    # body_link's solid collision box runs from the floor to the top basket's floor, so the cart
+    # would stand on it with the wheels in the air. Isaac never sees it (collision_from_visuals uses
+    # the cart mesh); here its bottom moves up to the cart's ground clearance. The basket's walls
+    # (the other boxes, all well off the floor) stay as they are.
     for g in spec.body("body_link").geoms:
-        if g.type == mujoco.mjtGeom.mjGEOM_BOX:
+        if g.type == mujoco.mjtGeom.mjGEOM_BOX and g.pos[2] - g.size[2] < 0.01:
             top = g.pos[2] + g.size[2]
             g.size = [g.size[0], g.size[1], (top - CART_FLOOR_CLEARANCE) / 2]
             g.pos = [g.pos[0], g.pos[1], (top + CART_FLOOR_CLEARANCE) / 2]
@@ -179,7 +181,9 @@ def add_world(spec):
         box(f"table_leg_{i}", (tx + dx * (hx - 0.03), ty + dy * (hy - 0.03), (th - 0.03) / 2),
             (0.025, 0.025, (th - 0.03) / 2), (0.5, 0.38, 0.25, 1))
 
-    cube = w.add_body(name="cube", pos=[tx - hx + 0.12, ty, th + CUBE_SIZE / 2 + 0.001])
+    # The cube 6 cm in from the table's near long edge (x = tx - hx): the arms reach about 40 cm out to
+    # the side with the claw straight down, so the cart parks alongside the table to pick it up.
+    cube = w.add_body(name="cube", pos=[tx - hx + CUBE_EDGE_INSET, ty, th + CUBE_SIZE / 2 + 0.001])
     cube.add_freejoint(name="cube_free")
     cube.add_geom(name="cube", type=mujoco.mjtGeom.mjGEOM_BOX, size=[CUBE_SIZE / 2] * 3,
                   mass=CUBE_MASS, rgba=[0.85, 0.15, 0.15, 1], group=ENV_GROUP, condim=4,

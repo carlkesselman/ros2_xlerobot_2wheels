@@ -2,8 +2,12 @@
 string waypoint                       # name in saved_waypoints.yaml; empty = use pose
 geometry_msgs/PoseStamped pose
 float32 timeout_s                     # 0 = default
+float32 final_straight_m              # > 0: park by driving the last this many metres straight in along the goal
+                                      # heading: Nav2 to a staging pose that far back, turn to the exact heading
+                                      # there, then drive straight; for parking alongside something, where turning
+                                      # in place at the goal would swing the cart's rear into it
 ---
 xlerobot_skill_msgs/SkillResult result
 ---
-string phase                          # waiting_for_nav2, driving, recovering
+string phase                          # waiting_for_nav2, driving, recovering, aligning, straight_in
 float32 distance_remaining_m

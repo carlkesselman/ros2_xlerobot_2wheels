@@ -1,0 +1,14 @@
+# Re-detect an object and pick it up with one arm: open the gripper, come down on it from above with the claw pointing
+# down (leaning outward when the object is farther out than a straight-down claw reaches), close, and lift.
+# Holding is judged by where the gripper stops: a gripper that closes all the way caught nothing (LOST_OBJECT).
+string arm                            # left or right
+xlerobot_skill_msgs/ObjectRef object  # pose = its centre, size_m its edge (the gripper opens for it)
+float32 lift_m                        # how far to lift it after closing; 0 = default
+float32 scaling
+---
+xlerobot_skill_msgs/SkillResult result
+geometry_msgs/PoseStamped object_pose # the re-detected object, in the frame of the request
+float32 gripper_position              # rad, where the gripper stopped on the object
+float32 claw_lean_deg                 # how far from straight down the claw came in
+---
+string phase                          # detecting, opening, above, descending, closing, lifting

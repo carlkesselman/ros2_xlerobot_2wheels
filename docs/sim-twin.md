@@ -329,6 +329,7 @@ Nav2 are unchanged.
 ```bash
 pixi run build
 source install/setup.zsh && source tools/ros_env.sh       # Cyclone DDS, as on the robot
+export ROS_AUTOMATIC_DISCOVERY_RANGE=LOCALHOST            # not ros_env.sh's SUBNET: Nav2 hangs at startup with it on the Mac
 ros2 launch sim/mujoco/mujoco_twin.launch.py              # viewer:=true opens MuJoCo's window
 ros2 launch xlerobot_navigation navigation.launch.py rviz:=true
 python sim/mujoco/grasp_check.py                          # the gripper holding a cube, no ROS
@@ -340,6 +341,9 @@ python sim/mujoco/grasp_check.py                          # the gripper holding 
 | `sim/mujoco/run_mujoco.py` | Runs it in real time: `/mujoco_wheel_commands` and `/mujoco_position_commands` in, `/mujoco_joint_states` out, `/ldlidar_node/scan` as the LD19's driver publishes it (455 bins, 10 Hz, `ldlidar_link`), `/mujoco/ground_truth` for checking odometry against. No `/clock`, nothing needs `use_sim_time`. |
 | `sim/mujoco/mujoco_twin.launch.py` | The twin, bringup with arms and head, and the LD19's `laser_filters` chain. |
 | `sim/mujoco/grasp_check.py` | Closes the left gripper on the cube, lets go of it, swings the arm and reports how far the cube slipped. |
+| `sim/mujoco/skills_sim.yaml` | The skill server's settings for the twin, over `xlerobot_skills/config/skills.yaml`: the model's claw length. |
+| `sim/mujoco/tasks/table_to_crate.json` | A plan for the executive: cube from the table into the top basket, drive to `crate_2`, cube onto it. |
+| `sim/mujoco/run_task.py` | Submits a plan to the executive and prints its events to the end; exit code 0 when it succeeds. |
 
 The plugin is PickNik's `topic_based_ros2_control` (RoboStack has no macOS build of
 `mujoco_ros2_control` or of `joint_state_topic_hardware_interface`); see the comment in
@@ -362,5 +366,50 @@ Checked on the M5 Pro Mac mini (2026-11-03): odometry against ground truth 0.2 c
 reverse and a half turn; every one of the 455 scan points within 0.1 mm of the wall or box it hit,
 through TF (so the upside-down mount is right); Nav2 from the start to the table around the crates
 in 19 s, 4.5 cm from the goal; the gripper holding the cube through the arm's swing (6 mm seated,
-0.4 mm more in 5 s). The physics runs about 100x faster than real time. Grasping with MoveIt, the
-head camera and the "drive, then grasp" sequence are not in the twin yet.
+0.4 mm more in 5 s). The physics runs about 100x faster than real time.
+
+MuJoCo's viewer shows geom groups 0-2 by default and the robot is in group 3 (so the lidar's rays
+skip it); `run_mujoco.py` turns group 3 on, and the `3` key toggles it.
+
+### Pick and place
+
+`skills:=true` adds the arm stack: MoveIt's `move_group`, the skill server and the plan executive.
+The twin then answers `/perception/detect` from its own state instead of a camera (what the prompt
+names, within 1.5 m, in `base_footprint`: "a cube", "a box" for the crates, "a table") and publishes
+the operator presence heartbeat the skill server waits for. Nav2 still goes on top.
+
+```bash
+ros2 launch sim/mujoco/mujoco_twin.launch.py viewer:=true skills:=true
+ros2 launch xlerobot_navigation navigation.launch.py rviz:=true          # second terminal
+python3 sim/mujoco/run_task.py sim/mujoco/tasks/table_to_crate.json     # third
+```
+
+The skills it uses are `grasp` and `place` (`xlerobot_skills`), and `navigate_to`'s
+`final_straight_m`. What shaped them:
+
+- **Reach.** The arms are mounted at the back of the top basket (0.24 m behind the axle) and reach
+  only 6-10 cm past the cart's front at table height, and the table top (0.72 m) is lower than the
+  basket rim (0.78 m), so the cart cannot nose under it. To the side the left arm reaches 0.42 m
+  with the claw straight down at table height, 0.40 m at the crate's top, and 0.48 / 0.45 m with the
+  claw leaning 25 deg outward. So the cart parks alongside what it picks from or places on, and
+  `grasp`/`place` lean the claw out (up to `grasp_max_lean_deg`) only when straight down is out of
+  reach. Nav2's goal tolerance is 5 cm for this.
+- **Parking alongside a solid box.** Turning in place swings the cart's rear corners through 0.5 m,
+  so at a parking spot a few centimetres from a crate Nav2's controller (rightly) refuses the final
+  turn. `final_straight_m` parks from a staging pose that far back along the goal heading: turn
+  there, then Nav2's `drive_on_heading` straight in. The table did not need it (the lidar sees only
+  its legs), the crate did.
+- **The top basket** is a collision model of its own now (`body_link`: a solid box to the basket's
+  floor, four walls to the rim, `top_basket_depth` 0.10 m, TODO measure), so MoveIt lets the arms
+  reach into it and the twin's cube lands on its floor.
+- **Grasping** comes down along the claw onto the object with the jaws square to it (the wrist roll),
+  closes, and judges holding by where the gripper stopped. Before coming down it corrects for the
+  arm's sag under gravity, read from the joint encoders (7 mm short at first, 1 mm after).
+
+Checked on the M5 Pro Mac mini (2026-11-03), headless, the whole plan in 130 s: Nav2 to the table,
+grasp (claw 17 deg from vertical), drop into the basket, arm to rest, Nav2 to `crate_2` with 1 m
+straight in, grasp from the basket (1 deg), place on the crate (25 deg); the cube ended on the crate's
+top (its centre 2 cm above it) 5 cm in from the edge. The crate parking ended 6 cm farther out than
+asked (a 2 deg heading error over the straight 1 m), which used the whole 25 deg lean: the margin
+there is thin. Not in the twin yet: cameras (detection is the world's truth), the head, two-arm
+coordination, and MoveIt knowing about the table or the held cube.
