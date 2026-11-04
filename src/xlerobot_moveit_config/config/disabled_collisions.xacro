@@ -22,7 +22,6 @@
   <disable_collisions link1="head_camera_link" link2="head_tilt_link" reason="Default"/>
   <disable_collisions link1="head_camera_link" link2="ldlidar_link" reason="Never"/>
   <disable_collisions link1="head_camera_link" link2="left_arm_base_link" reason="Never"/>
-  <disable_collisions link1="head_camera_link" link2="left_arm_gripper_link" reason="Never"/>
   <disable_collisions link1="head_camera_link" link2="left_arm_lower_arm_link" reason="Never"/>
   <disable_collisions link1="head_camera_link" link2="left_arm_moving_jaw_link" reason="Never"/>
   <disable_collisions link1="head_camera_link" link2="left_arm_shoulder_link" reason="Never"/>

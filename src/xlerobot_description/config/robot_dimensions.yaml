@@ -37,9 +37,10 @@ xlerobot:
     body_length: 0.295          # cart: top basket front to rear, outside of the rim, measured 2026-11-01
     body_width:  0.425          # cart: outside of the vertical side rails, measured 2026-11-01 (the top basket alone is 0.405)
     body_height: 0.780          # cart: floor to the top of the top basket rim, measured 2026-11-01
-    # Rim to the top basket's floor, inside. Only the collision model uses it (an open basket the
-    # arms can reach into). Measured 2026-11-03.
-    top_basket_depth: 0.09
+    # Rim to the top basket's floor, inside. The collision model uses it (an open basket the
+    # arms can reach into), and the shoulder placeholders stand on that floor. Measured 2026-11-04
+    # (0.09 on 2026-11-03). Inside 0.280 x 0.394, rim rolled 6 mm outward (2026-11-04).
+    top_basket_depth: 0.088
     # x of the body box centre behind the drive axle (body frame, front is -x). cart: the top
     # basket's front rim is 20-22 mm behind the axle line (2026-11-01), so the rims are at 0.021
     # and 0.316 and the centre at 0.1685. The reference notes had the front rim 22 mm ahead.
@@ -170,19 +171,22 @@ xlerobot:
   #   both pointing forward (official assembly video, confirmed by the user).
   # shoulders: rear | front_corners. rear is the one-piece "XLeRobot 0.3 Upper Body" shoulders
   #   against the top basket's rear wall (mount_x 0.239, mount_y 0.1329, the Fusion values above).
-  #   front_corners (2026-11-04, layout B of docs/arm-layouts): the shoulder assembly split into the
-  #   neck box, which stays at the rear rim (head.mount_x unchanged), and a left and a right shoulder
-  #   clamped into the basket's front corners, arms facing forward. The pan axes are where the
-  #   upstream Base.stl footprint sits 5 mm inside the front corner (inside of the front wall 0.027
-  #   behind the axle, side walls 0.1965 from the centreline). Planned, not built: no CAD for the
-  #   new shoulder pieces yet, so the model has a placeholder pedestal under each arm base.
-  #   Measure mount_x/mount_y on the cart once built, and refit frame_correction/mount_correction.
+  #   front_corners (2026-11-04, layout B of docs/arm-layouts): Fusion "XLeRobot 0.4 Upper Body Split
+  #   Shoulders". Each arm stands on an arm box, the outer half of the 0.3 shoulder (100 mm wide,
+  #   rounded outer end, pan axis 67 mm ahead of its back and 60.9 mm in from its outer end), set
+  #   into a front corner against the front and side walls (0.5 mm fit). The 0.3 Pi Case and the
+  #   middle of the shoulders are one neck base, still hooked over the rear rim (head.mount_x
+  #   unchanged). All three stand on the basket's mesh floor, clamped from below, and nothing is
+  #   drilled. Basket inside measured 2026-11-04 (0.280 x 0.394 x 0.088, rear wall inside 0.3058
+  #   behind the axle as before), so the pan axes are at 0.0593 behind the axle, 0.1356 from the
+  #   centreline, base bottom 72.3 mm above the floor. Not built yet: the URDF has a box
+  #   placeholder under each base. Measure once built, and refit frame_correction/mount_correction.
   #   Reach study: docs/arm-layouts/README.md (0.32 m past a table edge vs 0.14 m for rear).
   shoulders: front_corners
   arms:
-    mount_x: 0.0578
-    mount_y: 0.136
-    mount_z: 0.7603
+    mount_x: 0.0593
+    mount_y: 0.1356
+    mount_z: 0.7593
     right_yaw: -1.57079633
     left_yaw: -1.57079633
 
