@@ -8,6 +8,7 @@ import time
 import cv2
 import numpy as np
 import rclpy
+from ament_index_python.packages import get_package_share_directory
 from geometry_msgs.msg import Pose
 from rclpy.callback_groups import MutuallyExclusiveCallbackGroup, ReentrantCallbackGroup
 from rclpy.duration import Duration
@@ -19,9 +20,10 @@ from sensor_msgs.msg import CameraInfo, Image
 from tf2_ros import Buffer, TransformListener
 from vision_msgs.msg import Detection3D, Detection3DArray, ObjectHypothesisWithPose
 
+from objperc import wrist_fit
 from objperc.cube_fit import fit_cube
 from objperc.pipeline import ENGINES, PROMPTS, TrtEvitSam, TrtOwlv2
-from xlerobot_object_perception.srv import DetectObjects
+from xlerobot_object_perception.srv import DetectObjects, LocateInWrist
 
 DEFAULT_SIZE_MM = 28.0
 MERGE_RADIUS_MM = 15.0
@@ -58,6 +60,14 @@ class ObjectPerception(Node):
         self.prompts_file = P("prompts_file", "").value or PROMPTS
         self.sam_variant = P("sam_variant", "l0").value
         self.depth_scale = float(P("depth_scale", 1.0).value)          # measured with tools/depth_scale.py
+        self.wrist_topic = P("wrist_image_topic", "/cameras/{camera}/image_raw").value
+        self.wrist_info = P("wrist_camera_info_topic", "/cameras/{camera}/camera_info").value
+        self.occluder_dir = P("wrist_occluder_dir", "").value or os.path.join(
+            get_package_share_directory("xlerobot_object_perception"), "config")
+        self.wrist_min_score = float(P("wrist_min_score", 0.05).value)
+        P("wrist_max_rms_px", 4.0)
+        P("wrist_debug_dir", "")                           # non-empty: save each wrist frame with its mask and fit
+        self.occluders = {}
         self.prof = {}
         self.det = self.sam = None
         self.table_z = None                                # last good table height, base_footprint, metres
@@ -68,6 +78,7 @@ class ObjectPerception(Node):
         self._lock = threading.Lock()                      # one request at a time: the GPU and the camera subscriptions are shared
         self._sub_group = MutuallyExclusiveCallbackGroup()
         self.create_service(DetectObjects, "/perception/detect", self._on_detect, callback_group=ReentrantCallbackGroup())
+        self.create_service(LocateInWrist, "/perception/locate_in_wrist", self._on_locate, callback_group=ReentrantCallbackGroup())
         self.get_logger().info("object_perception ready (models load on the first request)")
 
     # ---- camera ----
@@ -287,6 +298,128 @@ class ObjectPerception(Node):
                         "height": float(np.nanmedian([o["height"] for o in g])) if not all(math.isnan(o["height"]) for o in g) else float("nan"),
                         "std_xy": float(max(xs.std(), ys.std())), "std_yaw": float(dev.std())})
         return sorted(out, key=lambda o: -o["score"])
+
+    # ---- wrist camera ----
+    def _occluder(self, camera):
+        if camera not in self.occluders:
+            path = os.path.join(self.occluder_dir, f"wrist_occluder_{camera}.png")
+            img = cv2.imread(path, cv2.IMREAD_GRAYSCALE) if os.path.exists(path) else None
+            self.occluders[camera] = img > 0 if img is not None else None
+        return self.occluders[camera]
+
+    def _grab_wrist(self, camera, n, timeout=5.0):
+        """n colour frames at least 0.1 s apart from a wrist camera, and its camera info."""
+        frames, info, last = [], {}, [0.0]
+
+        def on_img(m):
+            t = _stamp(m)
+            if t - last[0] < 0.1 or len(frames) >= n:
+                return
+            last[0] = t
+            a = np.frombuffer(m.data, np.uint8).reshape(m.height, m.width, 3)
+            frames.append((t, m.header.frame_id, a[:, :, ::-1].copy() if m.encoding == "rgb8" else a.copy()))
+
+        def on_info(m):
+            info["K"], info["D"] = np.array(m.k).reshape(3, 3), np.array(m.d, float)
+
+        subs = [self.create_subscription(Image, self.wrist_topic.format(camera=camera), on_img, qos_profile_sensor_data,
+                                         callback_group=self._sub_group),
+                self.create_subscription(CameraInfo, self.wrist_info.format(camera=camera), on_info, qos_profile_sensor_data,
+                                         callback_group=self._sub_group)]
+        try:
+            t0 = time.time()
+            while (len(frames) < n or "K" not in info) and time.time() - t0 < timeout:
+                time.sleep(0.02)
+        finally:
+            for sub in subs:
+                self.destroy_subscription(sub)
+        return frames, info
+
+    def _locate_frame(self, camera, img, frame_id, stamp, K, D, prior, size, fixed_yaw=None):
+        """(centre, yaw, rms, visible) or a failure code, for one wrist frame."""
+        try:
+            tf = self.tf_buf.lookup_transform(self.target, frame_id, Time(seconds=int(stamp), nanoseconds=int((stamp % 1) * 1e9)),
+                                              timeout=Duration(seconds=0.3))
+        except Exception:                                   # noqa: BLE001  (the arm is still: the latest transform will do)
+            try:
+                tf = self.tf_buf.lookup_transform(self.target, frame_id, Time(), timeout=Duration(seconds=0.3))
+            except Exception:                               # noqa: BLE001
+                return "STALE_TF"
+        T_base_cam = _mat(tf)
+        uv0 = wrist_fit.project_cube(np.linalg.inv(T_base_cam), prior, 0.0, size, K, D).mean(axis=0)
+        boxes = self.det(img, thr=self.wrist_min_score)
+        if not boxes:
+            return "NO_DET"
+        box = min(boxes, key=lambda b: math.hypot((b[1] + b[3]) / 2 - uv0[0], (b[2] + b[4]) / 2 - uv0[1]))
+        mask = self.sam(img, box[1:])
+        if mask.sum() < 50:
+            return "NO_MASK"
+        out = wrist_fit.fit_cube(mask, self._occluder(camera), T_base_cam, K, D, size, prior, fixed_yaw)
+        debug_dir = self.get_parameter("wrist_debug_dir").value
+        if debug_dir:
+            dbg = img.copy()
+            dbg[mask] = (0.5 * dbg[mask] + [0, 0, 120]).astype(np.uint8)
+            cv2.rectangle(dbg, (int(box[1]), int(box[2])), (int(box[3]), int(box[4])), (255, 0, 0), 1)
+            cv2.circle(dbg, (int(uv0[0]), int(uv0[1])), 4, (255, 0, 255), -1)
+            if out is not None:
+                uv = wrist_fit.project_cube(np.linalg.inv(T_base_cam), out[0], out[1], size, K, D)
+                cv2.polylines(dbg, [cv2.convexHull(uv.astype(np.float32)).astype(np.int32)], True, (0, 255, 0), 1)
+                cv2.putText(dbg, f"rms {out[2]:.1f} vis {out[3]:.2f} z {out[0][2]:.3f}", (8, 20), cv2.FONT_HERSHEY_SIMPLEX, 0.5, (0, 255, 0), 1)
+            os.makedirs(debug_dir, exist_ok=True)
+            cv2.imwrite(os.path.join(debug_dir, f"{camera}_{stamp:.3f}.jpg"), dbg)
+        if out is None or out[2] > self.get_parameter("wrist_max_rms_px").value:
+            return "NO_FIT"
+        if abs(out[0][2] - prior[2]) > 0.03 or out[3] < 0.3:    # a cube floating or mostly out of sight: a wrong fit
+            return "NO_FIT"
+        return out
+
+    def _on_locate(self, req, res):
+        t_start = time.time()
+        if not self._lock.acquire(blocking=False):
+            res.code = "BUSY"
+            return res
+        try:
+            if req.camera not in ("left", "right"):
+                res.code = "BAD_CAMERA"
+                return res
+            if self._occluder(req.camera) is None:
+                res.code = "NO_OCCLUDER"
+                return res
+            try:
+                self._load(req.prompt)
+            except Exception as e:                          # noqa: BLE001
+                res.code = "BAD_PROMPT"
+                self.get_logger().error(f"cannot load models for {req.prompt!r}: {e}")
+                return res
+            size = (req.size_mm or DEFAULT_SIZE_MM) / 1000.0
+            prior = np.array([req.prior.x, req.prior.y, req.prior.z])
+            frames, info = self._grab_wrist(req.camera, req.frames or 2)
+            if not frames or "K" not in info:
+                res.code = "NO_FRAMES"
+                return res
+            fits, codes = [], []
+            for t, fid, img in frames:
+                out = self._locate_frame(req.camera, img, fid, t, info["K"], info["D"], prior, size,
+                                         float(req.prior_yaw) if req.fix_height_yaw else None)
+                (codes if isinstance(out, str) else fits).append(out)
+            if not fits:
+                res.code = codes[0]
+                return res
+            centres = np.array([f[0] for f in fits])
+            c = np.median(centres, axis=0)
+            yaws = np.array([f[1] for f in fits])
+            yaw = float(np.angle(np.mean(np.exp(4j * yaws))) / 4.0)
+            res.pose = self._pose({"x": float(c[0]), "y": float(c[1]), "z": float(c[2]), "yaw": yaw})
+            res.spread_m = float(max(np.linalg.norm(a[:2] - b[:2]) for a in centres for b in centres))
+            res.rms_px = float(np.mean([f[2] for f in fits]))
+            res.visible = float(np.mean([f[3] for f in fits]))
+            res.success = True
+        finally:
+            self._lock.release()
+        res.latency_ms = float((time.time() - t_start) * 1000.0)
+        self.get_logger().info(f"locate_in_wrist {req.camera} {req.prompt!r}: {res.code or 'ok'} spread {res.spread_m * 1000:.1f} mm "
+                               f"rms {res.rms_px:.1f} px visible {res.visible:.2f} in {res.latency_ms:.0f} ms")
+        return res
 
     def _load(self, prompt):
         if self.det is None:

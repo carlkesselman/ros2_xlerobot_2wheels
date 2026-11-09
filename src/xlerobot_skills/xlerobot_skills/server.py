@@ -38,8 +38,8 @@ from std_srvs.srv import Empty, SetBool
 from tf2_ros import Buffer, TransformListener
 from trajectory_msgs.msg import JointTrajectoryPoint
 from vision_msgs.msg import Detection3DArray
-from xlerobot_object_perception.srv import DetectObjects
-from xlerobot_skill_msgs.action import Approach, Detect, Grasp, LookAt, MoveArm, NavigateTo, Place, Touch
+from xlerobot_object_perception.srv import DetectObjects, LocateInWrist
+from xlerobot_skill_msgs.action import Align, Approach, Detect, Grasp, LookAt, MoveArm, NavigateTo, Place, Touch
 from xlerobot_skill_msgs.msg import SkillResult
 
 from . import geometry as geo
@@ -77,13 +77,24 @@ class SkillServer(Node):
         self.correct_tol = float(P("tip_correction_tolerance_m", 0.005).value)
         self.correct_steps = int(P("tip_correction_steps", 2).value)
         self.max_tip_error = float(P("max_tip_error_m", 0.015).value)
+        self.correct_max_jump = float(P("tip_correction_max_joint_change", 0.5).value)
         self.camera_up_roll = {a: float(P(f"camera_up_wrist_roll_{a}", 1.5708).value) for a in ("left", "right")}
         self.roll_tol = float(P("camera_up_tolerance", 0.6).value)
         self.touch_step = float(P("touch_step_m", 0.003).value)
-        self.touch_travel = float(P("touch_max_travel_m", 0.02).value)
+        self.touch_travel = float(P("touch_max_travel_m", 0.025).value)
         self.touch_early = float(P("touch_early_margin_m", 0.015).value)
-        self.stall_ratio = float(P("touch_stall_ratio", 0.4).value)
+        self.touch_late = float(P("touch_late_margin_m", 0.018).value)
+        self.touch_settle = float(P("touch_settle_s", 0.25).value)
+        self.stall_lag = float(P("touch_stall_lag_m", 0.003).value)
+        self.stall_move = float(P("touch_stall_move_m", 0.0017).value)
         self.load_jump = float(P("touch_load_jump", 0.2).value)
+        self.align_tol = float(P("align_tolerance_m", 0.002).value)
+        self.align_steps = int(P("align_max_steps", 4).value)
+        self.align_frames = int(P("align_frames", 3).value)
+        self.align_view = float(P("align_view_offset_m", 0.02).value)
+        self.align_min_height = float(P("align_min_height_m", 0.01).value)
+        self.align_final = bool(P("align_check_over", True).value)
+        self.gripper_open = float(P("gripper_open", -0.7).value)
         self.loads = {}
         self.tip = {a: [float(v) for v in P(f"tip_offset_{a}", [0.0, 0.0, 0.0]).value] for a in ("left", "right")}
         # grasp and place (see _grasp_offset for the jaw geometry)
@@ -151,6 +162,9 @@ class SkillServer(Node):
         self.grip_ctl = {a: ActionClient(self, FollowJointTrajectory, f"/{a}_gripper_controller/follow_joint_trajectory",
                                          callback_group=self.cb) for a in ("left", "right")}
         self.perception = self.create_client(DetectObjects, "/perception/detect", callback_group=self.cb)
+        self.locate = self.create_client(LocateInWrist, "/perception/locate_in_wrist", callback_group=self.cb)
+        self.gripper_ctl = {a: ActionClient(self, FollowJointTrajectory, f"/{a}_gripper_controller/follow_joint_trajectory",
+                                            callback_group=self.cb) for a in ("left", "right")}
         self.estop_clients = {b: self.create_client(SetBool, f"/emergency_stop_{b}", callback_group=self.cb)
                               for b in ("xlerobot_bus1", "xlerobot_bus2")}
         self.cmd_pub = self.create_publisher(TwistStamped, "/diff_drive_controller/cmd_vel", 10)
@@ -158,11 +172,11 @@ class SkillServer(Node):
         for name, action, fn in (("navigate_to", NavigateTo, self.navigate_to), ("look_at", LookAt, self.look_at),
                                  ("detect", Detect, self.detect), ("move_arm", MoveArm, self.move_arm),
                                  ("approach", Approach, self.approach), ("touch", Touch, self.touch),
-                                 ("grasp", Grasp, self.grasp), ("place", Place, self.place)):
+                                 ("align", Align, self.align), ("grasp", Grasp, self.grasp), ("place", Place, self.place)):
             ActionServer(self, action, f"/skills/{name}", execute_callback=self._wrap(name, action, fn),
                          goal_callback=lambda g: GoalResponse.ACCEPT,
                          cancel_callback=lambda g: CancelResponse.ACCEPT, callback_group=self.cb)
-        self.get_logger().info("skills ready: /skills/{navigate_to, look_at, detect, move_arm, approach, touch, grasp, place}")
+        self.get_logger().info("skills ready: /skills/{navigate_to, look_at, detect, move_arm, approach, touch, align, grasp, place}")
 
     # ---- state ----
     def _on_joints(self, m):
@@ -622,7 +636,15 @@ class SkillServer(Node):
             goal = goal + e
             # stay with this posture: least squares from the current joints, not a fresh IK that may pick another one
             sol, serr = self._solve_tip_ls(arm, goal, overrides)
-            if serr > 0.005:
+            if serr > 0.005:                                     # far from here (the first move from rest): IK, but only
+                ik, ierr = self._solve_tip(arm, goal, overrides)  # if it keeps the posture (no swing through the scene)
+                here = {j: self.joints[j] for j in motion.GROUP_JOINTS[group]}
+                jump = max(abs(ik[j] - here[j]) for j in here if j in ik) if ik is not None else float("nan")
+                self.get_logger().info(f"{skill}: correction by IK, error {ierr if ierr is not None else float('nan'):.4f} m, "
+                                       f"largest joint change {jump:.2f} rad")
+                if ik is not None and ierr < serr and jump < self.correct_max_jump:
+                    sol, serr = ik, ierr
+            if serr > 0.01:                                      # a partial correction still helps: the next step refines it
                 break
             if feedback is not None:
                 feedback("correcting")
@@ -875,34 +897,68 @@ class SkillServer(Node):
             prev_load = self._load(arm, 0.4)
             # Steps are taken on the measured tool point: each command aims one step below where the tip really is,
             # corrected by how far the last command missed (the arm sags under gravity), and the travel limit is
-            # checked against the measured height, never the commanded one.
+            # checked against the measured height, never the commanded one. The same feedback steers the tip over
+            # the object's centre on the way down: approach leaves it up to 15 mm off, enough to land on an edge.
             z_prev = tip0[2]
             sag = 0.0
+            xy_bias = np.zeros(2)
+            tip_now = tip0
             q_cmd = {j: self.joints[j] for j in joints}
             R0 = self._fk(arm, q_cmd)[:3, :3]
-            stalls, contact = 0, None
+            lags, contact = [], None                             # (height before the step, how far it fell short)
+
+            # Settle over the object first: the corrections take a few commands to converge, and while they do the tip
+            # overshoots and then lags, which would look like contact.
+            for _ in range(6):
+                xy_cmd = centre[:2] + xy_bias
+                sol, miss = self._solve_fixed_hand(arm, q_cmd, (xy_cmd[0], xy_cmd[1], tip0[2] + sag), R0)
+                if miss > 0.002:
+                    raise SkillError(R.NOT_REACHABLE, f"the hand cannot reach over the object's centre at this angle ({miss * 1000:.0f} mm off)")
+                q_cmd = sol
+                self._joints_to(goal_handle, self.arm_ctl[arm], joints, [sol[j] for j in joints], 0.35, bus, f"{arm}_arm_controller")
+                time.sleep(self.touch_settle)
+                tip_now = self._tip_in_base(arm)
+                err = np.append(centre[:2], tip0[2]) - tip_now
+                sag = float(np.clip(sag + err[2] * 0.7, -0.03, 0.03))
+                xy_bias = np.clip(xy_bias + err[:2] * 0.7, -0.02, 0.02)
+                if np.linalg.norm(err) < 0.0015:
+                    break
+            z_prev = tip_now[2]
+            prev_load = self._load(arm, 0.3)
             while z_prev > floor + 0.0005:
                 z_goal = max(z_prev - step, floor)
                 z_cmd = z_goal + sag
-                sol, miss = self._solve_fixed_hand(arm, q_cmd, (tip0[0], tip0[1], z_cmd), R0)
+                xy_cmd = centre[:2] + xy_bias
+                sol, miss = self._solve_fixed_hand(arm, q_cmd, (xy_cmd[0], xy_cmd[1], z_cmd), R0)
                 if miss > 0.002:
                     raise SkillError(R.NOT_REACHABLE, f"the hand cannot go lower at this angle (z {z_cmd:.3f}, {miss * 1000:.0f} mm off)")
                 q_cmd = sol
                 self._joints_to(goal_handle, self.arm_ctl[arm], joints, [sol[j] for j in joints], 0.35, bus, f"{arm}_arm_controller")
-                time.sleep(0.15)
-                z_now = self._tip_in_base(arm)[2]
+                time.sleep(self.touch_settle)
+                tip_now = self._tip_in_base(arm)
+                z_now = tip_now[2]
                 load = self._load(arm)
                 moved, wanted = z_prev - z_now, z_prev - z_goal
                 sag = float(np.clip(sag + (z_goal - z_now) * 0.7, -0.03, 0.03))
+                xy_bias = np.clip(xy_bias + (centre[:2] - tip_now[:2]) * 0.7, -0.02, 0.02)
                 dload = float(np.max(np.abs(load - prev_load)))
-                stalls = stalls + 1 if wanted > 0.001 and moved < self.stall_ratio * wanted else 0
+                # The servos stick and slip on small steps (a step can fall 1.5 mm short in free air and catch up on
+                # the next), so the shortfall is summed with its sign, and only near the expected top: higher up, only
+                # a load jump counts.
+                lags = (lags + [(z_prev, wanted - moved, moved)])[-3:] if z_prev <= top + self.touch_early else []
+                # and on contact the tip nearly stops: free air has single slow steps, not two in a row
+                stopped = len(lags) == 3 and all(m < self.stall_move for _, _, m in lags[1:])
+                lag = sum(d for _, d, _ in lags) if stopped else 0.0
                 fb.tool_z, fb.load_change = float(z_now), dload
                 goal_handle.publish_feedback(fb)
                 self.get_logger().info(f"touch: goal {z_goal:.4f} cmd {z_cmd:.4f} tip {z_now:.4f} moved {moved * 1000:.1f}/{wanted * 1000:.1f} mm, "
+                                       f"{np.linalg.norm(tip_now[:2] - centre[:2]) * 1000:.1f} mm beside, "
                                        f"load {np.round(load, 3).tolist()} change {dload:.3f}")
-                by = [n for n, hit in (("stall", stalls >= 2), ("load", dload > self.load_jump)) if hit]
+                by = [n for n, hit in (("stall", lag >= self.stall_lag), ("load", dload > self.load_jump)) if hit]
                 if by:
-                    contact = (z_now, "+".join(by))
+                    # the tip met the object where it first fell behind, not where the lag added up
+                    first = next((z for z, d, _ in lags if d > 0.0005), z_now) if "stall" in by else z_now
+                    contact = (first, "+".join(by))
                     break
                 z_prev, prev_load = z_now, load
             if contact is None:
@@ -913,7 +969,11 @@ class SkillServer(Node):
             off = contact[0] - top
             if off > self.touch_early:
                 raise SkillError(R.COLLISION, f"contact {off * 1000:.0f} mm above the object's top ({contact[1]}): something is in the way")
-            result.result.message = f"contact {off * 1000:+.0f} mm from the expected top, sensed by {contact[1]}"
+            beside = np.linalg.norm(tip_now[:2] - centre[:2]) * 1000
+            if off < -self.touch_late:
+                raise SkillError(R.LOST_OBJECT, f"contact {-off * 1000:.0f} mm below the object's top ({contact[1]}, {beside:.0f} mm "
+                                                "beside its centre): the tool point probably slid off its side and pushed it")
+            result.result.message = f"contact {off * 1000:+.0f} mm from the expected top, {beside:.0f} mm beside its centre, sensed by {contact[1]}"
         except SkillError as e:
             if e.code == R.SAFETY_STOP:
                 retreat = False
@@ -927,6 +987,159 @@ class SkillServer(Node):
             finally:
                 self.destroy_subscription(load_sub)
                 self._release([bus])
+
+    def _locate_in_wrist(self, goal_handle, arm, prompt, size, prior, timeout=30.0, yaw=None):
+        """The object's centre (base frame) and yaw measured by the arm's wrist camera; with `yaw`, only x and y are
+        measured (the height from the prior)."""
+        if not self.locate.wait_for_service(timeout_sec=3.0):
+            raise SkillError(R.FAILED, "the object perception service (/perception/locate_in_wrist) is not running")
+        req = LocateInWrist.Request(camera=arm, prompt=prompt, size_mm=float(size) * 1000.0, frames=self.align_frames,
+                                    prior=Point(x=float(prior[0]), y=float(prior[1]), z=float(prior[2])),
+                                    fix_height_yaw=yaw is not None, prior_yaw=float(yaw or 0.0))
+        res = self._wait(self.locate.call_async(req), timeout, goal_handle, guard=False)
+        if not res.success:
+            if res.code in ("NO_DET", "NO_MASK", "NO_FIT"):
+                raise SkillError(R.LOST_OBJECT, f"the {arm} wrist camera does not see '{prompt}' ({res.code})")
+            raise SkillError(R.FAILED, f"perception: {res.code}")
+        p = res.pose.position
+        return np.array([p.x, p.y, p.z]), geo.yaw_of_matrix(geo.pose_to_matrix(res.pose)[:3, :3]), res
+
+    def _hold_tip(self, goal_handle, arm, joints, bus, q_cmd, R0, target, tries=5, tol=0.0007):
+        """Put the tool point at `target` (base frame) with the hand's orientation R0, correcting by the encoders."""
+        bias = np.zeros(3)
+        tip_now = self._tip_in_base(arm)
+        for _ in range(tries):
+            sol, miss = self._solve_fixed_hand(arm, q_cmd, tuple(np.asarray(target) + bias), R0)
+            if miss > 0.002:
+                raise SkillError(R.NOT_REACHABLE, f"the hand cannot reach {np.round(target, 3).tolist()} at this angle "
+                                                  f"({miss * 1000:.0f} mm off)")
+            q_cmd = sol
+            self._joints_to(goal_handle, self.arm_ctl[arm], joints, [sol[j] for j in joints], 0.4, bus, f"{arm}_arm_controller")
+            time.sleep(self.touch_settle)
+            tip_now = self._tip_in_base(arm)
+            err = np.asarray(target) - tip_now
+            if np.linalg.norm(err) < tol:
+                break
+            bias = np.clip(bias + err * 0.7, -0.03, 0.03)
+        return q_cmd, tip_now
+
+    def align(self, goal_handle, result):
+        g = goal_handle.request
+        if g.arm not in ("left", "right"):
+            raise SkillError(R.FAILED, "arm must be left or right")
+        arm, group = g.arm, f"{g.arm}_arm"
+        size = g.object.size_m or 0.028
+        prior = self._point_in(BASE_FRAME, g.object.pose)
+        tol = g.tolerance_m or self.align_tol
+        rounds = g.max_steps or self.align_steps
+        tip = self._tip_in_base(arm)
+        if np.linalg.norm(tip[:2] - prior[:2]) > 0.03 or tip[2] < prior[2] + size / 2 + 0.01:
+            raise SkillError(R.FAILED, "the tool point is not above the object: approach first")
+        self._require_safe()
+        bus = motion.GROUP_BUS[group]
+        self._claim("align", [bus])
+        joints = motion.GROUP_JOINTS[group]
+        fb = Align.Feedback(phase="opening")
+        goal_handle.publish_feedback(fb)
+        try:
+            # the moving jaw would hide the object from the wrist camera
+            self._joints_to(goal_handle, self.gripper_ctl[arm], [f"{arm}_arm_gripper_joint"], [self.gripper_open], 0.8, bus,
+                            f"{arm}_gripper_controller")
+            q_cmd = {j: self.joints[j] for j in joints}
+            R0 = self._fk(arm, q_cmd)[:3, :3]
+            height = float(tip[2])
+            if g.height_m > 0.0:
+                # measure at the working height: lowering after the last check would add the arm's sag, which changes
+                # with the pose and which the encoders do not see
+                fb.phase = "lowering"
+                goal_handle.publish_feedback(fb)
+                work = prior[2] + size / 2.0 + max(g.height_m, self.align_min_height)
+                for z in list(np.arange(height, work, -0.01)[1:]) + [work]:
+                    q_cmd, tip = self._hold_tip(goal_handle, arm, joints, bus, q_cmd, R0, (tip[0], tip[1], z), tries=2)
+                height = work
+            # Over the object, the claw hides most of it from the wrist camera. Measure from beside it instead: the tip
+            # shifted toward the image's left, so the object shows whole to the right of the claw. The object's centre
+            # and the tip both come through the arm's kinematics, a few centimetres apart: their errors cancel.
+            cam = self._lookup(BASE_FRAME, f"{arm}_arm_wrist_camera_optical_frame")[:3, 0]
+            side = np.array([cam[0], cam[1]]) / max(np.linalg.norm(cam[:2]), 1e-6)
+
+            def measure(target_xy, what):
+                nonlocal q_cmd
+                fb.phase = "moving"
+                goal_handle.publish_feedback(fb)
+                view = np.asarray(target_xy) - self.align_view * side
+                q_cmd, _ = self._hold_tip(goal_handle, arm, joints, bus, q_cmd, R0, (view[0], view[1], height))
+                fb.phase = "measuring"
+                goal_handle.publish_feedback(fb)
+                time.sleep(0.3)
+                centre, yaw, m = self._locate_in_wrist(goal_handle, arm, g.object.prompt, size, prior)
+                self.get_logger().info(f"align: {what}: object at {np.round(centre * 1000, 1).tolist()} mm, spread "
+                                       f"{m.spread_m * 1000:.1f} mm, rms {m.rms_px:.1f} px, visible {m.visible:.2f}")
+                return centre, yaw
+
+            check, yaw = measure(prior[:2], "first look")
+            target, steps = check[:2].copy(), 0
+            while True:
+                q_cmd, at = self._hold_tip(goal_handle, arm, joints, bus, q_cmd, R0, (target[0], target[1], height))
+                steps += 1
+                prior = check
+                check, yaw = measure(target, f"check {steps}")
+                off = check[:2] - at[:2]                         # the object's centre minus where the tip was over it
+                fb.offset_m = float(np.linalg.norm(off))
+                goal_handle.publish_feedback(fb)
+                self.get_logger().info(f"align: after move {steps} the tip was {np.round(off * 1000, 1).tolist()} mm from the centre")
+                if np.linalg.norm(off) <= tol or steps >= rounds:
+                    break
+                target = target + off
+            q_cmd, at = self._hold_tip(goal_handle, arm, joints, bus, q_cmd, R0, (target[0], target[1], height))
+            # Then measure where the tip ends up: the claw hides part of the object here, so only x and y are fitted,
+            # the height and yaw from the looks from beside. The hand turns a little between the two poses (servo play
+            # the encoders do not see), which this catches.
+            final = None
+            if np.linalg.norm(off) <= tol and self.align_final:
+                for k in range(self.align_steps):
+                    fb.phase = "measuring"
+                    goal_handle.publish_feedback(fb)
+                    time.sleep(0.3)
+                    try:
+                        here, _, m = self._locate_in_wrist(goal_handle, arm, g.object.prompt, size, check, yaw=yaw)
+                    except SkillError as e:
+                        if e.code != R.LOST_OBJECT:
+                            raise
+                        self.get_logger().info(f"align: over the object the wrist camera cannot measure it ({e}); "
+                                               "keeping the result from beside it")
+                        break
+                    tip_now = self._tip_in_base(arm)
+                    final = here[:2] - tip_now[:2]
+                    self.get_logger().info(f"align: over it, the tip is {np.round(final * 1000, 1).tolist()} mm from the "
+                                           f"centre (rms {m.rms_px:.1f} px, visible {m.visible:.2f})")
+                    check = np.array([here[0], here[1], check[2]])
+                    if np.linalg.norm(final) <= tol or k == self.align_steps - 1:
+                        break
+                    target = tip_now[:2] + final
+                    q_cmd, at = self._hold_tip(goal_handle, arm, joints, bus, q_cmd, R0, (target[0], target[1], height))
+                    steps += 1
+                if final is not None:
+                    off = final
+            out = PoseStamped()
+            out.header.frame_id = g.object.pose.header.frame_id or BASE_FRAME
+            c_, s_ = math.cos(yaw), math.sin(yaw)
+            M = np.eye(4)
+            M[:3, :3], M[:3, 3] = [[c_, -s_, 0.0], [s_, c_, 0.0], [0.0, 0.0, 1.0]], check
+            Mo = self._lookup(out.header.frame_id, BASE_FRAME) @ M
+            out.pose.position = Point(x=float(Mo[0, 3]), y=float(Mo[1, 3]), z=float(Mo[2, 3]))
+            o = out.pose.orientation
+            o.x, o.y, o.z, o.w = geo.yaw_quat(geo.yaw_of_matrix(Mo[:3, :3]))
+            result.object_pose = out
+            result.offset_m, result.offset_x_m, result.offset_y_m = float(np.linalg.norm(off)), float(off[0]), float(off[1])
+            result.steps = steps
+            if np.linalg.norm(off) > tol:
+                raise SkillError(R.NOT_REACHABLE, f"the claw tip was still {np.linalg.norm(off) * 1000:.1f} mm from the object's "
+                                                  f"centre after {steps} moves (wrist camera)")
+            result.result.message = (f"claw tip over the object's centre within {np.linalg.norm(off) * 1000:.1f} mm by the wrist "
+                                     f"camera after {steps} move{'s' if steps != 1 else ''}")
+        finally:
+            self._release([bus])
 
     def _detect(self, goal_handle, prompt, label, size_m, frames, timeout=30.0):
         if not self.perception.wait_for_service(timeout_sec=3.0):

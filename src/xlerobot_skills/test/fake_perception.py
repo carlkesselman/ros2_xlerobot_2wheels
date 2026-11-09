@@ -1,9 +1,11 @@
 #!/usr/bin/env python3
-"""Stands in for the object perception service in tests: answers /perception/detect from a scripted scene.
+"""Stands in for the object perception service in tests: answers /perception/detect and /perception/locate_in_wrist
+from a scripted scene.
 
-The scene is a JSON message on /fake_perception/scene (latched): {"objects": [[x, y, z], ...], "codes": [...]},
-positions in base_footprint (the centre of each object). An empty object list answers NO_DET; codes such as BUSY are
-returned as they are.
+The scene is a JSON message on /fake_perception/scene (latched): {"objects": [[x, y, z], ...], "codes": [...],
+"wrist_offset": [dx, dy, dz]}, positions in base_footprint (the centre of each object). An empty object list answers
+NO_DET; codes such as BUSY are returned as they are. The wrist camera sees the object nearest the prior (within 5 cm)
+shifted by wrist_offset: the head camera's error that align has to correct.
 """
 import json
 
@@ -12,7 +14,7 @@ from rclpy.node import Node
 from rclpy.qos import DurabilityPolicy, QoSProfile, ReliabilityPolicy
 from std_msgs.msg import String
 from vision_msgs.msg import Detection3D, ObjectHypothesisWithPose
-from xlerobot_object_perception.srv import DetectObjects
+from xlerobot_object_perception.srv import DetectObjects, LocateInWrist
 
 
 class FakePerception(Node):
@@ -22,6 +24,7 @@ class FakePerception(Node):
         latched = QoSProfile(depth=1, reliability=ReliabilityPolicy.RELIABLE, durability=DurabilityPolicy.TRANSIENT_LOCAL)
         self.create_subscription(String, "/fake_perception/scene", self._on_scene, latched)
         self.create_service(DetectObjects, "/perception/detect", self._on_detect)
+        self.create_service(LocateInWrist, "/perception/locate_in_wrist", self._on_locate)
 
     def _on_scene(self, m):
         self.scene = json.loads(m.data)
@@ -45,6 +48,21 @@ class FakePerception(Node):
             res.heights_m.append(size)
         res.codes = list(self.scene.get("codes", [])) or ([] if res.detections.detections else ["NO_DET"])
         res.success = bool(res.detections.detections)
+        return res
+
+
+    def _on_locate(self, req, res):
+        objs = self.scene.get("objects", [])
+        prior = (req.prior.x, req.prior.y)
+        near = [o for o in objs if ((o[0] - prior[0]) ** 2 + (o[1] - prior[1]) ** 2) ** 0.5 < 0.05]
+        if not near:
+            res.code = "NO_DET"
+            return res
+        o = min(near, key=lambda o: (o[0] - prior[0]) ** 2 + (o[1] - prior[1]) ** 2)
+        dx, dy, dz = self.scene.get("wrist_offset", [0.0, 0.0, 0.0])
+        res.pose.position.x, res.pose.position.y, res.pose.position.z = float(o[0] + dx), float(o[1] + dy), float(o[2] + dz)
+        res.pose.orientation.w = 1.0
+        res.success, res.visible, res.rms_px = True, 1.0, 1.0
         return res
 
 

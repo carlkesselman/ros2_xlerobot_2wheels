@@ -42,6 +42,8 @@ SKILLS = {
     "approach": {"arm": (str, True), "object": (str, True), "height_m": (float, False), "scaling": (float, False)},
     "touch": {"arm": (str, True), "object": (str, True), "max_travel_m": (float, False), "step_m": (float, False),
               "stay": (bool, False)},
+    "align": {"arm": (str, True), "object": (str, True), "tolerance_m": (float, False), "max_steps": (float, False),
+              "height_m": (float, False)},
     "grasp": {"arm": (str, True), "object": (str, True), "lift_m": (float, False), "scaling": (float, False)},
     "place": {"arm": (str, True), "location": (str, False), "object": (str, False), "point": (list, False),
               "frame": (str, False), "held_size_m": (float, False), "scaling": (float, False)},
@@ -129,7 +131,7 @@ def validate(plan, known_positions=None, known_waypoints=None):
                 errors.append(f"{where}: {p} {params[p]!r} names no object in the plan")
         if skill == "place" and sum(p in params for p in ("location", "object", "point")) != 1:
             errors.append(f"{where}: place needs exactly one of location, object or point")
-        if skill in ("approach", "touch", "look_at", "grasp", "place") and "object" in params and "pose" not in objects.get(params["object"], {}) \
+        if skill in ("approach", "touch", "align", "look_at", "grasp", "place") and "object" in params and "pose" not in objects.get(params["object"], {}) \
                 and not any(isinstance(t, dict) and t.get("skill") == "detect" and t.get("params", {}).get("bind") == params["object"]
                             for t in steps[:k]):
             errors.append(f"{where}: object {params['object']!r} has no pose and no earlier detect binds it")

@@ -134,6 +134,7 @@ The order to run the calibrations in, and where each result goes, is in [setup.m
 | `cube_pose_eval.py` | Measures the head camera's cube pose on the placement sheet with a colour threshold (no learned model), and saves every frame for comparing models later. |
 | `segment_eval.py` | Scores detectors and mask models (OWLv2, OWL-ViT, Grounding DINO, YOLO-World; SAM 2, MobileSAM, EfficientViT-SAM, also on TensorRT) on saved frames through the same pose fit. Needs the models venv (`tools/setup_venv.sh models`). |
 | `perception_check.py` | Calls the object pose service while the head camera sees the placement sheet and prints the error to the nearest footprint. |
+| `wrist_occluder.py` | The claw's mask in a wrist camera's image (the claw stays at the same pixels while the scene moves), for the wrist camera pose fit. |
 | `perception/export_models.py`, `perception/build_engines.sh` | Export the models to ONNX (with torch) and build TensorRT engines on the robot, see [the package README](../src/xlerobot_object_perception/README.md). |
 
 ## Spatial memory

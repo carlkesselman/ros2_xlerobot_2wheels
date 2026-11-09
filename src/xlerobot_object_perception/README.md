@@ -14,6 +14,21 @@ the given size to the mask (`objperc/cube_fit.py`). Frames are merged by positio
 `vision_msgs/Detection3DArray` in `base_footprint` (also published on `/perception/detections`), the height of each top face from the
 depth, status codes (`NO_DET`, `NO_MASK`, `FEW_DEPTH`, `SIZE_OOR`, `STALE_TF`, `BAD_PROMPT`, `NO_FRAMES`) and the latency. About 1.7 s for three frames on the Orin NX.
 
+## Wrist cameras
+
+`/perception/locate_in_wrist` (`srv/LocateInWrist.srv`) finds one cube-shaped object near a given position in a wrist
+camera's view, for the last millimetres before touching or grasping (the `align` skill). Per frame: OWLv2's box nearest
+the expected position, the mask, and a cube of known size fitted to the mask's outline (`objperc/wrist_fit.py`). The
+claw hides part of what the camera sees; a fixed mask per camera marks it (`config/wrist_occluder_<arm>.png`, made with
+`tools/wrist_occluder.py`; the ones here are the reference robot's printed claws), so the outline next to the claw is not
+taken for the object's edge. The cube's size fixes its distance. The pose comes through the arm's kinematics, so the
+offset to the claw tip does not depend on the arm's absolute accuracy. With `fix_height_yaw` only x and y are fitted, the height and yaw
+given: enough when the claw hides much of the object, as with the claw tip right over it.
+
+On the reference robot, with the object whole in view, repeated calls at a still pose agree to 0.3 mm horizontally and
+2 mm in height; about 0.9 s for three frames. `wrist_debug_dir` (a parameter, settable at run time) saves every frame
+with its mask and fitted outline.
+
 ## Setup
 
 1. On a machine with an NVIDIA GPU and torch (`tools/setup_venv.sh models`, see [docs/tools.md](../../docs/tools.md#python-environment)):

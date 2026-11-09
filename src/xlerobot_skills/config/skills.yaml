@@ -7,30 +7,46 @@ skill_server:
     head_camera_frame_fallback: head_camera_optical_frame   # the model's frame while no camera_info has arrived
     look_at_tolerance_deg: 2.0
     approach_height_m: 0.05       # gap between the object's top and the claw tip
-    # The tool point (claw tip) in each arm's gripper_link frame. Printed claws lie along the link's -y axis; their
-    # length depends on the print (these are the reference robot's: right 13.2 cm, left about 11 cm). Measure yours,
-    # e.g. by resting the tip on the table and finding it in the wrist camera image.
     tip_correction_tolerance_m: 0.005   # re-aim the tool point while it lands farther than this from the goal
     tip_correction_steps: 2
+    tip_correction_max_joint_change: 0.5   # a correction by IK may turn no joint further (rad): no swing through the scene
     max_tip_error_m: 0.015        # a tool-point move that ends farther than this (by the encoders) fails NOT_REACHABLE
     # approach keeps the wrist camera above the hand (clear of the table, looking down at the target): wrist roll
     camera_up_wrist_roll_left: 1.5708
     camera_up_wrist_roll_right: 1.5708
     camera_up_tolerance: 0.6
+    # The tool point (claw tip) in each arm's gripper_link frame. Printed claws lie along the link's -y axis; their
+    # length depends on the print (these are the reference robot's: right about 12.7 cm, left about 11 cm). Measure
+    # yours: align the tip over a cube (the align skill, height_m a few mm) and see where it really is with a camera
+    # above; the right arm's value here was measured that way.
     tip_offset_left: [0.0, -0.111, 0.0]
-    tip_offset_right: [0.0, -0.132, 0.0]
+    tip_offset_right: [0.0005, -0.1259, 0.0041]
     table_margin_m: 0.025         # the table box's top above the measured table: the arms sag 1-2 cm below the model
     table_box_min_x: 0.20         # the table box starts this far in front; the resting claws hang down to table height closer in
     association_gate_m: 0.05      # how far a re-detection may be from the object reference
     nav_timeout_s: 120.0
     arm_timeout_s: 60.0
     default_scaling: 1.0          # arm speed when a goal gives none (MoveIt reads 0 as full speed anyway)
-    # touch: straight down in steps until the tool point stops following (two steps in a row) or the load jumps
+    # align: the claw tip over an object's centre by the wrist camera (/perception/locate_in_wrist)
+    align_tolerance_m: 0.002
+    align_max_steps: 4
+    align_frames: 3               # wrist frames fitted per measurement
+    align_view_offset_m: 0.02     # measure from beside the object, the tip shifted toward the image's left
+    align_min_height_m: 0.01      # lowest working gap above the object's top with height_m
+    align_check_over: true        # measure again over the object (x and y only) and correct there
+    gripper_open: -0.7            # the gripper joint while aligning (the moving jaw out of the camera's view)
+    # touch: straight down in steps until the tool point falls behind the commands or the load jumps
     touch_step_m: 0.003
-    touch_max_travel_m: 0.02      # past the expected contact
+    touch_max_travel_m: 0.025     # past the expected contact
     touch_early_margin_m: 0.015   # contact this far above the expected top is something in the way
-    touch_stall_ratio: 0.4        # a step that moves less than this share of the command is a stall
-    touch_load_jump: 0.2          # effort change between steps on shoulder lift, elbow or wrist flex
+    touch_late_margin_m: 0.018    # contact this far below it: the tool point slid off the object's side (LOST_OBJECT); on the
+                                  # reference robot contact on top is 8-15 mm below where perception expects it (issue #16)
+    touch_settle_s: 0.25          # wait after each step before reading the tool point (the servos settle under load)
+    touch_stall_lag_m: 0.003      # contact: the tool point fell this far behind the commanded steps over the last three,
+                                  # counted from touch_early_margin_m above the expected top (on a cube 4-8 mm)
+    touch_stall_move_m: 0.0017    # ... and the last two steps each moved less than this (on a cube under 1.6 mm)
+    touch_load_jump: 0.2          # effort change between steps on shoulder lift, elbow or wrist flex; a guard for hard hits,
+                                  # a light contact on a cube changes the load by less than 0.05
     # grasp and place. In the gripper link frame the claw points along -y and the moving jaw closes along +x onto the
     # fixed jaw, whose inner face is at x = grasp_fixed_jaw_x (the CAD's, 2026-11-03; the claw tip is tip_offset).
     grasp_fixed_jaw_x_left: 0.008

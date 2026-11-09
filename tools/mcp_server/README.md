@@ -45,9 +45,22 @@ visible otherwise, regardless of what's sourced in the shell that started Claude
 4. `ros2 launch xlerobot_teleop mcp_presence.launch.py` (needs `/joy` already up from step 1)
 
 Read-only tools (`list_positions`, `list_waypoints`, `get_joint_states`, `get_robot_pose`,
-`get_status`, `capture_image`, `recall_objects`) work without step 4 - they don't move
+`get_status`, `capture_image`, `recall_objects`, `describe_scene`, `wait_for_event`, `get_execution_state`) work without step 4 - they don't move
 anything, and neither do `remember_object`/`forget_object` (same reasoning, they only read
 cached sensor/TF state and write a YAML file).
+
+## Plans
+
+For a task of many steps, the agent writes a plan and the executive on the robot runs it
+([ADR-0006](../../docs/decisions/0006-plan-execute-watch.md), `src/xlerobot_executive`); needs the stack with
+`object_perception:=true skills:=true executive:=true`.
+
+- `describe_scene(prompt)`: the objects found for a prompt, numbered, with pose, size and score, and a head camera
+  frame with the same numbers drawn on them;
+- `submit_plan(plan)`: validates and starts a plan, or returns every problem with it (needs presence);
+- `wait_for_event(after_seq, max_wait_s)`: the plan's events after a sequence number, waiting up to 30 s; call it at
+  least once a minute while a plan runs, or the executive retreats the arms and aborts the plan;
+- `get_execution_state`, `control_plan(pause | resume | abort)` (resume needs presence).
 
 ## Presence heartbeat
 
