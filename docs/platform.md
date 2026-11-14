@@ -88,7 +88,7 @@ breaks its name silently. The D415 needs librealsense's `99-realsense-libusb.rul
 
 LDROBOT LD19 (Waveshare D500 developer kit), USB serial adapter, 230400 baud, `/dev/ldlidar`. Mounted low on the cart:
 centreline, over the drive axle, in the gap between the bottom basket's rim and the middle basket's underside, scan
-plane about 0.30-0.35 m (to be mounted and measured). The head spacer in `XLeRobot/hardware/lidar_bracket/` is retired.
+plane 0.375 m (built and measured 2026-11-13). The head spacer in `XLeRobot/hardware/lidar_bracket/` is retired.
 
 ## 4. USB
 
@@ -189,11 +189,11 @@ robot's value standing in; "—" = no value yet. Where: `dims` = `robot_dimensio
 
 | Measurement | Value | Status | How |
 |---|---|---|---|
-| x, y from the drive axle / centreline | 0, 0 | bracket design (XLeRobot/hardware/lidar_bracket): axis over the drive axle, on the centreline | plumb line from the LD19 axis to the axle |
-| Mounting surface height (middle basket's underside) | 0.415 m (scan plane 0.382, head bottom 0.374) | cart, 2026-11-01 | tape, floor to the underside of the middle basket's mesh floor |
-| Scan plane to mounting surface | 0.033 m | bracket design: 6 mm plate + 27 mm (LD19 base to scan plane); head bottom 40.8 mm under the basket | |
-| Upside down | true | bracket design | as mounted |
-| Yaw (forward arrow vs robot front) | +90° | bracket design (arrow to the robot's left, connector to the rear) | checked in RViz against a wall ahead |
+| x, y from the drive axle / centreline | 0, 0 | cart, 2026-11-13: over the axle, centred (bracket: Fusion "Lidar Base") | plumb line from the LD19 axis to the axle |
+| Mounting surface height (the LD19's base) | 0.402 m (scan plane 0.375, head bottom 0.367) | cart, 2026-11-13: lower plate's bottom 15 7/8 in less the 1.2 mm boss plate; LD19's bottom 14 1/2 in (0.368) agrees | tape, floor to the lower plate and to the LD19's bottom |
+| Scan plane to mounting surface | 0.027 m | LD19 base to scan plane (the 6 mm plate is now below the mounting surface, not in this value) | |
+| Upside down | true | cart, 2026-11-13 | as mounted |
+| Yaw (forward arrow vs robot front) | +90° | cart, 2026-11-13: arrow to the robot's left | checked in RViz against a wall ahead |
 | Corner posts removed from the scan | box in base_link x -0.40..0.02, y ±0.25 | front posts (about 0.20 m away) fall under range_min 0.30; the rear ones (about 0.38 m, ±148°) are dropped by `config/laser_filters.yaml` on the way from `/ldlidar_node/scan` to `/scan`. Checked on a synthetic scan, 2026-11-01 | RViz: `/scan` against the raw scan once mounted |
 
 ### 6.3 Head and D415
@@ -213,7 +213,7 @@ robot's value standing in; "—" = no value yet. Where: `dims` = `robot_dimensio
 
 | Measurement | Value | Status | How |
 |---|---|---|---|
-| Arm mount x, y (pan axes), z (base bottom), yaw | **model: 0.0593 behind, ±0.1356, 0.759 m, forward (`shoulders: front_corners`, Fusion "XLeRobot 0.4 Upper Body Split Shoulders" with the basket measured 2026-11-04; not built, measure once the arm boxes are clamped in, see docs/arm-layouts)**. Built today: 0.239 behind, ±0.1329, 0.760 m, forward | rear values: cart, CAD (Fusion upper body), 2026-11-02: pan axes 67 mm ahead of the shoulders' backs against the inside of the rear wall, 265.7 mm apart; z from the neck box's slot resting on the rim (tape 0.765); yaw ref. The reference robot's mount and frame corrections are reset | CAD |
+| Arm mount x, y (pan axes), z (base bottom), yaw | **0.054 behind, ±0.1356, 0.772 m, forward (`shoulders: front_corners`, Fusion "XLeRobot 0.4 Upper Body Split Shoulders"), built and measured 2026-11-13: horn to axle 54 mm both arms, horn to horn 10 11/16 in, platform 1/4 in under the rim (CAD 0.0593, 0.759)**. The rear shoulders are retired | rear values: cart, CAD (Fusion upper body), 2026-11-02: pan axes 67 mm ahead of the shoulders' backs against the inside of the rear wall, 265.7 mm apart; z from the neck box's slot resting on the rim (tape 0.765); yaw ref. The reference robot's mount and frame corrections are reset | CAD |
 | Servo calibration (`zero_step` per joint) | ref values | ref; lerobot JSONs exist on elroy | `tools/calibrate_arm.py`, arms held straight |
 | Model offsets, frame and mount corrections | ref values | ref | `tools/calibrate_arm_camera.py` (ChArUco, 20 poses per arm), `tools/arm_accuracy.py --fit` |
 | Wrist camera extrinsics | ref values | ref | `calibrate_arm_camera.py` |

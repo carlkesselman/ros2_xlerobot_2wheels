@@ -127,8 +127,14 @@ xlerobot:
     #    don't support.
     # Heights follow the CAD (arms: mount_z): pan horn face 1.1178 m (tape 1.118 to the top of
     # the pan servo), D415 front glass centre 1.1964 (tape 1.200).
+    # checked on the built cart 2026-11-13: pan horn centre about 1/2 in behind the rear rim's outside
+    # (0.316 + 0.0127 = 0.329), the CAD's 0.328 kept
     mount_x: 0.328
     mount_y: 0.0
+    # Height reference for the neck and head: the CAD arm-base height, which the head's Fusion
+    # points are measured from (pan horn face 1.1178). Kept apart from arms: mount_z since the arms
+    # moved to their own boxes (2026-11-13).
+    mount_z: 0.7593
     # that URDF's limits, TODO check against the mechanical stops
     pan_limit_lower: -3.2       # rad
     pan_limit_upper:  3.2
@@ -179,14 +185,21 @@ xlerobot:
   #   unchanged). All three stand on the basket's mesh floor, clamped from below, and nothing is
   #   drilled. Basket inside measured 2026-11-04 (0.280 x 0.394 x 0.088, rear wall inside 0.3058
   #   behind the axle as before), so the pan axes are at 0.0593 behind the axle, 0.1356 from the
-  #   centreline, base bottom 72.3 mm above the floor. Not built yet: the URDF has a box
-  #   placeholder under each base. Measure once built, and refit frame_correction/mount_correction.
+  #   centreline, base bottom 72.3 mm above the floor. Built 2026-11-13 (neck base with a full-width
+  #   skirt, outside screws and a floor clamp; arm boxes clamped to the floor) and measured: pan axes
+  #   0.054 behind the axle, the arm platforms 0.772 up (values below). The URDF still has a box
+  #   placeholder under each base. Refit frame_correction/mount_correction once the arms are calibrated.
   #   Reach study: docs/arm-layouts/README.md (0.32 m past a table edge vs 0.14 m for rear).
   shoulders: front_corners
   arms:
-    mount_x: 0.0593
+    # measured on the built cart 2026-11-13: pan horn centre 54 mm behind the axle line (CAD 59.3)
+    mount_x: 0.054
+    # measured 2026-11-13: horn centre to horn centre 10 11/16 in (271.5 mm), CAD 271.2, kept
     mount_y: 0.1356
-    mount_z: 0.7593
+    # measured on the built cart 2026-11-13: floor to the top of the arm box 30 11/16 in - 0.263 in
+    # = 0.7728 (CAD 0.7593); rim to the top of the arm box 1/4 in with the floor to the rim 30 5/8 in
+    # (0.7779) gives 0.7715. Mean of the two.
+    mount_z: 0.772
     right_yaw: -1.57079633
     left_yaw: -1.57079633
 
@@ -261,12 +274,12 @@ xlerobot:
   # --- LD19 2D lidar, low on the cart frame ---
   # Carl's cart: on the centreline over the drive axle, in the gap between the bottom basket's rim and the
   # middle basket's underside, scan plane about 0.30-0.35 m (docs/rosie-port-plan.md, section 2.4).
-  # The mount is XLeRobot/hardware/lidar_bracket (ld19_basket_mount_*, 2026-11-01 design, not printed
-  # yet): a two-piece clamp on the middle basket's mesh floor with an arm reaching forward past the
+  # The mount is the Fusion design "Lidar Base" (LD19 Lower/Upper Plate, built and measured 2026-11-13):
+  # a two-piece clamp on the middle basket's mesh floor with an arm reaching forward past the
   # front wall, the LD19 hung upside down from its tip with its axis over the drive axle. x, y,
   # scan_below_mount (6 mm plate + 27 mm), upside_down and yaw (arrow to the robot's left) are that
-  # design's. mount_z: floor to the middle basket's underside, 0.415 (2026-11-01), so the scan plane
-  # is at 0.382 and the LD19's head bottom at 0.374. TODO check yaw in RViz once it is mounted.
+  # design's, all checked on the built cart (2026-11-13). The design had mount_z 0.415 (the middle
+  # basket's underside) and the scan plane at 0.382; measured, it is at 0.375 (see mount_z).
   # x, y: base_link frame (front is +x), the drive axle is x=0.
   # mount_z: floor to the housing's mounting surface.
   # scan_below_mount: distance between the mounting surface and the scan plane (0.033 m on an LD19),
@@ -275,9 +288,14 @@ xlerobot:
   # yaw: rotation of the lidar about z, base_link frame, counter-clockwise seen from above; the LD19's
   #   forward arrow against the robot's front. Checked in RViz against a wall in front of the robot.
   lidar:
-    x: 0.0
-    y: 0.0
-    mount_z: 0.415
-    scan_below_mount: 0.033
+    x: 0.0          # checked on the built cart 2026-11-13: over the axle
+    y: 0.0          # checked on the built cart 2026-11-13: centred
+    # measured on the built cart 2026-11-13: floor to the bottom of the lower clamp plate 15 7/8 in
+    # (0.4032); the LD19's top face is under the 1.2 mm boss plate, 0.402, and the scan plane 27 mm
+    # below that, 0.375 (the design had the basket underside 0.415 with the 6 mm plate in the 0.033).
+    # Cross-check: floor to the bottom of the LD19 14 1/2 in (0.3683), the model has 0.402 - 0.0349
+    # = 0.3671.
+    mount_z: 0.402
+    scan_below_mount: 0.027
     upside_down: true
-    yaw: 1.5707963
+    yaw: 1.5707963  # checked on the built cart 2026-11-13: arrow to the robot's left

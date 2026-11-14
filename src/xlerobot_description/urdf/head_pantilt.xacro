@@ -32,7 +32,9 @@
     <!-- The top base sits 0.045 m below the arm mounting surface and 0.103 m ahead of the
          pan axis, as in the upstream URDF. Fusion's frame is turned 180 degrees about z into it
          with the pan axis at x -0.103 and the arm bases' bottom at arms: mount_z. -->
-    <xacro:property name="top_base_z" value="${dims['arms']['mount_z'] - 0.045}"/>
+    <!-- head: mount_z when set (the neck's own reference, the CAD arm-base height 0.7593), so the
+         arms on their front-corner boxes can be measured without moving the head -->
+    <xacro:property name="top_base_z" value="${dims['head'].get('mount_z', dims['arms']['mount_z']) - 0.045}"/>
     <xacro:property name="cart_mesh_xyz" value="${-0.103 + f_pan_x} ${f_pan_y} ${0.045 - f_arm_z}"/>
     <!-- pan joint at the pan horn's face, 1.1178 m above the floor -->
     <xacro:property name="pan_dz" value="${0.045 + f_pan_z - f_arm_z}"/>
