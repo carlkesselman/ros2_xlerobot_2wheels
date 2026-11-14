@@ -226,7 +226,10 @@ def write_rules(assignments, dry_run):
         fh.write("\n\n".join(kept + list(new_rules.values())) + "\n")
     print(f"Saved {len(new_rules)} rule(s) to {RULES_PATH}, kept {len(kept)} existing.")
     subprocess.run(["udevadm", "control", "--reload-rules"], check=False)
-    subprocess.run(["udevadm", "trigger"], check=False)
+    # --action=add: a plain trigger sends "change" events, and on the Jetson the ID_PATH rules
+    # did not create their symlinks on a change, only on add (99-cameras-elroy.rules notes)
+    subprocess.run(["udevadm", "trigger", "--action=add", "--subsystem-match=tty",
+                    "--subsystem-match=video4linux"], check=False)
     print("Done. /dev/" + " and /dev/".join(new_rules) + " should now be stable across reboots.")
 
 
@@ -234,7 +237,8 @@ def list_devices():
     counts = serial_counts(capture_devices())
     for dev in capture_devices():
         serial = dev.get("serial") or "-"
-        binding = "serial" if serial != "-" and counts[serial] == 1 else "USB port"
+        unique = serial != "-" and serial not in GENERIC_SERIALS and counts[serial] == 1
+        binding = "serial" if unique else "USB port"  # the same test as build_rule
         print(f'/dev/{dev["kernel"]:<10} {dev["subsystem"]:<11} {dev["vendor"]}:{dev["product"]}  '
               f'serial={serial}  port={dev["id_path"]}  (rule binds by {binding})')
 

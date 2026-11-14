@@ -1,28 +1,46 @@
 # laser_filters chain between the LD19 driver and everything that reads the scan (lidar.launch.py):
 # /ldlidar_node/scan in, /scan out. Nav2, slam_toolbox and amcl read /scan.
 #
-# The box drops the cart's own frame. The LD19 hangs on the centreline over the drive axle
-# (robot_dimensions.yaml, lidar), so the front RASKOG posts are about 0.20 m away, already under the
-# driver's range_min, but the rear posts are about 0.38 m away at about +-148 deg and would be in
-# every scan, two fixed points riding along with the robot that spoil slam_toolbox's and amcl's
-# scan matching. The driver's own angle crop is one sector and would blind the whole rear.
+# The boxes drop the cart's own frame, two fixed returns that ride along with the robot and spoil
+# slam_toolbox's and amcl's scan matching. Points inside a box become NaN, the scan keeps its size.
 #
-# Box in base_link (drive axle at x=0, front +x), from robot_dimensions.yaml: rear rails at about
-# -0.35 (casters at -0.325 under them), side rails 0.425 apart. Nav2's footprint runs to -0.41 and
-# +-0.29; the box is a little inside it on the sides and stops at the front posts, so nothing it
-# hides is somewhere the robot could drive into. Points inside it become NaN, the scan keeps its
-# size.
+# Measured on the built cart 2026-11-13 (15 s of raw LD19 data, about 75k points, robot frame from
+# robot_dimensions.yaml's lidar: over the axle, upside down, arrow to the left). The LD19 hangs just
+# in front of the front wall and scans through the gap between the bottom basket's rim and the
+# middle basket's underside. The only part of the cart in that plane is the RASKOG side frames'
+# pair of uprights on each side, mid-length, not corner posts:
+#   left  x -0.202..-0.120, y  0.180..0.244   (two tubes, at x about -0.135 and -0.180)
+#   right x -0.246..-0.111, y -0.263..-0.182
+# 0.21-0.34 m from the lidar at about +-120..+-138 deg; the far values are mixed edge pixels, which
+# is why range_min alone cannot drop them. Nothing else came back under 0.35 m, the front half is
+# clear. Each box adds about 1-2 cm around the extremes. Both are inside Nav2's footprint
+# (x to -0.41, y +-0.29), so nothing they hide is somewhere the robot could drive into.
+#
+# Re-measure after anything changes at the scan plane (0.375 m): the decoder that produced the
+# numbers above reads /dev/ttyUSB0 directly, see docs/platform.md 6.2.
 scan_to_scan_filter_chain:
   ros__parameters:
     filter1:
-      name: robot_frame
+      name: left_uprights
       type: laser_filters/LaserScanBoxFilter
       params:
         box_frame: base_link
-        min_x: -0.40
-        max_x: 0.02
-        min_y: -0.25
-        max_y: 0.25
+        min_x: -0.26
+        max_x: -0.10
+        min_y: 0.16
+        max_y: 0.28
+        min_z: 0.0
+        max_z: 0.80
+        invert: false
+    filter2:
+      name: right_uprights
+      type: laser_filters/LaserScanBoxFilter
+      params:
+        box_frame: base_link
+        min_x: -0.26
+        max_x: -0.10
+        min_y: -0.28
+        max_y: -0.16
         min_z: 0.0
         max_z: 0.80
         invert: false

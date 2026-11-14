@@ -65,8 +65,8 @@ developer kit takes 9-20 V on the barrel; 20 V is the top of that range). Four U
 | Camera | Model | Address | Mode |
 |---|---|---|---|
 | Head | Intel RealSense **D415** (no IMU, rolling shutter, ~65°×40° depth FOV) | serial `836112060112` | 640×480×30 colour; depth for ROS |
-| Left wrist | Innomaker U20CAM-1080p-S1 | `/dev/cam_left`, udev on `ID_PATH` `platform-3610000.usb-usb-0:2.1.3:1.0` | MJPG 640×480×30, `buffer_size 2` |
-| Right wrist | Innomaker U20CAM-1080p-S1 | `/dev/cam_right`, `ID_PATH` `…usb-0:2.1.1:1.0` | MJPG 640×480×30, `buffer_size 2` |
+| Left wrist | Innomaker U20CAM-1080p-S1 | `/dev/cam_left`, udev on `ID_PATH` `platform-3610000.usb-usb-0:2.2.2:1.0` | MJPG 640×480×30, `buffer_size 2` |
+| Right wrist | Innomaker U20CAM-1080p-S1 | `/dev/cam_right`, `ID_PATH` `…usb-0:2.2.4:1.0` | MJPG 640×480×30, `buffer_size 2` |
 
 Both Innomakers report serial `SN0001`, so they are told apart only by hub port: moving a camera to another hub port
 breaks its name silently. The D415 needs librealsense's `99-realsense-libusb.rules` and the `video`/`plugdev` groups.
@@ -94,17 +94,25 @@ plane 0.375 m (built and measured 2026-11-13). The head spacer in `XLeRobot/hard
 
 ```
 elroy (Orin Nano)
-├── stack A ─┬─ RealSense D415          (needs a USB 3 link: check 5000M in `lsusb -t`)
-│            └─ ODESC                   (USB 2, libusb)
-└── stack B ─┬─ powered 4-port hub ─┬─ left wrist camera    (hub port 3 -> /dev/cam_left)
-             │                      ├─ right wrist camera   (hub port 1 -> /dev/cam_right)
-             │                      ├─ bus 1 board (left arm + head)
-             │                      └─ bus 2 board (right arm)
-             └─ LD19 lidar adapter
+├── USB-C ──── RealSense D415           (root port 2-2, 5000M; the FUSB301 puts it in host mode)
+├── internal hub port 4 ── ODESC          (USB 2, libusb, serial 387734503135)
+├── internal hub port 2 ── powered 4-port hub ─┬─ bus 1 board (left arm + head)   (hub port 1)
+│                                              ├─ left wrist camera    (hub port 2 -> /dev/cam_left)
+│                                              ├─ bus 2 board (right arm)        (hub port 3)
+│                                              └─ right wrist camera   (hub port 4 -> /dev/cam_right)
+└── internal hub port 3 ── LD19 lidar adapter (/dev/ldlidar)
 ```
 
-- The hub is full; there is no free port on the cart without another hub.
-- The D415 is on elroy, on stack A, apart from the hub and its two wrist cameras. That follows XLeRobot's
+Measured after the rebuild, 2026-11-13: wrist cameras at `ID_PATH` `…usb-0:2.2.2` (left, identified by covering it)
+and `…usb-0:2.2.4` (right); `/etc/udev/rules.d/99-cameras.rules` updated to match. `/dev/ldlidar` is in
+`/etc/udev/rules.d/99-xlerobot.rules` (`tools/xlerobot_setup_usb_modules.py --assign ldlidar=/dev/ttyUSB0`), bound to
+`ID_PATH` `…usb-0:2.3` because the CP2102's serial is the factory `0001`: moving the lidar to another port loses the
+name. The ODESC (internal hub port 4) needs no name, the odrive package finds it by USB id.
+
+- The hub is full; internal hub port 1 is the cart's only free port.
+- The D415 is on elroy's USB-C port, apart from the hub and its two wrist cameras (it was on a USB-A port, "stack A",
+  until 2026-11-13). If it fails to show up there, replug it: the FUSB301 only switches the port on when it sees
+  the attach. That follows XLeRobot's
   `config/ORIN-SETUP.md` §3: before the cart's cameras moved to the Orin they ran on a Pi, where a wrist camera on the
   same USB host controller as the RealSense stopped delivering frames once the RealSense streamed. Stack A's other
   device, the ODESC, carries little data. `ORIN-SETUP.md` measured the
@@ -194,7 +202,7 @@ robot's value standing in; "—" = no value yet. Where: `dims` = `robot_dimensio
 | Scan plane to mounting surface | 0.027 m | LD19 base to scan plane (the 6 mm plate is now below the mounting surface, not in this value) | |
 | Upside down | true | cart, 2026-11-13 | as mounted |
 | Yaw (forward arrow vs robot front) | +90° | cart, 2026-11-13: arrow to the robot's left | checked in RViz against a wall ahead |
-| Corner posts removed from the scan | box in base_link x -0.40..0.02, y ±0.25 | front posts (about 0.20 m away) fall under range_min 0.30; the rear ones (about 0.38 m, ±148°) are dropped by `config/laser_filters.yaml` on the way from `/ldlidar_node/scan` to `/scan`. Checked on a synthetic scan, 2026-11-01 | RViz: `/scan` against the raw scan once mounted |
+| Cart frame removed from the scan | two boxes in base_link, x -0.26..-0.10, y 0.16..0.28 and -0.28..-0.16; range_min 0.12 | cart, 2026-11-13: in the scan plane the only part of the cart is the side frames' uprights (a pair of tubes per side at x about -0.135 and -0.180, y ±0.20), 0.21-0.34 m away at ±120..±138°; no corner posts and nothing else under 0.35 m. `config/laser_filters.yaml` drops them on the way from `/ldlidar_node/scan` to `/scan` | 15 s of raw LD19 packets read from `/dev/ttyUSB0` and decoded, robot frame from the mount above; then RViz: `/scan` against the raw scan |
 
 ### 6.3 Head and D415
 
@@ -214,7 +222,7 @@ robot's value standing in; "—" = no value yet. Where: `dims` = `robot_dimensio
 | Measurement | Value | Status | How |
 |---|---|---|---|
 | Arm mount x, y (pan axes), z (base bottom), yaw | **0.054 behind, ±0.1356, 0.772 m, forward (`shoulders: front_corners`, Fusion "XLeRobot 0.4 Upper Body Split Shoulders"), built and measured 2026-11-13: horn to axle 54 mm both arms, horn to horn 10 11/16 in, platform 1/4 in under the rim (CAD 0.0593, 0.759)**. The rear shoulders are retired | rear values: cart, CAD (Fusion upper body), 2026-11-02: pan axes 67 mm ahead of the shoulders' backs against the inside of the rear wall, 265.7 mm apart; z from the neck box's slot resting on the rim (tape 0.765); yaw ref. The reference robot's mount and frame corrections are reset | CAD |
-| Servo calibration (`zero_step` per joint) | ref values | ref; lerobot JSONs exist on elroy | `tools/calibrate_arm.py`, arms held straight |
+| Servo calibration (`zero_step` per joint) | cart values in `robot_dimensions.yaml` | cart, 2026-11-13: each arm held stretched straight forward, read raw; gripper = range_min + 244. Right wrist_flex is a new servo, recalibrated the same day (`servo.sh recal`). The left wrist_flex's calibrated middle is about 16° off straight, so its full down travel maps to -2.08 rad, past the model's -1.66 limit | `tools/calibrate_arm.py`, arms held straight |
 | Model offsets, frame and mount corrections | ref values | ref | `tools/calibrate_arm_camera.py` (ChArUco, 20 poses per arm), `tools/arm_accuracy.py --fit` |
 | Wrist camera extrinsics | ref values | ref | `calibrate_arm_camera.py` |
 | Wrist camera intrinsics | — | — | `tools/calibrate_camera_charuco.py` |

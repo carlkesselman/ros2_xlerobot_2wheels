@@ -93,7 +93,8 @@ the reference robot.
   whether it's upside down, which flips roll by π). `lidar.xacro` keeps `ldlidar_link` on `base_link`, as now.
 - Corner posts: done with a laser_filters box filter (`config/laser_filters.yaml`, started by `lidar.launch.py`),
   `/ldlidar_node/scan` → `/scan`, which Nav2, slam_toolbox and amcl now read. The driver's angle crop is one sector
-  and would have blinded the whole rear. `range_min: 0.30` stays.
+  and would have blinded the whole rear. Re-measured on the built cart 2026-11-13: the boxes now sit on the side
+  frames' uprights (the only part of the cart in the scan plane) and `range_min` is down to 0.12.
 - `/dev/ldlidar` udev name (`tools/xlerobot_setup_usb_modules.py`).
 - The D415 depth still goes into the local costmap for what's above the scan plane (tabletops, counter edges,
   shelves), as a second obstacle source.

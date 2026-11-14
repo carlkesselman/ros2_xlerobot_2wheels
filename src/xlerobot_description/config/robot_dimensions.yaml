@@ -264,12 +264,20 @@ xlerobot:
       left:  {xyz: "-0.015770 0.015190 0.003387", rpy: "0.376871 -1.549444 2.303024"}
       right: {xyz: "0.004451 0.026293 0.013168", rpy: "-0.319586 -1.544162 3.034952"}
     joints:
-      shoulder_pan:  {zero_step: {left: 2057, right: 2075}, direction:  1, max_velocity: 0.8, lower: -2.16,      upper: 2.16, model_offset: {left: -0.05780, right: -0.03181}}
-      shoulder_lift: {zero_step: {left: 3197, right: 3070}, direction: -1, max_velocity: 0.8, lower: -0.22,      upper: 3.37, model_offset: {left: -0.05564, right: 0.04402}}
-      elbow_flex:    {zero_step: {left:  989, right: 1056}, direction:  1, max_velocity: 0.8, lower: -0.22,      upper: 3.14, model_offset: {left: -0.01166, right: 0.04683}}
-      wrist_flex:    {zero_step: {left: 1978, right: 1991}, direction:  1, max_velocity: 0.8, lower: -1.6580628, upper: 1.6580627, model_offset: {left: 0.06606, right: -0.28337}}
-      wrist_roll:    {zero_step: {left: 2079, right: 2018}, direction: -1, max_velocity: 0.8, lower: -2.7438473, upper: 2.8412063, model_offset: {left: -0.00000, right: -0.00000}}
-      gripper:       {zero_step: {left: 1802, right: 1766}, direction:  1, max_velocity: 0.8, lower: -0.374533,  upper: 1.7453292}
+      shoulder_pan:  {zero_step: {left: 2065, right: 2002}, direction:  1, max_velocity: 0.8, lower: -2.16,      upper: 2.16, model_offset: {left: -0.05780, right: -0.03181}}
+      shoulder_lift: {zero_step: {left: 3146, right: 3218}, direction: -1, max_velocity: 0.8, lower: -0.22,      upper: 3.37, model_offset: {left: -0.05564, right: 0.04402}}
+      elbow_flex:    {zero_step: {left:  904, right:  833}, direction:  1, max_velocity: 0.8, lower: -0.22,      upper: 3.14, model_offset: {left: -0.01166, right: 0.04683}}
+      # Zero steps read on the cart 2026-11-13, each arm held stretched straight forward and level, wrist in
+      # line with the forearm (lerobot calibration unchanged except the right wrist_flex). The gripper's is
+      # range_min + 244 as above. Two holds each for the wrists: left wrist_flex 2236 / 2223 - its
+      # calibrated middle is about 16 degrees off straight, the same both times - and wrist_roll 2022 / 1968
+      # left, 2016 right with the gripper mirrored to the left's. The model_offsets are still the reference
+      # robot's fits against its zero steps; refit them (calibrate_arm_camera.py).
+      # right wrist_flex: new servo (recalibrated 2026-11-13, homing -1825, range 792..3141), read three
+      # times (2015, 2019, 2013). Its model_offset was fitted on the old servo (-0.28337) and is reset.
+      wrist_flex:    {zero_step: {left: 2230, right: 2015}, direction:  1, max_velocity: 0.8, lower: -1.6580628, upper: 1.6580627, model_offset: {left: 0.06606, right: 0.0}}
+      wrist_roll:    {zero_step: {left: 1995, right: 2016}, direction: -1, max_velocity: 0.8, lower: -2.7438473, upper: 2.8412063, model_offset: {left: -0.00000, right: -0.00000}}
+      gripper:       {zero_step: {left: 1640, right: 1673}, direction:  1, max_velocity: 0.8, lower: -0.374533,  upper: 1.7453292}
 
   # --- LD19 2D lidar, low on the cart frame ---
   # Carl's cart: on the centreline over the drive axle, in the gap between the bottom basket's rim and the
