@@ -122,11 +122,20 @@ def _camera_nodes(context, *args, **kwargs):
             ]))
             continue
 
-        device = camera["device"]
-        if not os.path.exists(device):
-            print(f"[cameras.launch] {name}: {device} not found, skipping")
+        # device is a path or a list of them: the first one that exists is used, so one file
+        # serves machines whose udev rules name the same camera differently. A list entry can
+        # also be a mapping, {path: ..., <setting>: ...}, whose settings apply only to that device
+        # (a different camera behind the same name, say, with its own pixel_format).
+        candidates = camera["device"] if isinstance(camera["device"], list) else [camera["device"]]
+        candidates = [c if isinstance(c, dict) else {"path": c} for c in candidates]
+        found = next((c for c in candidates if os.path.exists(c["path"])), None)
+        if found is None:
+            print(f"[cameras.launch] {name}: none of {[c['path'] for c in candidates]} found, skipping")
             continue
-        cfg = {**d, **camera}
+        # usb_cam follows a symlink itself but takes its target as relative to /dev, so a link
+        # outside /dev (/dev/v4l/by-path/..., target ../../video8) becomes /dev/../../video8.
+        device = os.path.realpath(found["path"])
+        cfg = {**d, **camera, **{k: v for k, v in found.items() if k != "path"}}
         actions.append(Node(
             package="usb_cam",
             executable="usb_cam_node_exe",
@@ -151,8 +160,22 @@ def _camera_nodes(context, *args, **kwargs):
                 "image_raw.ffmpeg.bit_rate": cfg["bit_rate"],
                 "image_raw.ffmpeg.gop_size": cfg["gop_size"],
                 "image_raw.ffmpeg.max_b_frames": 0,
+                # compressed_image_transport declares its parameters with a leading dot here
+                ".image_raw.compressed.jpeg_quality": int(cfg.get("jpeg_quality", 95)),
             }],
         ))
+        # The remote viewer's copy, see cameras.yaml viewer_fps. The throttle keeps the JPEG
+        # encoder running at the full rate (it always subscribes), but only viewer_fps frames
+        # a second leave the robot.
+        viewer_fps = float(cfg.get("viewer_fps", 0))
+        if viewer_fps > 0:
+            actions.append(Node(
+                package="topic_tools",
+                executable="throttle",
+                name="viewer_throttle",
+                namespace=f"cameras/{name}",
+                arguments=["messages", "image_raw/compressed", str(viewer_fps), "viewer/compressed"],
+            ))
     return actions
 
 

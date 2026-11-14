@@ -49,6 +49,14 @@ def _joy_nodes(context):
             parameters=params,
             remappings=[("cmd_vel", "cmd_vel_joy")],
         ),
+        # d-pad -> head pan/tilt (head_controller, bringup with_head:=true). Sends only while a
+        # direction is held, so it is harmless on a robot without the head.
+        Node(
+            package="xlerobot_teleop",
+            executable="head_teleop",
+            parameters=[{"joy_layout": layout}],
+            output="screen",
+        ),
     ]
 
 

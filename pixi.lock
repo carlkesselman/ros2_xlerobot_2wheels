@@ -14,6 +14,7 @@ environments:
     packages:
       osx-arm64-macos-14-0:
       - conda: https://conda.anaconda.org/robostack-jazzy/osx-arm64/ros-jazzy-desktop-0.11.0-h60d57d3_25.conda
+      - conda: https://conda.anaconda.org/robostack-jazzy/osx-arm64/ros-jazzy-ffmpeg-image-transport-msgs-1.3.0-h60d57d3_25.conda
       - conda: https://conda.anaconda.org/robostack-jazzy/osx-arm64/ros-jazzy-joint-state-publisher-gui-2.4.3-h60d57d3_25.conda
       - conda: https://conda.anaconda.org/robostack-jazzy/osx-arm64/ros-jazzy-joy-3.3.0-h60d57d3_25.conda
       - conda: https://conda.anaconda.org/robostack-jazzy/osx-arm64/ros-jazzy-laser-filters-2.0.10-h60d57d3_25.conda
@@ -145,6 +146,7 @@ environments:
       - conda: https://conda.anaconda.org/robostack-jazzy/osx-arm64/ros2-fastcdr-2.2.8-np2py312h3d3361c_25.conda
       - conda: https://conda.anaconda.org/robostack-jazzy/osx-arm64/ros2-fastrtps-2.14.7-np2py312h6133e15_25.conda
       - conda: https://conda.anaconda.org/robostack-jazzy/osx-arm64/ros2-fastrtps-cmake-module-3.6.4-np2py312h3d3361c_25.conda
+      - conda: https://conda.anaconda.org/robostack-jazzy/osx-arm64/ros2-ffmpeg-image-transport-msgs-1.3.0-np2py312h3d3361c_25.conda
       - conda: https://conda.anaconda.org/robostack-jazzy/osx-arm64/ros2-filters-2.2.2-np2py312ha81f7ed_25.conda
       - conda: https://conda.anaconda.org/robostack-jazzy/osx-arm64/ros2-foonathan-memory-vendor-1.3.1-np2py312h3d3361c_25.conda
       - conda: https://conda.anaconda.org/robostack-jazzy/osx-arm64/ros2-force-torque-sensor-broadcaster-4.43.0-np2py312h3d3361c_25.conda
@@ -1068,6 +1070,13 @@ packages:
   - ros2-desktop ==0.11.0
   size: 1999
   timestamp: 1791453519246
+- conda: https://conda.anaconda.org/robostack-jazzy/osx-arm64/ros-jazzy-ffmpeg-image-transport-msgs-1.3.0-h60d57d3_25.conda
+  sha256: ec618e746272f5baa71623f788ac9cd110080f0542a64e231c73a4b4a4d5ea46
+  md5: 86a722f257fcd1e0d4d017007acf5ecc
+  depends:
+  - ros2-ffmpeg-image-transport-msgs ==1.3.0
+  size: 2086
+  timestamp: 1791436190794
 - conda: https://conda.anaconda.org/robostack-jazzy/osx-arm64/ros-jazzy-joint-state-publisher-gui-2.4.3-h60d57d3_25.conda
   sha256: fe9390eb21e829a56cf99d45dc526515d591c085e5ff38af1f99fb6bd8d3e044
   md5: c5125880a436946df44b8cb383fcd3a5
@@ -3386,6 +3395,23 @@ packages:
   license: Apache-2.0
   size: 29593
   timestamp: 1791430883568
+- conda: https://conda.anaconda.org/robostack-jazzy/osx-arm64/ros2-ffmpeg-image-transport-msgs-1.3.0-np2py312h3d3361c_25.conda
+  sha256: 947705de9d791849a7abebead030a7b7465b314d71e244fbc6962c4ec33a1175
+  md5: 080b35864201eb0ec9d08877d3c722a3
+  depends:
+  - python
+  - ros2-distro-mutex 0.19.* jazzy_*
+  - ros2-ros-workspace
+  - ros2-rosidl-default-runtime
+  - ros2-std-msgs
+  - libcxx >=21
+  - __osx >=14.0
+  - ros2-distro-mutex >=0.19.0,<0.20.0a0
+  - numpy >=1.25,<3
+  - python_abi 3.12.* *_cp312
+  license: Apache-2.0
+  size: 90425
+  timestamp: 1791435931184
 - conda: https://conda.anaconda.org/robostack-jazzy/osx-arm64/ros2-filters-2.2.2-np2py312ha81f7ed_25.conda
   sha256: ef3f3d1f077ed5e6b6034a81213c228fdf8ad42ebd66ff2616a075b1112f7d43
   md5: 5f06a30bde5ac660861cb07cdc2be96a

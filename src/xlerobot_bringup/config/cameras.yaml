@@ -20,6 +20,14 @@ defaults:
   gop_size: 30
   # usb_cam's own default is 50, near the top of these cameras' -64..64 range: washed out in sunlight
   brightness: 0
+  # The remote viewer's copy: <name>/viewer/compressed, every viewer_fps-th of a second's newest
+  # JPEG (topic_tools throttle on image_raw/compressed), what tools/rerun_bridge.py shows by
+  # default. Rerun's decoder lags a live H.264 stream: the frames showed faded with a loading
+  # spinner and flashed (2026-11-14). Standalone JPEGs at 10 fps are what the lerobot setup
+  # settled on for the Mac viewer over wifi. 0 = no viewer copy. jpeg_quality is
+  # compressed_image_transport's, default 95, about 120 KB a frame here.
+  viewer_fps: 10
+  jpeg_quality: 70
 
 # frame_id is the camera's optical frame in the URDF (head from sensors.xacro, the
 # wrist ones from so101_arm.xacro), so the video can be placed in the robot. It's also the
@@ -32,13 +40,23 @@ defaults:
 # server (tools/mcp_server/bridge.py) reads the real frame_id live off each camera's own
 # camera_info instead of this file, for exactly this reason - this value is only its
 # last-resort fallback before the first camera_info message arrives.
+#
+# device may be a list: the first path that exists is used. elroy has no xle-cam-* rules yet. Its
+# wrist cameras are /dev/cam_left and /dev/cam_right, from its own 99-cameras.rules, bound to hub
+# ports 2.2.2 and 2.2.4. Its head camera is a RealSense D415, read here as a plain UVC camera: its
+# colour stream (YUYV) is interface 1.3 of the device on root port 2, the only thing on that
+# port. That works until sensor:=realsense exists (docs/rosie-port-plan.md 2.3); it gives
+# colour only, no depth.
 cameras:
   head:
-    device: /dev/xle-cam-head
+    device:
+      - /dev/xle-cam-head
+      - path: /dev/v4l/by-path/platform-3610000.usb-usb-0:2:1.3-video-index0   # elroy: D415 colour
+        pixel_format: yuyv2rgb
     frame_id: head_camera_optical_frame
   left:
-    device: /dev/xle-cam-left
+    device: [/dev/xle-cam-left, /dev/cam_left]
     frame_id: left_arm_wrist_camera_optical_frame
   right:
-    device: /dev/xle-cam-right
+    device: [/dev/xle-cam-right, /dev/cam_right]
     frame_id: right_arm_wrist_camera_optical_frame

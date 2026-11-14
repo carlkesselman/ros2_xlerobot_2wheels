@@ -68,7 +68,7 @@ from rcl_interfaces.msg import Log
 from rclpy.node import Node
 from rclpy.qos import DurabilityPolicy, QoSProfile, ReliabilityPolicy, qos_profile_sensor_data
 from rerun.blueprint.components import PlayState
-from sensor_msgs.msg import CameraInfo, Image, JointState, LaserScan
+from sensor_msgs.msg import CameraInfo, CompressedImage, Image, JointState, LaserScan
 from std_msgs.msg import String
 from tf2_msgs.msg import TFMessage
 
@@ -92,6 +92,7 @@ DEPTH_LOG_PERIOD = 1.0 / 8  # s, matches the driver's own depth/points rate - ra
 # frame was the same mistake that caused the 90s joint-state latency bug below - throttle it.
 DEPTH_METER = 1000.0  # Orbbec depth is millimeters (OpenNI/RealSense convention), not measured
 FFMPEG_TYPE = "ffmpeg_image_transport_msgs/msg/FFMPEGPacket"
+COMPRESSED_TYPE = "sensor_msgs/msg/CompressedImage"
 AV_PKT_FLAG_KEY = 1
 
 # rcl_interfaces/msg/Log.level values (rclpy.logging.LoggingSeverity) -> rr.TextLogLevel
@@ -252,7 +253,7 @@ def log_static_setup():
 
 
 class RerunBridge(Node):
-    def __init__(self):
+    def __init__(self, video="jpeg"):
         super().__init__("rerun_bridge")
         self.path = []
         self.joints = {}
@@ -291,7 +292,10 @@ class RerunBridge(Node):
                 reliability=ReliabilityPolicy.RELIABLE))
         self.video_subs = {}
         self.video_started = set()
-        if FFMPEGPacket is not None:
+        self.video_lags = {}       # path -> arrival minus stamp of the first packets, seconds
+        self.video_restamp = {}    # path -> True: place packets at arrival, not at their stamp
+        self.video_mode = video
+        if video == "jpeg" or FFMPEGPacket is not None:
             self.create_timer(2.0, self.find_cameras)
 
         # Camera intrinsics (rr.Pinhole), so the 3D view draws a frustum at each camera's real
@@ -407,7 +411,18 @@ class RerunBridge(Node):
                 # squeezing 16-bit depth through an 8-bit video codec isn't a valid video - depth
                 # is logged properly (raw 16UC1) by on_depth_image instead.
                 continue
-            if FFMPEG_TYPE in types and topic not in self.video_subs:
+            if topic in self.video_subs:
+                continue
+            if self.video_mode == "jpeg":
+                # cameras.launch.py's throttled JPEG copy, <camera>/viewer/compressed
+                if topic.endswith("/viewer/compressed") and COMPRESSED_TYPE in types:
+                    path = topic.strip("/").removesuffix("/viewer/compressed")
+                    self.video_subs[topic] = self.create_subscription(
+                        CompressedImage, topic, lambda msg, path=path: self.on_jpeg(msg, path),
+                        qos_profile_sensor_data)
+                    self.get_logger().info(f"logging JPEG frames from {topic} to {path}")
+                continue
+            if FFMPEGPacket is not None and FFMPEG_TYPE in types:
                 # /cameras/left/image_raw/ffmpeg -> cameras/left
                 path = topic.strip("/").removesuffix("/image_raw/ffmpeg").removesuffix("/ffmpeg")
                 self.video_subs[topic] = self.create_subscription(
@@ -427,8 +442,39 @@ class RerunBridge(Node):
                 path, rr.VideoStream(codec=rr.VideoCodec.H265 if hevc else rr.VideoCodec.H264),
                 static=True)
             self.video_started.add(path)
-        self.set_time(msg.header)
+        self.set_video_time(msg.header, path)
         rr.log(path, rr.VideoStream.from_fields(sample=bytes(msg.data), is_keyframe=keyframe))
+
+    def on_jpeg(self, msg, path):
+        self.set_video_time(msg.header, path)
+        rr.log(path, rr.EncodedImage(contents=bytes(msg.data), media_type="image/jpeg"))
+
+    def set_video_time(self, header, path):
+        """Like set_time, but a stream whose stamps run well behind their arrival is placed at
+        arrival instead. usb_cam 0.8.1 stamps every frame early by a fixed 0-1 s, set when the
+        node starts: its epoch shift (utils.hpp, get_epoch_time_shift_us) adds the start time's
+        microseconds divided by 1000. On the timeline those frames sit behind the scan and the
+        joints, so the viewer, following the newest time, waits for video that never comes and
+        shows the last frame faded with a spinner. Decided per stream on its first 30 packets."""
+        now = self.get_clock().now().nanoseconds / 1e9
+        restamp = self.video_restamp.get(path)
+        if restamp is None:
+            lags = self.video_lags.setdefault(path, [])
+            lags.append(now - stamp_seconds(header))
+            # Until decided, the stamp: switching to arrival later only moves samples forward,
+            # and a video stream's samples must not go back in time.
+            restamp = False
+            if len(lags) == 30:
+                lag = sorted(lags)[15]
+                restamp = self.video_restamp[path] = lag > 0.25
+                if restamp:
+                    self.get_logger().warn(
+                        f"{path}: stamps run {lag * 1000:.0f} ms behind arrival (usb_cam's "
+                        f"start-time offset?), placing its video at arrival time")
+        if restamp:
+            rr.set_time("ros_time", timestamp=now)
+        else:
+            self.set_time(header)
 
     def on_robot_description(self, msg: String):
         if self.joints:
@@ -587,6 +633,12 @@ def main():
                         help="send to a running viewer, e.g. rerun+http://laptop:9876/proxy")
     parser.add_argument("--cameras", default=",".join(CAMERAS),
                         help="camera views in the layout, comma separated, empty for none")
+    parser.add_argument("--video", choices=("jpeg", "h264"), default="jpeg",
+                        help="jpeg (default): each camera's <camera>/viewer/compressed, JPEG frames "
+                             "throttled on the robot (cameras.yaml viewer_fps), every frame stands "
+                             "alone. h264: <camera>/image_raw/ffmpeg at the full rate, about a third "
+                             "of the bandwidth, but the viewer's decoder lags a live stream and "
+                             "shows it faded with a spinner much of the time")
     args, ros_args = parser.parse_known_args()
 
     # so a backgrounded run (SIGINT ignored) still flushes the recording on kill
@@ -600,7 +652,7 @@ def main():
     rr.send_blueprint(blueprint([name for name in args.cameras.split(",") if name]))
     log_static_setup()
     rclpy.init(args=ros_args)
-    node = RerunBridge()
+    node = RerunBridge(video=args.video)
     try:
         rclpy.spin(node)
     except KeyboardInterrupt:

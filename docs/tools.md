@@ -149,6 +149,7 @@ The order to run the calibrations in, and where each result goes, is in [setup.m
 | Tool | What it does |
 |---|---|
 | `rerun_bridge.py` | Streams the robot model, odometry, velocities, Nav2 goal/plan, lidar scan, the SLAM map, camera video and the head camera's depth (back-projected into a 3D point cloud on the viewer side) into [Rerun](https://rerun.io/) for timeline debugging - complements RViz/Foxglove rather than replacing them. Also has a Logs tab combining `/rosout` with the MCP server's own call log. |
+| `rerun_view.sh` | Runs `rerun_bridge.py` on the Mac operator station and opens the viewer there: `pixi run tools/rerun_view.sh`. Needs `tools/setup_venv.sh rerun` once, and bringup on the robot with `cameras:=true lidar:=true`. The video arrives as H.264, about 2 Mbit/s per camera. |
 
 ## MCP server
 

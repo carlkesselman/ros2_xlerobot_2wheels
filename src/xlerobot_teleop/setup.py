@@ -30,6 +30,7 @@ setup(
             "mcp_presence_guard = xlerobot_teleop.mcp_presence_guard:main",
             "arm_servo_teleop = xlerobot_teleop.arm_servo_teleop:main",
             "leader_arms = xlerobot_teleop.leader_arms:main",
+            "head_teleop = xlerobot_teleop.head_teleop:main",
         ],
     },
 )

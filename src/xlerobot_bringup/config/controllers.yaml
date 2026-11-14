@@ -211,6 +211,9 @@ head_controller:
     state_interfaces: [position, velocity]
     allow_partial_joints_goal: false
     open_loop_control: false
+    # The d-pad (head_teleop) streams a trajectory every tick, as the leader arms do, so the same
+    # reason as the arm controllers above applies.
+    interpolate_from_desired_state: true
     state_publish_rate: 50.0
     action_monitor_rate: 20.0
     constraints:

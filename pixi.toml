@@ -43,6 +43,7 @@ ros-jazzy-twist-mux = "*"
 libusb = "*"                # xlerobot_odrive_hardware talks to the ODESC over libusb
 nlohmann_json = "*"
 pyserial = "*"              # xlerobot_teleop leader_arms reads the leader arms
+ros-jazzy-ffmpeg-image-transport-msgs = "*"   # tools/rerun_bridge.py reads the cameras' H.264 packets
 ros-jazzy-laser-filters = "*"          # drops the cart's own posts from the LD19 scan
 # MuJoCo twin (sim/mujoco/): MuJoCo's own Python bindings run the physics, and ros2_control
 # talks to it over joint-state topics like the Isaac twin. mujoco_ros2_control has no macOS
