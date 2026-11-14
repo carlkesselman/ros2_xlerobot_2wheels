@@ -225,6 +225,15 @@ xlerobot:
     #   of the command cannot exceed whatever the trajectory says. The cap applies to every
     #   commanded position joint on the bus, the head too.
     servo_speed_limit_steps: 600
+    # servo_acceleration: the ACC sent with every position command (protocol units 1-254, each
+    #   100 steps/s^2, so 100 =~ 15 rad/s^2). sts_hardware_interface's default is 100, the first
+    #   value found to work. With leader-arm teleop the servo stage (command out to position back)
+    #   was 125-210 ms at 100 (2026-11-14). The servos' Maximum_Acceleration (addr 85) is 254 on
+    #   every arm servo, so the servo does not cap this below 254. lerobot's configure_motors
+    #   writes Acceleration 254 to every SO-101 servo, so 254 is what lerobot teleop runs at. At 254
+    #   the servo stage dropped to 85-135 ms on the arm joints, and leader to follower to 110-170 ms
+    #   (2026-11-14). Gripper and wrist roll trail a little more.
+    servo_acceleration: 254
     # limit_margin: rad added to both ends of every arm joint's limits, in the model and in
     #   ros2_control. The upstream limits are another arm's stops, and the folded rest pose sits
     #   at a hard stop that reads up to 2 degrees past them here (left elbow). A joint measured
@@ -273,9 +282,14 @@ xlerobot:
       # calibrated middle is about 16 degrees off straight, the same both times - and wrist_roll 2022 / 1968
       # left, 2016 right with the gripper mirrored to the left's. The model_offsets are still the reference
       # robot's fits against its zero steps; refit them (calibrate_arm_camera.py).
-      # right wrist_flex: new servo (recalibrated 2026-11-13, homing -1825, range 792..3141), read three
-      # times (2015, 2019, 2013). Its model_offset was fitted on the old servo (-0.28337) and is reset.
-      wrist_flex:    {zero_step: {left: 2230, right: 2015}, direction:  1, max_velocity: 0.8, lower: -1.6580628, upper: 1.6580627, model_offset: {left: 0.06606, right: 0.0}}
+      # right wrist_flex: servo replaced again 2026-11-14, the 2026-11-13 one drove only toward the fold.
+      #   Recalibrated: homing 236, range 841..3191, the same 2350-step span as the 2026-11-13 servo's
+      #   792..3141, so the end stops are the same and only the middle was held 49 steps further from
+      #   the fold. The zero carries over by the stops: the 2026-11-13 servo read straight three times
+      #   (2015, 2019, 2013, mean 2016), 1224 above its fold end and 1125 below its other end, which
+      #   gives 2065 from the fold end and 2066 from the other one. Its model_offset was fitted on an
+      #   older servo (-0.28337) and is reset.
+      wrist_flex:    {zero_step: {left: 2230, right: 2065}, direction:  1, max_velocity: 0.8, lower: -1.6580628, upper: 1.6580627, model_offset: {left: 0.06606, right: 0.0}}
       wrist_roll:    {zero_step: {left: 1995, right: 2016}, direction: -1, max_velocity: 0.8, lower: -2.7438473, upper: 2.8412063, model_offset: {left: -0.00000, right: -0.00000}}
       gripper:       {zero_step: {left: 1640, right: 1673}, direction:  1, max_velocity: 0.8, lower: -0.374533,  upper: 1.7453292}
 

@@ -597,6 +597,7 @@ environments:
       - conda: https://prefix.dev/conda-forge/noarch/pyopengl-3.1.10-pyh534df25_2.conda
       - conda: https://prefix.dev/conda-forge/noarch/pyparsing-3.3.3-pyh5ded981_0.conda
       - conda: https://prefix.dev/conda-forge/noarch/pyqt-builder-1.18.2-pyhd8ed1ab_1.conda
+      - conda: https://prefix.dev/conda-forge/noarch/pyserial-3.5-pyhcf101f3_2.conda
       - conda: https://prefix.dev/conda-forge/noarch/pytest-9.2.0-pyhc364b38_1.conda
       - conda: https://prefix.dev/conda-forge/noarch/pytest-cov-7.1.0-pyhcf101f3_0.conda
       - conda: https://prefix.dev/conda-forge/noarch/pytest-repeat-0.9.4-pyhd8ed1ab_0.conda
@@ -12624,6 +12625,17 @@ packages:
   run_exports: {}
   size: 2952282
   timestamp: 1766858321453
+- conda: https://prefix.dev/conda-forge/noarch/pyserial-3.5-pyhcf101f3_2.conda
+  sha256: 8c618e8ca376d73133c9971abe45463a48c9cfb529788d609fd19568764941ba
+  md5: b27a6cd32160c34682ce6053b04c12c6
+  depends:
+  - python >=3.10
+  - python
+  license: BSD-3-Clause
+  license_family: BSD
+  run_exports: {}
+  size: 73910
+  timestamp: 1767289527295
 - conda: https://prefix.dev/conda-forge/noarch/pytest-9.2.0-pyhc364b38_1.conda
   sha256: a9cf3571e80a4e86992502068eb1d29a109e88345c39babf03b10450895056af
   md5: f0cfded84ced11a9dfb3790c4c1c0b63

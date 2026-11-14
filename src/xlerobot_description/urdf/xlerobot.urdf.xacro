@@ -43,8 +43,27 @@
        which doesn't exist until the head is actually plugged in. -->
   <xacro:arg name="with_head"         default="false"/>
 
+  <!-- rad/s. Above 0, replaces every arm joint's max_velocity (the URDF velocity limit that
+       controller_manager enforces, and the driver's position_rate_limit at 1.25x) and turns off
+       the driver's proportional speed coordination (servo_speed_limit_steps 0). That mode gives
+       the joint with the most distance left the full speed and scales the others by their share,
+       each cycle: right for planned point-to-point moves, but under a streamed command it throttles
+       every joint except the one moving most. With it off each servo chases its target at full
+       speed, still under the 1.25x rate limit. For leader-arm teleop, where a hand moves the
+       leaders far faster than the 0.8 rad/s planning limit. 0 = robot_dimensions.yaml. -->
+  <xacro:arg name="arm_max_velocity"  default="0"/>
+
   <xacro:property name="dims_file" value="$(find xlerobot_description)/config/robot_dimensions.yaml"/>
-  <xacro:property name="dims" value="${xacro.load_yaml(dims_file)['xlerobot']}"/>
+  <xacro:property name="dims_yaml" value="${xacro.load_yaml(dims_file)['xlerobot']}"/>
+  <xacro:property name="arm_vmax" value="${float('$(arg arm_max_velocity)')}"/>
+  <xacro:if value="${arm_vmax &lt;= 0}">
+    <xacro:property name="dims" value="${dims_yaml}"/>
+  </xacro:if>
+  <xacro:unless value="${arm_vmax &lt;= 0}">
+    <xacro:property name="dims" value="${dict(dims_yaml, arms=dict(dims_yaml['arms'],
+        servo_speed_limit_steps=0,
+        joints=dict((k, dict(v, max_velocity=arm_vmax)) for k, v in dims_yaml['arms']['joints'].items())))}"/>
+  </xacro:unless>
 
   <xacro:include filename="$(find xlerobot_description)/urdf/materials.xacro"/>
   <xacro:include filename="$(find xlerobot_description)/urdf/base_2wheels.xacro"/>

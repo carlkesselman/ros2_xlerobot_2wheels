@@ -2,8 +2,8 @@
 The base is the ODrive (USB), so a base-only bringup needs no servo bus; bus1
 (left arm + head) and bus2 (right arm) come in with with_head/with_arms. Point
 bus1_port/bus2_port at your udev symlinks, not the raw ttyACM device, those
-numbers swap on reboot. Until the ODrive hardware interface exists (step 2 of
-docs/rosie-port-plan.md), run with use_mock_hardware:=true.
+numbers swap on reboot. The wheels run on xlerobot_odrive_hardware; only one program can
+hold the ODrive's USB interface, so stop lerobot and odrive-check first.
 
 use_sim:=true switches to the Isaac Sim twin's hardware interface instead
 of the real bus (or sts_hardware_interface's mock mode), see docs/sim-twin.md.
@@ -175,6 +175,7 @@ def generate_launch_description():
             " torque_off:=", torque_off,
             " with_head:=", with_head,
             " sensor:=", sensor,
+            " arm_max_velocity:=", LaunchConfiguration("arm_max_velocity"),
         ]),
         value_type=str,
     )
@@ -189,6 +190,12 @@ def generate_launch_description():
         # see the module-level use_sim_time comment above
         DeclareLaunchArgument("use_sim_time", default_value="false"),
         DeclareLaunchArgument("teleop", default_value="true"),
+        # false when the gamepad is on another machine (the Mac operator station): bringup then
+        # runs only twist_mux and the safety supervisor, see xlerobot_teleop/launch/teleop.launch.py
+        DeclareLaunchArgument("teleop_joy", default_value="true"),
+        # rad/s, raises every arm joint's speed limits for leader-arm teleop (xlerobot.urdf.xacro);
+        # 0 keeps robot_dimensions.yaml's planning limits
+        DeclareLaunchArgument("arm_max_velocity", default_value="0"),
         # off by default: bus1 (head pan/tilt) isn't wired on a base-only
         # robot, see xlerobot.urdf.xacro. Flip on once the head is plugged in.
         DeclareLaunchArgument("with_head", default_value="false"),
@@ -260,6 +267,7 @@ def generate_launch_description():
 
         IncludeLaunchDescription(
             PythonLaunchDescriptionSource(teleop_launch_file),
+            launch_arguments={"with_joy": LaunchConfiguration("teleop_joy")}.items(),
             condition=IfCondition(teleop),
         ),
 

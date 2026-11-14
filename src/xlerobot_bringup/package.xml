@@ -15,6 +15,7 @@
   <exec_depend>xlerobot_description</exec_depend>
   <exec_depend>xlerobot_teleop</exec_depend>
   <exec_depend>sts_hardware_interface</exec_depend>
+  <exec_depend>xlerobot_odrive_hardware</exec_depend>
   <exec_depend>controller_manager</exec_depend>
   <exec_depend>diff_drive_controller</exec_depend>
   <exec_depend>joint_state_broadcaster</exec_depend>

@@ -1,0 +1,53 @@
+diff --git a/include/sts_hardware_interface/sts_hardware_interface.hpp b/include/sts_hardware_interface/sts_hardware_interface.hpp
+index 6ee723c..ca7433e 100644
+--- a/include/sts_hardware_interface/sts_hardware_interface.hpp
++++ b/include/sts_hardware_interface/sts_hardware_interface.hpp
+@@ -366,6 +366,10 @@ private:
+   /// actually took effect. 100 is the value tested working (clean, no overshoot); not swept to
+   /// find a lower bound.
+   static constexpr double DEFAULT_ACCELERATION = 100.0;
++  /// ACC sent to position-mode joints: hardware parameter "servo_acceleration" (1-254),
++  /// DEFAULT_ACCELERATION when absent. Higher follows streamed targets (leader-arm teleop)
++  /// more closely, at the cost of harder starts and stops.
++  double servo_acceleration_ = DEFAULT_ACCELERATION;
+   // Ping retry/backoff, configurable via node parameters (see on_configure()).
+   int configure_ping_retry_attempts_ = 5;
+   int configure_ping_retry_delay_ms_ = 20;
+diff --git a/src/sts_hardware_interface.cpp b/src/sts_hardware_interface.cpp
+index 589a248..dabc7fa 100644
+--- a/src/sts_hardware_interface.cpp
++++ b/src/sts_hardware_interface.cpp
+@@ -199,6 +199,24 @@ hardware_interface::CallbackReturn STSHardwareInterface::on_init(
+     return hardware_interface::CallbackReturn::ERROR;
+   }
+ 
++  // ACC for position-mode joints without an "acceleration" command interface
++  // (see DEFAULT_ACCELERATION in the header).
++  if (info_.hardware_parameters.count("servo_acceleration")) {
++    const auto & value = info_.hardware_parameters.at("servo_acceleration");
++    try {
++      servo_acceleration_ = std::stoi(value);
++    } catch (const std::exception &) {
++      RCLCPP_ERROR(logger_, "Invalid servo_acceleration value: '%s' (must be a valid integer)",
++        value.c_str());
++      return hardware_interface::CallbackReturn::ERROR;
++    }
++    if (servo_acceleration_ < 1 || servo_acceleration_ > SMS_STS_MAX_ACCELERATION) {
++      RCLCPP_ERROR(logger_, "Invalid servo_acceleration: %.0f. Must be in [1, %d]",
++        servo_acceleration_, SMS_STS_MAX_ACCELERATION);
++      return hardware_interface::CallbackReturn::ERROR;
++    }
++  }
++  RCLCPP_INFO(logger_, "Position-mode ACC: %.0f", servo_acceleration_);
+   RCLCPP_INFO(logger_, "Proportional ACC: max=%d, deadband=%.4f rad/s",
+     proportional_acc_max_, proportional_acc_deadband_rad_s_);
+   RCLCPP_INFO(logger_, "Proportional VEL: max=%d steps/s (%s), deadband=%.4f rad",
+@@ -1012,7 +1030,7 @@ double STSHardwareInterface::cmd_default(CmdKind kind, size_t i) const
+   // Position-mode joints need a non-zero ACC or the servo ignores the Speed we send
+   // (see DEFAULT_ACCELERATION). Velocity-mode (wheel) joints keep ACC=0 for proportional scaling.
+   if (kind == CMD_ACCELERATION && operating_modes_[i] == MODE_SERVO) {
+-    return DEFAULT_ACCELERATION;
++    return servo_acceleration_;
+   }
+   return 0.0;
+ }

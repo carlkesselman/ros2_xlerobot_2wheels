@@ -27,7 +27,7 @@ CMAKE_EXPORT_COMPILE_COMMANDS = "ON"   # compile_commands.json per package in bu
 
 [tasks]
 venv = "tools/setup_venv.sh"
-build = "colcon build --symlink-install --packages-select xlerobot_description xlerobot_teleop xlerobot_bringup xlerobot_navigation xlerobot_moveit_config xlerobot_skill_msgs xlerobot_object_perception xlerobot_skills xlerobot_executive --cmake-args -DCMAKE_BUILD_TYPE=RelWithDebInfo"
+build = "colcon build --symlink-install --packages-select xlerobot_description xlerobot_odrive_hardware xlerobot_teleop xlerobot_bringup xlerobot_navigation xlerobot_moveit_config xlerobot_skill_msgs xlerobot_object_perception xlerobot_skills xlerobot_executive --cmake-args -DCMAKE_BUILD_TYPE=RelWithDebInfo"
 
 [dependencies]
 python = "3.12.*"
@@ -40,6 +40,9 @@ ros-jazzy-teleop-twist-keyboard = "*"
 ros-jazzy-joy = "*"
 ros-jazzy-teleop-twist-joy = "*"
 ros-jazzy-twist-mux = "*"
+libusb = "*"                # xlerobot_odrive_hardware talks to the ODESC over libusb
+nlohmann_json = "*"
+pyserial = "*"              # xlerobot_teleop leader_arms reads the leader arms
 ros-jazzy-laser-filters = "*"          # drops the cart's own posts from the LD19 scan
 # MuJoCo twin (sim/mujoco/): MuJoCo's own Python bindings run the physics, and ros2_control
 # talks to it over joint-state topics like the Isaac twin. mujoco_ros2_control has no macOS

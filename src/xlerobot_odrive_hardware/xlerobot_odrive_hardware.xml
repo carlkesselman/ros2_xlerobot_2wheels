@@ -1,0 +1,7 @@
+<library path="xlerobot_odrive_hardware">
+  <class name="xlerobot_odrive_hardware/ODriveSystem"
+         type="xlerobot_odrive_hardware::ODriveSystem"
+         base_class_type="hardware_interface::SystemInterface">
+    <description>Two velocity-controlled wheels on one ODrive v3 / ODESC (firmware 0.5.x), native USB.</description>
+  </class>
+</library>

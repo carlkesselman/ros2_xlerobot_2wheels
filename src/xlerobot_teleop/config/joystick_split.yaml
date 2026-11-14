@@ -1,0 +1,8 @@
+# Overlay on joystick.yaml for split-stick driving (teleop.launch.py split_stick:=true):
+# left stick up/down = forward/back, right stick left/right = turn. Keeps sideways thumb drift
+# on the left stick from steering the cart (measured 2026-11-13: ~10% sideways stick with a
+# steady rightward bias while pushing "straight", about 5 deg/s of unintended turn).
+# The right stick's horizontal axis is 2 on both the Linux and macOS (SDL) layouts.
+teleop_twist_joy_node:
+  ros__parameters:
+    axis_angular.yaw: 2

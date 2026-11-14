@@ -1,0 +1,8 @@
+# Overlay on joystick.yaml for the macOS operator station. joy_node on macOS opens the pad as an
+# SDL GameController, which numbers the buttons by SDL's standard layout instead of the Linux
+# one joystick.yaml was confirmed with: A=0 B=1 X=2 Y=3 back=4 guide=5 start=6 LS=7 RS=8
+# LB=9 RB=10, d-pad 11-14. Sticks are the same: left [0,1], right [2,3].
+# Checked 2026-11-13 with the 8BitDo in PS4 mode (054c:05c4): RB held = button 10.
+teleop_twist_joy_node:
+  ros__parameters:
+    enable_button: 10       # RB

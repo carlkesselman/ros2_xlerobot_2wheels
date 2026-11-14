@@ -120,9 +120,16 @@ left_arm_controller:
     # A goal that names only some of the joints would leave the others to hold whatever
     # the last trajectory ended on, better refused.
     allow_partial_joints_goal: false
-    # Closed loop: the trajectory starts from the measured state. On activation the controller
-    # holds the position the joints are at, the driver seeds the command with it.
+    # On activation the controller holds the position the joints are at, the driver seeds the
+    # command with it. Feedback is still used for tolerances, but each new trajectory starts from
+    # the last command, not the measured state. Leader teleop streams a new single-point trajectory
+    # every 20 ms. Started from the measured state, which trails by the servo's ~130 ms, each one
+    # pulled the reference back toward the arm, and the controller stage alone came to 235-335 ms
+    # (2026-11-14, splitlag.py). With this it is 30-35 ms, and leader to follower went from
+    # 285-405 ms to 150-240 ms. Catch: after a stall or a push, the next trajectory starts from a
+    # command the arm never reached; the driver's position_rate_limit bounds how fast it then moves.
     open_loop_control: false
+    interpolate_from_desired_state: true
     state_publish_rate: 50.0
     action_monitor_rate: 20.0
     constraints:
@@ -136,9 +143,16 @@ right_arm_controller:
     # A goal that names only some of the joints would leave the others to hold whatever
     # the last trajectory ended on, better refused.
     allow_partial_joints_goal: false
-    # Closed loop: the trajectory starts from the measured state. On activation the controller
-    # holds the position the joints are at, the driver seeds the command with it.
+    # On activation the controller holds the position the joints are at, the driver seeds the
+    # command with it. Feedback is still used for tolerances, but each new trajectory starts from
+    # the last command, not the measured state. Leader teleop streams a new single-point trajectory
+    # every 20 ms. Started from the measured state, which trails by the servo's ~130 ms, each one
+    # pulled the reference back toward the arm, and the controller stage alone came to 235-335 ms
+    # (2026-11-14, splitlag.py). With this it is 30-35 ms, and leader to follower went from
+    # 285-405 ms to 150-240 ms. Catch: after a stall or a push, the next trajectory starts from a
+    # command the arm never reached; the driver's position_rate_limit bounds how fast it then moves.
     open_loop_control: false
+    interpolate_from_desired_state: true
     state_publish_rate: 50.0
     action_monitor_rate: 20.0
     constraints:
@@ -152,9 +166,16 @@ left_gripper_controller:
     # A goal that names only some of the joints would leave the others to hold whatever
     # the last trajectory ended on, better refused.
     allow_partial_joints_goal: false
-    # Closed loop: the trajectory starts from the measured state. On activation the controller
-    # holds the position the joints are at, the driver seeds the command with it.
+    # On activation the controller holds the position the joints are at, the driver seeds the
+    # command with it. Feedback is still used for tolerances, but each new trajectory starts from
+    # the last command, not the measured state. Leader teleop streams a new single-point trajectory
+    # every 20 ms. Started from the measured state, which trails by the servo's ~130 ms, each one
+    # pulled the reference back toward the arm, and the controller stage alone came to 235-335 ms
+    # (2026-11-14, splitlag.py). With this it is 30-35 ms, and leader to follower went from
+    # 285-405 ms to 150-240 ms. Catch: after a stall or a push, the next trajectory starts from a
+    # command the arm never reached; the driver's position_rate_limit bounds how fast it then moves.
     open_loop_control: false
+    interpolate_from_desired_state: true
     state_publish_rate: 50.0
     action_monitor_rate: 20.0
     constraints:
@@ -168,9 +189,16 @@ right_gripper_controller:
     # A goal that names only some of the joints would leave the others to hold whatever
     # the last trajectory ended on, better refused.
     allow_partial_joints_goal: false
-    # Closed loop: the trajectory starts from the measured state. On activation the controller
-    # holds the position the joints are at, the driver seeds the command with it.
+    # On activation the controller holds the position the joints are at, the driver seeds the
+    # command with it. Feedback is still used for tolerances, but each new trajectory starts from
+    # the last command, not the measured state. Leader teleop streams a new single-point trajectory
+    # every 20 ms. Started from the measured state, which trails by the servo's ~130 ms, each one
+    # pulled the reference back toward the arm, and the controller stage alone came to 235-335 ms
+    # (2026-11-14, splitlag.py). With this it is 30-35 ms, and leader to follower went from
+    # 285-405 ms to 150-240 ms. Catch: after a stall or a push, the next trajectory starts from a
+    # command the arm never reached; the driver's position_rate_limit bounds how fast it then moves.
     open_loop_control: false
+    interpolate_from_desired_state: true
     state_publish_rate: 50.0
     action_monitor_rate: 20.0
     constraints:

@@ -119,6 +119,7 @@
           <param name="baud_rate">1000000</param>
           <param name="enable_mock_mode">$(arg use_mock_hardware)</param>
           <param name="proportional_vel_max">${dims['arms']['servo_speed_limit_steps']}</param>
+          <param name="servo_acceleration">${dims['arms'].get('servo_acceleration', 100)}</param>
         </hardware>
 
         <xacro:if value="${with_arms}">
@@ -153,6 +154,7 @@
           <param name="baud_rate">1000000</param>
           <param name="enable_mock_mode">$(arg use_mock_hardware)</param>
           <param name="proportional_vel_max">${dims['arms']['servo_speed_limit_steps']}</param>
+          <param name="servo_acceleration">${dims['arms'].get('servo_acceleration', 100)}</param>
         </hardware>
         <xacro:sts_arm_joints prefix="right_arm" side="right" read_only="${torque_off}" joints="${dims['arms']['joints']}" margin="${dims['arms']['limit_margin']}"/>
       </ros2_control>
@@ -161,9 +163,10 @@
     <!-- ================= BASE : two brushless wheels on the ODrive ================= -->
     <!-- Mock: ros2_control's own GenericSystem, which integrates the velocity command into the
          position state (calculate_dynamics), so diff_drive_controller gets odometry to difference.
-         Real: the ODrive hardware interface is step 2 of docs/rosie-port-plan.md and doesn't exist
-         yet, so asking for it stops xacro with a message instead of failing inside
-         controller_manager.
+         Real: xlerobot_odrive_hardware over native USB. Acceleration is per wheel in rad/s^2,
+         from robot_dimensions.yaml's m/s^2 and the wheel radius. With friction_ff_nm or
+         inertia_ff above 0 the driver ramps in software and sends feed-forward torque; both 0 and
+         the board's own VEL_RAMP does the ramp.
 
          The left motor is the mirrored one on this cart. That sign lives in exactly one place,
          diff_drive_controller's left_wheel_radius_multiplier: -1.0 (controllers.yaml); the joints
@@ -176,7 +179,12 @@
           <param name="calculate_dynamics">true</param>
         </xacro:if>
         <xacro:unless value="$(arg use_mock_hardware)">
-          ${xacro.fatal('base: no ODrive hardware interface yet (step 2 of docs/rosie-port-plan.md); use use_mock_hardware:=true')}
+          <plugin>xlerobot_odrive_hardware/ODriveSystem</plugin>
+          <param name="serial_number">${od['serial_number']}</param>
+          <param name="max_wheel_accel">${od['max_accel_mps2'] / b['wheel_radius']}</param>
+          <param name="friction_ff_nm">${od['friction_ff_nm']}</param>
+          <param name="inertia_ff">${od['inertia_ff']}</param>
+          <param name="watchdog_s">${od['watchdog_s']}</param>
         </xacro:unless>
       </hardware>
       <xacro:odrive_wheel_joint name="left_wheel_joint"  axis="${od['left_axis']}"  wmax="${wmax}"/>
