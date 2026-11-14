@@ -56,6 +56,7 @@ import os
 import pathlib
 import signal
 import tempfile
+import xml.etree.ElementTree as ET
 
 import rclpy
 import rerun as rr
@@ -177,7 +178,7 @@ def blueprint(cameras):
         tabs.append(rrb.Horizontal(
             *[rrb.Spatial3DView(
                 name=name, origin="/",
-                contents=["/xlerobot/**", "/transforms/**", "/cameras/head",
+                contents=["/xlerobot/**", "/transforms/**", "/cameras/head", "/cameras/head_depth",
                           "- /xlerobot/collision_geometries/**"],
                 spatial_information=rrb.SpatialInformation(target_frame="base_link"),
                 eye_controls=rrb.EyeControls3D(
@@ -278,6 +279,11 @@ class RerunBridge(Node):
             ParticleCloud, "/particle_cloud", self.on_particles,
             QoSProfile(depth=1, reliability=ReliabilityPolicy.BEST_EFFORT))
         self.map_tf_time = 0.0
+        # Static transforms the URDF doesn't define (a camera driver's own frame tree), held
+        # until robot_description says which frames the URDF owns; see log_static_tf.
+        self.urdf_links = None
+        self.pending_static_tf = []
+        self.static_tf_logged = set()
         self.create_subscription(TFMessage, "/tf", lambda m: self.on_tf(m, False), QoSProfile(depth=100))
         self.create_subscription(
             TFMessage, "/tf_static", lambda m: self.on_tf(m, True),
@@ -326,10 +332,22 @@ class RerunBridge(Node):
         # for free, without this bridge parsing depth/points (PointCloud2, ~920k XYZ points/frame)
         # off the Jetson itself.
         self.last_depth_log_time = {}
+        self.depth_viewer_pinholes = set()
         for name in DEPTH_CAMERAS:
-            self.create_subscription(
-                Image, f"cameras/{name}/depth/image_raw",
-                lambda msg, name=name: self.on_depth_image(msg, name), qos_profile_sensor_data)
+            if video == "jpeg":
+                # Remote viewing: cameras.launch.py's light copy, depth_viewer/image_raw (shrunk
+                # and throttled on the robot) with its intrinsics on depth_small/camera_info, at
+                # its own entity next to the camera's: a Pinhole can't sit under another Pinhole.
+                self.create_subscription(
+                    CameraInfo, f"cameras/{name}/depth_small/camera_info",
+                    lambda msg, name=name: self.on_depth_viewer_info(msg, name), qos_profile_sensor_data)
+                self.create_subscription(
+                    Image, f"cameras/{name}/depth_viewer/image_raw",
+                    lambda msg, name=name: self.on_depth_viewer(msg, name), qos_profile_sensor_data)
+            else:
+                self.create_subscription(
+                    Image, f"cameras/{name}/depth/image_raw",
+                    lambda msg, name=name: self.on_depth_image(msg, name), qos_profile_sensor_data)
 
     def on_camera_info(self, msg: CameraInfo, name):
         if name in self.pinhole_logged:
@@ -358,6 +376,33 @@ class RerunBridge(Node):
         depth = np.frombuffer(msg.data, dtype=np.uint16).reshape(msg.height, msg.width)
         self.set_time(msg.header)
         rr.log(f"cameras/{name}", rr.DepthImage(depth, meter=DEPTH_METER))
+
+    def on_depth_viewer_info(self, msg: CameraInfo, name):
+        if name in self.depth_viewer_pinholes or msg.k[0] <= 0.0 or msg.k[4] <= 0.0:
+            return
+        rr.log(
+            f"cameras/{name}_depth",
+            rr.Pinhole(
+                resolution=[msg.width, msg.height], focal_length=[msg.k[0], msg.k[4]],
+                principal_point=[msg.k[2], msg.k[5]], camera_xyz=rr.ViewCoordinates.RDF,
+                parent_frame=msg.header.frame_id),
+            static=True)
+        self.depth_viewer_pinholes.add(name)
+        self.get_logger().info(f"logging depth from cameras/{name}/depth_viewer/image_raw to cameras/{name}_depth "
+                               f"({msg.width}x{msg.height}, frame {msg.header.frame_id})")
+
+    def on_depth_viewer(self, msg: Image, name):
+        if name not in self.depth_viewer_pinholes:
+            return  # nothing to back-project through until its camera_info arrives
+        if msg.encoding not in ("16UC1", "mono16"):
+            self.get_logger().warning(
+                f"cameras/{name}/depth_viewer: unexpected encoding {msg.encoding!r}, skipping",
+                throttle_duration_sec=10.0)
+            return
+        depth = np.frombuffer(msg.data, dtype=np.uint16).reshape(msg.height, msg.width)
+        path = f"cameras/{name}_depth"
+        self.set_video_time(msg.header, path)
+        rr.log(path, rr.DepthImage(depth, meter=DEPTH_METER))
 
     def on_rosout(self, msg: Log):
         stamp = msg.stamp.sec + msg.stamp.nanosec / 1e9
@@ -487,6 +532,8 @@ class RerunBridge(Node):
         tree.log_urdf_to_recording()
         self.joints = {j.name: j for j in tree.joints() if j.joint_type != "fixed"}
         self.get_logger().info(f"logged robot model, {len(self.joints)} movable joints")
+        self.urdf_links = {link.get("name") for link in ET.fromstring(msg.data).iter("link")}
+        self.log_static_tf()
 
     def on_odom(self, msg: Odometry):
         self.set_time(msg.header)
@@ -520,6 +567,9 @@ class RerunBridge(Node):
             rr.LineStrips3D([[(px, py, PLAN_Z) for px, py in points]], colors=[(0, 114, 178)], radii=0.01))
 
     def on_tf(self, msg: TFMessage, static):
+        if static:
+            self.pending_static_tf.extend(msg.transforms)
+            self.log_static_tf()
         for t in msg.transforms:
             if t.header.frame_id != MAP_FRAME or t.child_frame_id != ODOM_FRAME:
                 continue
@@ -536,6 +586,34 @@ class RerunBridge(Node):
                     translation=[v.x, v.y, v.z], rotation=rr.Quaternion(xyzw=[q.x, q.y, q.z, q.w]),
                     parent_frame=MAP_FRAME, child_frame=ODOM_FRAME),
                 static=static)
+
+    def log_static_tf(self):
+        """Give Rerun the static frames the URDF doesn't: a camera driver publishes its own tree
+        (realsense2_camera and orbbec_camera: head_link -> head_color_frame ->
+        head_color_optical_frame, ...), and a camera's Pinhole and depth hang from those frames.
+        Without them Rerun can't place the frustum or back-project the depth at all. Frames the
+        URDF defines are skipped, it already logs them, and defining a frame twice is an error
+        ("Two entities define the same child frame"); so nothing is logged before
+        robot_description has been read."""
+        if self.urdf_links is None:
+            return
+        before = len(self.static_tf_logged)
+        for t in self.pending_static_tf:
+            child, parent = t.child_frame_id, t.header.frame_id
+            if (child in self.urdf_links or child in self.static_tf_logged
+                    or child in (ODOM_FRAME, MAP_FRAME, BASE_FRAME)):
+                continue
+            v, q = t.transform.translation, t.transform.rotation
+            rr.log(
+                f"transforms/static/{child}",
+                rr.Transform3D(
+                    translation=[v.x, v.y, v.z], rotation=rr.Quaternion(xyzw=[q.x, q.y, q.z, q.w]),
+                    parent_frame=parent, child_frame=child),
+                static=True)
+            self.static_tf_logged.add(child)
+        self.pending_static_tf.clear()
+        if len(self.static_tf_logged) > before:
+            self.get_logger().info(f"logged static frames not in the URDF: {sorted(self.static_tf_logged)}")
 
     def on_map(self, msg: OccupancyGrid):
         self.set_time(msg.header)

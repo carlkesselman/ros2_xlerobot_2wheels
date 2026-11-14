@@ -54,6 +54,15 @@ cameras:
       - path: /dev/v4l/by-path/platform-3610000.usb-usb-0:2:1.3-video-index0   # elroy: D415 colour
         pixel_format: yuyv2rgb
     frame_id: head_camera_optical_frame
+    # sensor:=realsense: the D415 through realsense2_camera instead of usb_cam (colour and
+    # aligned depth, cameras.launch.py _realsense_head). Profiles are "width,height,fps".
+    # depth_viewer_*: the light copy of the depth for the remote viewer.
+    realsense:
+      serial_no: "836112060112"
+      color_profile: "640,480,30"
+      depth_profile: "640,480,30"
+      depth_viewer_scale: 0.5
+      depth_viewer_fps: 5
   left:
     device: [/dev/xle-cam-left, /dev/cam_left]
     frame_id: left_arm_wrist_camera_optical_frame

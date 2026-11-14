@@ -5,7 +5,8 @@ left/right (arm wrist cameras) are always plain USB webcams: one usb_cam node pe
 device exists, in the namespace cameras/<name>. image_transport's ffmpeg plugin encodes on
 <name>/image_raw/ffmpeg while something subscribes to it.
 
-head depends on the sensor:=usbcam|gemini arg (default usbcam, matches xlerobot.urdf.xacro's own
+head depends on the sensor:=usbcam|gemini|realsense arg (realsense: _realsense_head below, colour
+plus aligned depth from realsense2_camera; default usbcam, matches xlerobot.urdf.xacro's own
 default - see ADR-0003):
   - usbcam: same plain usb_cam node as left/right, from cameras.yaml's head entry.
   - gemini: the usb_cam entry for head is skipped entirely. Instead, the official
@@ -48,6 +49,98 @@ from launch.launch_description_sources import PythonLaunchDescriptionSource
 from launch.substitutions import LaunchConfiguration
 from launch_ros.actions import ComposableNodeContainer, Node, PushRosNamespace, SetRemap
 from launch_ros.descriptions import ComposableNode
+
+
+def _viewer_throttle(name, cfg, source="image_raw/compressed"):
+    """The remote viewer's copy of a camera's JPEG stream, see cameras.yaml viewer_fps. The
+    throttle keeps the JPEG encoder running at the full rate (it always subscribes), but only
+    viewer_fps frames a second leave the robot. source is relative to cameras/<name>."""
+    viewer_fps = float(cfg.get("viewer_fps", 0))
+    if viewer_fps <= 0:
+        return []
+    return [Node(
+        package="topic_tools",
+        executable="throttle",
+        name="viewer_throttle",
+        namespace=f"cameras/{name}",
+        arguments=["messages", source, str(viewer_fps), "viewer/compressed"],
+    )]
+
+
+def _realsense_head(cfg):
+    """The head RealSense through realsense2_camera: colour, and depth aligned to it.
+
+    The node is /cameras/head. Its colour comes out at cameras/head/image_raw and camera_info,
+    remapped from color/*, so every consumer of the usb_cam layout keeps working, the viewer
+    copy included, except that the driver's transports (compressed, ffmpeg, ...) stay at
+    color/image_raw/*: the remap moves only the raw topic. Aligned depth stays at aligned_depth_to_color/*: the unaligned depth stream's
+    depth/camera_info has different intrinsics, so remapping onto depth/* would mix the two.
+
+    With camera_name head the driver publishes its TF tree rooted at head_link (head_link ->
+    head_color_frame -> head_color_optical_frame, ...). xlerobot_description's realsense
+    branch places head_link on the head, as for the Gemini.
+
+    depth_viewer/image_raw: the aligned depth shrunk by depth_viewer_scale (nearest, so no
+    blending at edges) and throttled to depth_viewer_fps, for the remote viewer. Raw 640x480
+    depth at 30 fps is about 18 MB/s; at half size and 5 fps it is about 0.75 MB/s. Its intrinsics
+    are depth_small/camera_info (full rate, small): image_transport names a camera's info topic
+    after its image topic, so the resize node's info follows the depth_small/image_raw remap."""
+    head = "/cameras/head"
+    nodes = [Node(
+        package="realsense2_camera",
+        executable="realsense2_camera_node",
+        namespace="cameras",
+        name="head",
+        parameters=[{
+            "camera_name": "head",
+            "serial_no": str(cfg.get("serial_no", "")),
+            "rgb_camera.color_profile": cfg["color_profile"],
+            "depth_module.depth_profile": cfg["depth_profile"],
+            "enable_color": True,
+            "enable_depth": True,
+            "enable_infra1": False,
+            "enable_infra2": False,
+            "enable_gyro": False,        # the D415 has no IMU
+            "enable_accel": False,
+            "align_depth.enable": True,
+            "pointcloud.enable": False,  # the viewer back-projects depth itself
+            "publish_tf": True,
+            "tf_publish_rate": 0.0,      # static
+            # image_transport names its parameters after the topic before remapping
+            ".head.color.image_raw.compressed.jpeg_quality": int(cfg.get("jpeg_quality", 95)),
+        }],
+        remappings=[(f"{head}/color/image_raw", f"{head}/image_raw"),
+                    (f"{head}/color/camera_info", f"{head}/camera_info")],
+    )]
+    scale = float(cfg.get("depth_viewer_scale", 0.5))
+    depth_fps = float(cfg.get("depth_viewer_fps", 0))
+    if depth_fps > 0:
+        nodes.append(ComposableNodeContainer(
+            package="rclcpp_components",
+            executable="component_container",
+            name="depth_viewer_container",
+            namespace=head,
+            composable_node_descriptions=[ComposableNode(
+                package="image_proc",
+                plugin="image_proc::ResizeNode",
+                name="depth_viewer_resize",
+                namespace=head,
+                parameters=[{"scale_height": scale, "scale_width": scale, "interpolation": 0}],
+                remappings=[
+                    ("image/image_raw", "aligned_depth_to_color/image_raw"),
+                    ("image/camera_info", "aligned_depth_to_color/camera_info"),
+                    ("resize/image_raw", "depth_small/image_raw"),   # info: depth_small/camera_info
+                ],
+            )],
+        ))
+        nodes.append(Node(
+            package="topic_tools",
+            executable="throttle",
+            name="depth_viewer_throttle",
+            namespace=head,
+            arguments=["messages", "depth_small/image_raw", str(depth_fps), "depth_viewer/image_raw"],
+        ))
+    return nodes + _viewer_throttle("head", cfg, source="color/image_raw/compressed")
 
 
 def _camera_nodes(context, *args, **kwargs):
@@ -122,6 +215,10 @@ def _camera_nodes(context, *args, **kwargs):
             ]))
             continue
 
+        if name == "head" and sensor == "realsense":
+            actions += _realsense_head({**d, **camera, **camera.get("realsense", {})})
+            continue
+
         # device is a path or a list of them: the first one that exists is used, so one file
         # serves machines whose udev rules name the same camera differently. A list entry can
         # also be a mapping, {path: ..., <setting>: ...}, whose settings apply only to that device
@@ -164,18 +261,7 @@ def _camera_nodes(context, *args, **kwargs):
                 ".image_raw.compressed.jpeg_quality": int(cfg.get("jpeg_quality", 95)),
             }],
         ))
-        # The remote viewer's copy, see cameras.yaml viewer_fps. The throttle keeps the JPEG
-        # encoder running at the full rate (it always subscribes), but only viewer_fps frames
-        # a second leave the robot.
-        viewer_fps = float(cfg.get("viewer_fps", 0))
-        if viewer_fps > 0:
-            actions.append(Node(
-                package="topic_tools",
-                executable="throttle",
-                name="viewer_throttle",
-                namespace=f"cameras/{name}",
-                arguments=["messages", "image_raw/compressed", str(viewer_fps), "viewer/compressed"],
-            ))
+        actions += _viewer_throttle(name, cfg)
     return actions
 
 

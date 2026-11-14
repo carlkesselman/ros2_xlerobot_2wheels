@@ -62,12 +62,25 @@
         <child  link="head_camera_link"/>
         <origin xyz="0 0 0" rpy="0 0 0"/>
       </joint>
-      <!-- REP-103 optical frame, z forward -->
+      <!-- REP-103 optical frame, z forward. The driver stamps its images with its own
+           head_color_optical_frame (below head_link), not this one. -->
       <link name="head_camera_optical_frame"/>
       <joint name="head_camera_optical_joint" type="fixed">
         <parent link="head_camera_link"/>
         <child  link="head_camera_optical_frame"/>
         <origin xyz="0 0 0" rpy="${-pi/2} 0 ${-pi/2}"/>
+      </joint>
+      <!-- realsense2_camera (cameras.launch.py, camera_name head) publishes its own calibrated
+           TF tree rooted at head_link: head_link -> head_color_frame ->
+           head_color_optical_frame, head_depth_frame, ... as the Gemini's driver does. So this
+           only places head_link, x forward like head_camera_link. The driver's head_link is
+           its depth origin (the left imager), not the front glass centre: a couple of cm to
+           the side, not measured yet. -->
+      <link name="head_link"/>
+      <joint name="head_link_joint" type="fixed">
+        <parent link="head_camera_link"/>
+        <child  link="head_link"/>
+        <origin xyz="0 0 0" rpy="0 0 0"/>
       </joint>
     </xacro:if>
 
