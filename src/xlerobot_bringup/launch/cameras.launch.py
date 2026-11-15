@@ -103,6 +103,9 @@ def _realsense_head(cfg):
             "enable_gyro": False,        # the D415 has no IMU
             "enable_accel": False,
             "align_depth.enable": True,
+            # Keep the colour stream at its profile's 30 fps: with priority on, the D415 lengthened its exposure
+            # indoors and delivered 15 fps (2026-11-14), which halves the head camera in LeRobot datasets.
+            "rgb_camera.auto_exposure_priority": False,
             "pointcloud.enable": False,  # the viewer back-projects depth itself
             "publish_tf": True,
             "tf_publish_rate": 0.0,      # static
