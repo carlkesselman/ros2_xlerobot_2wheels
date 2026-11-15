@@ -22,6 +22,8 @@ Running on the real robot:
 - [x] Hand-guided record and replay, also of both arms together
 - [x] Console UI to start, stop and check the stack (`tools/xlerobot_tui.py`)
 - [x] MCP server for agent control, and a Rerun bridge for timeline debugging
+- [x] LeRobot over ROS: leader-arm demos recorded to LeRobot datasets, SmolVLA/ACT policies run on the Mac's GPU
+  ([docs/lerobot.md](docs/lerobot.md)); not yet tried on the real robot
 
 Not yet:
 
@@ -58,6 +60,7 @@ src/xlerobot_teleop/              joystick, twist mux, safety supervisor
 src/xlerobot_navigation/          slam_toolbox, Nav2, robot_localization
 src/xlerobot_perception/          camera and lidar bringup
 src/xlerobot_object_perception/   on-demand object pose service
+src/xlerobot_lerobot/             LeRobot datasets and policies (SmolVLA) over the topics, on the Mac (docs/lerobot.md)
 sim/                              Isaac Sim twin
 tools/                            TUI, calibration, diagnostics, MCP server, see docs/tools.md
 docs/setup.md                     setting up and calibrating a robot, step by step

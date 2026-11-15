@@ -4,13 +4,14 @@
 #   tools/setup_venv.sh            the tools venv, <repo>/.venv
 #   tools/setup_venv.sh rerun      ~/venvs/xlerobot-rerun, for rerun_bridge.py
 #   tools/setup_venv.sh models     ~/venvs/xlerobot-models, perception model export (NVIDIA GPU machine)
+#   tools/setup_venv.sh lerobot    ~/venvs/xlerobot-lerobot, LeRobot VLA policies (SmolVLA) on the Mac's GPU
 #
 # The tools venv is built on the ROS install's own Python with --system-site-packages, so rclpy, cv_bridge, the message
 # types and (on the robot) OpenCV, SciPy and TensorRT are visible in it. That Python is the pixi environment's on a Mac
 # (run this inside `pixi shell`, or as `pixi run venv`) and /usr/bin/python3 with apt ROS Jazzy on the robot. A bare
 # `uv sync` would instead build .venv on a uv-managed Python that cannot see rclpy.
 #
-# rerun and models want NumPy 2 and must not see the system packages; they get plain venvs. rclpy still reaches them
+# rerun, models and lerobot want NumPy 2 and must not see the system packages; they get plain venvs. rclpy still reaches them
 # through the sourced ROS install's PYTHONPATH.
 set -euo pipefail
 cd "$(dirname "$0")/.."
@@ -33,13 +34,13 @@ case "$which_env" in
         "$venv/bin/python" -c "import rclpy" 2>/dev/null \
             || echo "warning: rclpy is not visible in $venv - source ROS (or use pixi shell) before running the tools"
         ;;
-    rerun|models)
+    rerun|models|lerobot)
         venv="$HOME/venvs/xlerobot-$which_env"
         [ -x "$venv/bin/python" ] || uv venv --python 3.12 "$venv"
         UV_PROJECT_ENVIRONMENT="$venv" uv sync --no-default-groups --group "$which_env"
         ;;
     *)
-        echo "usage: $0 [tools|rerun|models]" >&2
+        echo "usage: $0 [tools|rerun|models|lerobot]" >&2
         exit 2
         ;;
 esac

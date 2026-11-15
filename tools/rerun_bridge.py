@@ -40,6 +40,10 @@ entry shows the call, the agent's stated reason, and the result/error together,
 so "what was the agent doing, and what did the stack say back" reads next to
 "what was ROS2 saying at that same moment" without digging through two tools.
 
+The Policy tab plots what tools/lerobot.sh policy plans (/lerobot_policy/planned, one
+JointTrajectory per action chunk, points) against the arm joints as measured (/joint_states,
+lines), per arm. It fills only while the policy node runs.
+
 Usage (bringup already running):
     python3 tools/rerun_bridge.py
     python3 tools/rerun_bridge.py --save run.rrd    # record to a file, no viewer
@@ -56,6 +60,7 @@ import os
 import pathlib
 import signal
 import tempfile
+import time
 import xml.etree.ElementTree as ET
 
 import rclpy
@@ -72,6 +77,7 @@ from rerun.blueprint.components import PlayState
 from sensor_msgs.msg import CameraInfo, CompressedImage, Image, JointState, LaserScan
 from std_msgs.msg import String
 from tf2_msgs.msg import TFMessage
+from trajectory_msgs.msg import JointTrajectory
 
 try:
     from ffmpeg_image_transport_msgs.msg import FFMPEGPacket
@@ -87,6 +93,10 @@ MAP_ENTITIES = ("world/map/occupied", "world/map/free", "world/particles")
 MAP_TF_PERIOD = 0.2  # s, slam_toolbox publishes map -> odom at 50 Hz
 JOINT_TRANSFORM_PERIOD = 1.0 / 30  # s, /joint_states arrives at 100 Hz, 30 Hz is smooth enough
 CAMERAS = ("head", "left", "right")
+POLICY_TOPIC = "/lerobot_policy/planned"   # tools/lerobot.sh policy, one JointTrajectory per action chunk
+POLICY_JOINTS = ("shoulder_pan", "shoulder_lift", "elbow_flex", "wrist_flex", "wrist_roll", "gripper")
+POLICY_ACTUAL_PERIOD = 0.5  # s, measured joints are batched into one send_columns per joint this often
+POLICY_IDLE = 5.0           # s without a planned chunk after which the measured joints stop being logged
 DEPTH_CAMERAS = ("head",)  # left/right are plain 2D wrist webcams, no depth stream
 DEPTH_LOG_PERIOD = 1.0 / 8  # s, matches the driver's own depth/points rate - raw depth/image_raw
 # arrives at ~20-26Hz uncompressed (1280x720 16UC1, no ffmpeg transport for it), logging every
@@ -221,6 +231,15 @@ def blueprint(cameras):
         name="Odometry & Map",
     ))
 
+    # tools/lerobot.sh policy: planned chunks (points) against the measured joints (lines), per arm
+    tabs.append(rrb.Vertical(
+        rrb.TimeSeriesView(name="Left arm: planned and measured", origin="/policy/left"),
+        rrb.TimeSeriesView(name="Right arm: planned and measured", origin="/policy/right"),
+        rrb.TimeSeriesView(name="Policy actions (not matched to joints)", origin="/policy/actions"),
+        row_shares=[2, 2, 1],
+        name="Policy",
+    ))
+
     tabs.append(rrb.Horizontal(
         rrb.TextLogView(name="ROS2 Log", origin="/logs/rosout"),
         rrb.TextLogView(name="MCP Calls", origin="/logs/mcp"),
@@ -271,6 +290,11 @@ class RerunBridge(Node):
             TwistStamped, "/diff_drive_controller/cmd_vel", self.on_cmd_vel_final, 20)
         self.create_subscription(TwistStamped, "/cmd_vel_nav", self.on_cmd_vel_nav, 20)
         self.create_subscription(JointState, "/joint_states", self.on_joint_states, 20)
+        self.policy_seen = -POLICY_IDLE   # monotonic time of the last planned chunk
+        self.policy_actual = {}           # entity -> ([stamps], [positions]) waiting to be sent
+        self.policy_actual_sent = 0.0
+        self.policy_styled = set()
+        self.create_subscription(JointTrajectory, POLICY_TOPIC, self.on_policy_planned, 10)
         self.create_subscription(PoseStamped, "/goal_pose", self.on_goal, 10)
         self.create_subscription(LaserScan, "/ldlidar_node/scan", self.on_scan, qos_profile_sensor_data)
         latched = QoSProfile(depth=1, durability=DurabilityPolicy.TRANSIENT_LOCAL)
@@ -686,6 +710,8 @@ class RerunBridge(Node):
 
     def on_joint_states(self, msg: JointState):
         self.set_time(msg.header)
+        if time.monotonic() - self.policy_seen < POLICY_IDLE:
+            self.buffer_policy_actual(msg)
         for name, position, velocity in zip(msg.name, msg.position, msg.velocity):
             if name in ("left_wheel_joint", "right_wheel_joint"):
                 rr.log(f"wheels/{name}/velocity", rr.Scalars(velocity))
@@ -702,6 +728,63 @@ class RerunBridge(Node):
         for name, position in zip(msg.name, msg.position):
             if name in self.joints:
                 rr.log(f"transforms/{name}", self.joints[name].compute_transform(position))
+
+
+    # -- tools/lerobot.sh policy
+
+    def policy_entity(self, joint):
+        """left_arm_shoulder_pan_joint -> policy/left/shoulder_pan; anything else (action_3) -> policy/actions/..."""
+        for side in ("left", "right"):
+            prefix = f"{side}_arm_"
+            if joint.startswith(prefix) and joint.endswith("_joint"):
+                short = joint[len(prefix):-len("_joint")]
+                if short in POLICY_JOINTS:
+                    return f"policy/{side}/{short}", POLICY_JOINTS.index(short), short
+        return f"policy/actions/{joint}", None, joint
+
+    def style_policy(self, joint):
+        entity, index, short = self.policy_entity(joint)
+        if entity in self.policy_styled:
+            return entity
+        self.policy_styled.add(entity)
+        n = len(POLICY_JOINTS)
+        r, g, b = colorsys.hsv_to_rgb(((index if index is not None else hash(short) % n) / n), 0.75, 0.95)
+        color = (int(r * 255), int(g * 255), int(b * 255))
+        rr.log(f"{entity}/planned", rr.SeriesPoints(colors=[color], names=[f"{short} planned"], markers=["circle"],
+                                                    marker_sizes=[1.5]), static=True)
+        rr.log(f"{entity}/measured", rr.SeriesLines(colors=[color], names=[short], widths=[2.0]), static=True)
+        return entity
+
+    def on_policy_planned(self, msg: JointTrajectory):
+        """One chunk: every point at its own future time, one send_columns per joint."""
+        self.policy_seen = time.monotonic()
+        if not msg.points:
+            return
+        t0 = stamp_seconds(msg.header) or self.get_clock().now().nanoseconds / 1e9
+        times = np.array([t0 + p.time_from_start.sec + p.time_from_start.nanosec / 1e9 for p in msg.points])
+        for i, joint in enumerate(msg.joint_names):
+            entity = self.style_policy(joint)
+            values = np.array([p.positions[i] for p in msg.points], dtype=np.float64)
+            rr.send_columns(f"{entity}/planned", indexes=[rr.TimeColumn("ros_time", timestamp=times)],
+                            columns=rr.Scalars.columns(scalars=values))
+
+    def buffer_policy_actual(self, msg: JointState):
+        stamp = stamp_seconds(msg.header) or self.get_clock().now().nanoseconds / 1e9
+        for joint, position in zip(msg.name, msg.position):
+            entity, index, _ = self.policy_entity(joint)
+            if index is None:
+                continue
+            stamps, values = self.policy_actual.setdefault(self.style_policy(joint), ([], []))
+            stamps.append(stamp)
+            values.append(position)
+        if time.monotonic() - self.policy_actual_sent < POLICY_ACTUAL_PERIOD:
+            return
+        self.policy_actual_sent = time.monotonic()
+        for entity, (stamps, values) in self.policy_actual.items():
+            if stamps:
+                rr.send_columns(f"{entity}/measured", indexes=[rr.TimeColumn("ros_time", timestamp=stamps)],
+                                columns=rr.Scalars.columns(scalars=np.array(values, dtype=np.float64)))
+        self.policy_actual = {}
 
 
 def main():

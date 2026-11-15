@@ -1,0 +1,28 @@
+<?xml version="1.0"?>
+<?xml-model href="http://download.ros.org/schema/package_format3.xsd" schematypens="http://www.w3.org/2001/XMLSchema"?>
+<package format="3">
+  <name>xlerobot_lerobot</name>
+  <version>0.0.1</version>
+  <description>
+    LeRobot on top of the ROS 2 stack, for the operator station (the Mac): record leader-arm
+    demonstrations from the camera, joint state and arm command topics into a LeRobot dataset,
+    and run a trained policy (SmolVLA) that sends its action chunks to the arm controllers as
+    JointTrajectory messages. lerobot is not in the control path (ADR-0001); it is a client of
+    the topics. The modules run on the LeRobot venv's Python (tools/setup_venv.sh lerobot,
+    tools/lerobot.sh), with rclpy from the ROS install.
+  </description>
+  <maintainer email="carl@isi.edu">Carl Kesselman</maintainer>
+  <license>Apache-2.0</license>
+
+  <exec_depend>rclpy</exec_depend>
+  <exec_depend>sensor_msgs</exec_depend>
+  <exec_depend>trajectory_msgs</exec_depend>
+  <exec_depend>std_srvs</exec_depend>
+  <exec_depend>builtin_interfaces</exec_depend>
+  <exec_depend>python3-yaml</exec_depend>
+  <exec_depend>xlerobot_description</exec_depend>
+
+  <export>
+    <build_type>ament_python</build_type>
+  </export>
+</package>

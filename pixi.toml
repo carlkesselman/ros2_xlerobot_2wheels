@@ -27,7 +27,7 @@ CMAKE_EXPORT_COMPILE_COMMANDS = "ON"   # compile_commands.json per package in bu
 
 [tasks]
 venv = "tools/setup_venv.sh"
-build = "colcon build --symlink-install --packages-select xlerobot_description xlerobot_odrive_hardware xlerobot_teleop xlerobot_bringup xlerobot_navigation xlerobot_moveit_config xlerobot_skill_msgs xlerobot_object_perception xlerobot_skills xlerobot_executive --cmake-args -DCMAKE_BUILD_TYPE=RelWithDebInfo"
+build = "colcon build --symlink-install --packages-select xlerobot_description xlerobot_odrive_hardware xlerobot_teleop xlerobot_bringup xlerobot_navigation xlerobot_moveit_config xlerobot_skill_msgs xlerobot_object_perception xlerobot_skills xlerobot_executive xlerobot_lerobot --cmake-args -DCMAKE_BUILD_TYPE=RelWithDebInfo"
 
 [dependencies]
 python = "3.12.*"

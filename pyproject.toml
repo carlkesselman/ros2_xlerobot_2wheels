@@ -3,12 +3,13 @@
 # environment (pixi.toml) on a Mac. Create the environments with tools/setup_venv.sh, not a bare `uv sync`, which would
 # build a venv that cannot see rclpy (docs/tools.md#python-environment).
 #
-# Three environments from one lock file, because the ROS tools need NumPy 1.x (cv_bridge and Ubuntu's OpenCV are built
-# against it) while rerun-sdk and the model export need NumPy 2:
+# Four environments from one lock file, because the ROS tools need NumPy 1.x (cv_bridge and Ubuntu's OpenCV are built
+# against it) while rerun-sdk, the model export and LeRobot need NumPy 2:
 #
 #   tools    .venv, sees the ROS Python's packages          tools/setup_venv.sh
 #   rerun    ~/venvs/xlerobot-rerun, rerun_bridge.py         tools/setup_venv.sh rerun
 #   models   ~/venvs/xlerobot-models, perception export      tools/setup_venv.sh models   (NVIDIA GPU machine)
+#   lerobot  ~/venvs/xlerobot-lerobot, VLA policies (SmolVLA) tools/setup_venv.sh lerobot  (Mac, MPS)
 [project]
 name = "xlerobot-tools"
 version = "0.1.0"
@@ -45,6 +46,9 @@ models = [
     "timm",
     "einops",
 ]
+lerobot = [
+    "lerobot[smolvla,training]>=0.7,<0.8; sys_platform == 'darwin'",   # SmolVLA on the Mac's GPU (MPS); elroy would need NVIDIA's torch
+]
 
 [tool.uv]
 package = false
@@ -52,5 +56,8 @@ default-groups = ["tools"]
 conflicts = [
     [{ group = "tools" }, { group = "rerun" }],
     [{ group = "tools" }, { group = "models" }],
+    [{ group = "tools" }, { group = "lerobot" }],
+    [{ group = "rerun" }, { group = "lerobot" }],
+    [{ group = "models" }, { group = "lerobot" }],
 ]
 environments = ["sys_platform == 'darwin'", "sys_platform == 'linux'"]

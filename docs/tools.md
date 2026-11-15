@@ -35,13 +35,14 @@ python3 tools/xlerobot_tui.py
 The MCP server's `run.sh` and the object perception launch file activate the venv themselves; they use `$XLEROBOT_VENV`
 and fall back to the repo's `.venv`, so set that variable if you keep it elsewhere.
 
-Two tools need a venv of their own because their packages want NumPy 2, which breaks `cv_bridge`. They are dependency
+Some tools need a venv of their own because their packages want NumPy 2, which breaks `cv_bridge`. They are dependency
 groups of the same uv project, synced into their own venvs:
 
 | Venv | Create with | For |
 |---|---|---|
 | `~/venvs/xlerobot-rerun` | `tools/setup_venv.sh rerun` | `rerun_bridge.py`; keep `rerun-sdk` in `pyproject.toml` at the viewer's version |
 | `~/venvs/xlerobot-models` | `tools/setup_venv.sh models` | exporting and benchmarking the perception models (`tools/perception/export_models.py`, `segment_eval.py`), on a machine with an NVIDIA GPU |
+| `~/venvs/xlerobot-lerobot` | `tools/setup_venv.sh lerobot` | LeRobot VLA policies (SmolVLA) on the Mac's GPU (MPS): inference, datasets, fine-tuning |
 
 To add a package, add it to the right group in `pyproject.toml`, run `uv lock` and rerun `tools/setup_venv.sh`.
 
@@ -148,8 +149,9 @@ The order to run the calibrations in, and where each result goes, is in [setup.m
 
 | Tool | What it does |
 |---|---|
-| `rerun_bridge.py` | Streams the robot model, odometry, velocities, Nav2 goal/plan, lidar scan, the SLAM map, camera video and the head camera's depth (back-projected into a 3D point cloud on the viewer side) into [Rerun](https://rerun.io/) for timeline debugging - complements RViz/Foxglove rather than replacing them. Also has a Logs tab combining `/rosout` with the MCP server's own call log. |
+| `rerun_bridge.py` | Streams the robot model, odometry, velocities, Nav2 goal/plan, lidar scan, the SLAM map, camera video and the head camera's depth (back-projected into a 3D point cloud on the viewer side) into [Rerun](https://rerun.io/) for timeline debugging - complements RViz/Foxglove rather than replacing them. Also has a Logs tab combining `/rosout` with the MCP server's own call log, and a Policy tab: `lerobot.sh policy`'s planned chunks against the measured arm joints. |
 | `rerun_view.sh` | Runs `rerun_bridge.py` on the Mac operator station and opens the viewer there: `pixi run tools/rerun_view.sh`. Needs `tools/setup_venv.sh rerun` once, and bringup on the robot with `cameras:=true lidar:=true`. The video arrives as H.264, about 2 Mbit/s per camera. |
+| `lerobot.sh` | LeRobot on the Mac over ROS ([lerobot.md](lerobot.md)): `record` leader-arm demonstrations into a LeRobot dataset, run a `policy` (SmolVLA, ACT; dry run unless `--live`), or a `fake_robot` to test both without the robot. Runs `src/xlerobot_lerobot` on `~/venvs/xlerobot-lerobot` (`tools/setup_venv.sh lerobot`). |
 
 ## MCP server
 

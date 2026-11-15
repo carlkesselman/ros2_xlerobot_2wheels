@@ -1,0 +1,47 @@
+# The robot as LeRobot sees it: which ROS topics make one observation and one action. Read by the recorder
+# (record.py) and the policy node (policy.py); a dataset recorded with one layout trains a policy that needs the same
+# layout, so change it between datasets, not within one.
+#
+# Everything is sampled by arrival time on the operator station, newest message per topic. Header stamps are not
+# used: usb_cam 0.8.1 stamps the wrist frames 0-1 s early.
+
+fps: 30                  # dataset and policy rate; the cameras run at 30
+
+# observation.images.<name> <- sensor_msgs/CompressedImage (JPEG). The compressed topics, never image_raw, over wifi
+# (docs/jetson.md section 4). cameras.yaml sets their quality (jpeg_quality 70, about 43 KB a frame); three cameras at
+# 30 fps are about 4 MB/s.
+cameras:
+  head: /cameras/head/color/image_raw/compressed          # sensor:=realsense; with sensor:=usbcam: /cameras/head/image_raw/compressed
+  left_wrist: /cameras/left/image_raw/compressed
+  right_wrist: /cameras/right/image_raw/compressed
+image_size: [480, 640]   # height, width; a frame of another size is resized to this
+
+# observation.state and action, in this order, as /joint_states names them. The dataset calls them by these names
+# without the _joint suffix. Units are the model's (radians), not lerobot's SO-101 degrees.
+joints:
+  - left_arm_shoulder_pan_joint
+  - left_arm_shoulder_lift_joint
+  - left_arm_elbow_flex_joint
+  - left_arm_wrist_flex_joint
+  - left_arm_wrist_roll_joint
+  - left_arm_gripper_joint
+  - right_arm_shoulder_pan_joint
+  - right_arm_shoulder_lift_joint
+  - right_arm_elbow_flex_joint
+  - right_arm_wrist_flex_joint
+  - right_arm_wrist_roll_joint
+  - right_arm_gripper_joint
+
+# Where actions come from while recording (what the leader arms send) and where the policy sends them:
+# JointTrajectory topic -> the joints that controller takes, in its order (controllers.yaml).
+controllers:
+  /left_arm_controller/joint_trajectory:
+    [left_arm_shoulder_pan_joint, left_arm_shoulder_lift_joint, left_arm_elbow_flex_joint, left_arm_wrist_flex_joint, left_arm_wrist_roll_joint]
+  /left_gripper_controller/joint_trajectory: [left_arm_gripper_joint]
+  /right_arm_controller/joint_trajectory:
+    [right_arm_shoulder_pan_joint, right_arm_shoulder_lift_joint, right_arm_elbow_flex_joint, right_arm_wrist_flex_joint, right_arm_wrist_roll_joint]
+  /right_gripper_controller/joint_trajectory: [right_arm_gripper_joint]
+
+# A frame is only recorded, and a policy only runs, while every camera, the joint state and (recording) every
+# commanded joint is newer than this. The leader arms stream at 50 Hz while engaged and stop when disengaged.
+stale_s: 0.25
