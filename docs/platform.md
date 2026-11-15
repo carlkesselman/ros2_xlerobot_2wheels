@@ -23,11 +23,25 @@ Carl (2026-11-01). All the questions in §7 are answered; §6 lists the measurem
 
 | | rosie | elroy | HomeBoy (Mac mini) |
 |---|---|---|---|
-| Role | operator station: leaders, gamepad, viewer | the robot: motors, sensors, dataset, policy, ROS stack | development, build (pixi), RViz, viewer |
-| Hardware | Raspberry Pi 5 | Jetson Orin Nano developer kit | Mac mini, M5 Pro (15-core CPU, 16-core GPU), 48 GB |
+| Role | operator station: leaders, gamepad, viewer | the robot: motors, sensors, ROS stack | development, build (pixi), RViz, viewer; leader arms and gamepad; LeRobot datasets and policies ([lerobot.md](lerobot.md)) |
+| Hardware | Raspberry Pi 5 | Jetson Orin Nano Super developer kit, 8 GB | Mac mini, M5 Pro (15-core CPU, 16-core GPU), 48 GB |
 | OS | Raspberry Pi OS | JetPack 7 (Ubuntu 24.04, CUDA 13) | macOS 27 |
 | Network | wifi `wlan0`, connection `preconfigured`, 192.168.1.100 | wifi `wlP1p1s0` (RTL8822CE), connection `homenet` | |
 | Must-do | wifi power saving off | wifi power saving off, plus the `rtl8822ce` modprobe options (`ORIN-SETUP.md`) | |
+
+**Code on elroy.** `~/Developer/ros2_xlerobot_2wheels` on elroy is a git checkout of `rosie`, tracking GitHub
+(`carlkesselman/ros2_xlerobot_2wheels`). Change code on the Mac, commit and push, then on elroy:
+
+```bash
+cd ~/Developer/ros2_xlerobot_2wheels && git pull --ff-only
+colcon build --symlink-install --packages-select <packages with C++ changes or new files>
+```
+
+elroy is built with `--symlink-install`, so changed Python, launch and config files take effect at the next launch
+without a build. A package with C++ changes, or with files added to its install, needs the build. Don't edit on elroy;
+`git status` there should stay clean. The vcs-imported dependencies in `src/` (`xlerobot.repos`) are not tracked here.
+elroy's `sts_hardware_interface` carries the local `servo_acceleration` patch (copy in
+`tools/sts_servo_acceleration.patch`), so re-importing it needs the patch reapplied.
 
 ## 2. Operator station (rosie)
 
