@@ -10,6 +10,8 @@
 # shell has none.
 set -eo pipefail
 cd "$(dirname "$0")/.."
+# pixi's installer on rosie ran without a PATH update, and ssh shells don't read ~/.bashrc anyway
+command -v pixi >/dev/null || PATH="$HOME/.pixi/bin:$PATH"
 
 env=default
 if [ "$(uname -s)" = Linux ]; then

@@ -122,11 +122,14 @@ class Recorder:
         from lerobot.configs.video import RGBEncoderConfig
         from lerobot.datasets.lerobot_dataset import LeRobotDataset
 
+        from lerobot.utils.constants import HF_LEROBOT_HOME
         a, features = self.args, self.layout.dataset_features()
         threads = 4 * len(self.layout.cameras)
         encoder = RGBEncoderConfig(vcodec=a.vcodec)
+        # create() falls back to this folder by itself, resume() refuses to without being told
+        root = a.root or HF_LEROBOT_HOME / a.repo_id
         if a.resume:
-            ds = LeRobotDataset.resume(a.repo_id, root=a.root, image_writer_threads=threads, rgb_encoder=encoder,
+            ds = LeRobotDataset.resume(a.repo_id, root=root, image_writer_threads=threads, rgb_encoder=encoder,
                                        streaming_encoding=a.streaming_encoding)
             if ds.fps != self.fps:
                 raise SystemExit(f"{a.repo_id} was recorded at {ds.fps} fps, the layout says {self.fps}")
@@ -136,7 +139,7 @@ class Recorder:
                     raise SystemExit(f"{a.repo_id}: feature {key} differs from the layout ({have} vs {feat})")
             print(f"resuming {a.repo_id}: {ds.num_episodes} episodes so far, at {ds.root}")
         else:
-            ds = LeRobotDataset.create(a.repo_id, self.fps, features=features, root=a.root,
+            ds = LeRobotDataset.create(a.repo_id, self.fps, features=features, root=root,
                                        robot_type="xlerobot_ros2", use_videos=True, image_writer_threads=threads,
                                        rgb_encoder=encoder, streaming_encoding=a.streaming_encoding)
             print(f"new dataset {a.repo_id} at {ds.root}")

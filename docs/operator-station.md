@@ -55,9 +55,14 @@ Python, launch and config changes take effect at the next start (`--symlink-inst
 
    ```bash
    ros2 launch xlerobot_bringup bringup.launch.py teleop_joy:=false with_arms:=true with_head:=true cameras:=true \
-     sensor:=realsense bus1_port:=/dev/serial/by-id/usb-1a86_USB_Single_Serial_5A7A058116-if00 \
+     sensor:=realsense arm_max_velocity:=4.5 \
+     bus1_port:=/dev/serial/by-id/usb-1a86_USB_Single_Serial_5A7A058116-if00 \
      bus2_port:=/dev/serial/by-id/usb-1a86_USB_Single_Serial_5B91028673-if00
    ```
+
+   Keep `arm_max_velocity:=4.5`. Without it the arms keep the URDF's 0.8 rad/s limit, which ros2_control enforces,
+   and the follower trails every quick leader move. elroy's log then fills with "Command of at least one joint is out
+   of limits".
 
 2. **rosie:** `tools/station.sh`, from rosie's own terminal or over ssh (`ssh rosie Developer/ros2_xlerobot_2wheels/tools/station.sh`).
    The viewer opens full screen on rosie's monitor either way.

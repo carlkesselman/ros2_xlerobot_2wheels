@@ -72,6 +72,7 @@ class Camera:
         self.arrivals = deque(maxlen=90)
 
     def fps(self, now):
+        """Frames in the last 2 s, per second. Call it holding the viewer's lock."""
         recent = [t for t in self.arrivals if now - t < 2.0]
         return len(recent) / 2.0
 
@@ -277,8 +278,8 @@ class StationViewer(Node):
 
     def _draw_camera(self, pygame, screen, fonts, cam, rect, now):
         pygame.draw.rect(screen, TILE, rect)
-        with self.lock:
-            data, seq, arrival = cam.data, cam.seq, cam.arrival
+        with self.lock:   # on_frame appends to cam.arrivals from the executor thread
+            data, seq, arrival, fps = cam.data, cam.seq, cam.arrival, cam.fps(now)
         if data is not None and seq != cam.drawn_seq:
             try:
                 cam.surface = pygame.image.load(io.BytesIO(data), "frame.jpg").convert()
@@ -299,7 +300,7 @@ class StationViewer(Node):
         img_rect = cam.scaled[1].get_rect(center=rect.center)
         screen.blit(cam.scaled[1], img_rect)
         age = now - arrival
-        label = f"{cam.name}  {cam.fps(now):.0f} fps"
+        label = f"{cam.name}  {fps:.0f} fps"
         colour = TEXT
         if age > self.stale_s:
             pygame.draw.rect(screen, RED, img_rect, width=max(3, rect.height // 80))

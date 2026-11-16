@@ -41,7 +41,9 @@ not in the state.
 
 ## Record
 
-On elroy, bringup with the arms and cameras. On the Mac, the leader arms (`teleop.launch.py`), engaged. Then:
+On elroy, bringup with the arms and cameras, and `arm_max_velocity:=4.5` so the follower keeps up with the leaders
+(the command is in [operator-station.md](operator-station.md)). The leader arms run on the Mac (`teleop.launch.py`)
+or on rosie's operator station, engaged. Then:
 
 ```bash
 pixi run tools/lerobot.sh record --repo-id carl/xle_cube_to_bin --task "put the red cube in the bin" --num-episodes 20

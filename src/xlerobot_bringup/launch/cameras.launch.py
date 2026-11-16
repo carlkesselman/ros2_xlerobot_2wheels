@@ -233,13 +233,21 @@ def _camera_nodes(context, *args, **kwargs):
             print(f"[cameras.launch] {name}: none of {[c['path'] for c in candidates]} found, skipping")
             continue
         # usb_cam follows a symlink itself but takes its target as relative to /dev, so a link
-        # outside /dev (/dev/v4l/by-path/..., target ../../video8) becomes /dev/../../video8.
-        device = os.path.realpath(found["path"])
+        # outside /dev (/dev/v4l/by-path/..., target ../../video8) becomes /dev/../../video8: those
+        # are resolved here. A udev link directly in /dev (/dev/cam_left -> video8) is passed as it
+        # is, so a respawned node finds the camera again after it re-enumerates under a new number.
+        path = found["path"]
+        device = path if os.path.dirname(path) == "/dev" else os.path.realpath(path)
         cfg = {**d, **camera, **{k: v for k, v in found.items() if k != "path"}}
         actions.append(Node(
             package="usb_cam",
             executable="usb_cam_node_exe",
             namespace=f"cameras/{name}",
+            # usb_cam aborts when its camera drops off USB or stops sending frames ("Invalid v4l2
+            # format", "Select timeout"): both seen on elroy's left wrist camera on 2026-11-16, with
+            # the camera fine again a second later. Start it again rather than lose the camera.
+            respawn=True,
+            respawn_delay=2.0,
             parameters=[{
                 "video_device": device,
                 "image_width": cfg["width"],
