@@ -27,7 +27,8 @@ from launch.launch_description_sources import PythonLaunchDescriptionSource
 from launch.substitutions import LaunchConfiguration
 from launch_ros.actions import Node
 
-# Leader-arm engage button per joy_layout: the top face button on every layout (Y; triangle in PlayStation mode).
+# Leader-arm engage button per joy_layout: the top face button on every layout (Y on an Xbox-style pad; in PlayStation
+# mode triangle, which is X on the 8BitDo's Nintendo-style letters).
 # station_viewer prints its name and has the recorder buttons (RECORDER_BUTTONS).
 ENGAGE_BUTTON = {"sdl": 3, "linux": 4, "ps": 2}
 

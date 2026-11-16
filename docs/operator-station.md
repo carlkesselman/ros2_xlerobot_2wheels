@@ -69,15 +69,18 @@ Python, launch and config changes take effect at the next start (`--symlink-inst
 3. **Mac**, at the Mac or over ssh: `pixi run tools/lerobot.sh record --repo-id ... --task "..."`.
 4. **At the station:**
 
-| Gamepad (PlayStation mode) | Viewer keys | Does |
+| 8BitDo | Viewer keys | Does |
 |---|---|---|
-| triangle | | leader arms on / off (they blend in from where the follower is over 2 s) |
-| options, tap | right arrow, Enter | keep the episode and end it now; during the reset, end the reset |
-| share | left arrow, r | throw the episode away and record it again |
-| options, hold 1.5 s | q | keep the episode and stop recording |
-| R1 held + left stick | | drive the base |
+| X (top face button) | | leader arms on / off (they blend in from where the follower is over 2 s) |
+| start, tap | right arrow, Enter | keep the episode and end it now; during the reset, end the reset |
+| select | left arrow, r | throw the episode away and record it again |
+| start, hold 1.5 s | q | keep the episode and stop recording |
+| R (right shoulder) held + left stick | | drive the base |
 | d-pad | | point the head |
 | | f | full screen on / off |
+
+The 8BitDo's letters are Nintendo-style, and PlayStation mode maps the buttons by position: X is the top face button,
+Y the left one. On a real PlayStation pad the same buttons are triangle, options and share.
 
 The recorder's own terminal keys still work as well.
 
@@ -124,3 +127,8 @@ training next to the Mac with the leader arms on a long USB cable.
 - **Buttons do nothing:** the pad came up in another mode. `ros2 topic echo /joy` on rosie shows its buttons, and
   `joystick_ps.yaml` and station.launch.py's `ENGAGE_BUTTON` say which numbers are used.
 - **A camera stays red:** the camera on elroy, or the wifi. Measure the frame age on elroy before blaming the network.
+  A wrist camera that drops off USB or stalls turns red for a few seconds: its usb_cam node exits and is started again.
+- **A service call to rosie gets no answer** (`ros2 service call /leader_arms/engage ...` from elroy): rosie's Fast DDS
+  (RoboStack) and elroy's (apt) disagree on small fixed-size messages. leader_arms logs `Change payload size of '24'
+  bytes is larger than the history payload size of '11' bytes`. Call it on rosie. Topics with variable-size
+  messages (joint states, trajectories, images, `/joy`, the recorder's strings) are not affected.

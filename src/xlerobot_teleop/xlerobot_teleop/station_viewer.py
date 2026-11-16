@@ -41,11 +41,13 @@ from std_msgs.msg import Bool, String
 # leader arms' engage button (its number is station.launch.py's ENGAGE_BUTTON, which leader_arms gets).
 #   sdl    the Mac's joy_node: back=4 start=6 (joystick_sdl.yaml, RB=10 checked 2026-11-13)
 #   linux  evdev order, joystick.yaml's pad: select=10 start=11 (from the evdev key order, not checked)
-#   ps     the 8BitDo in PlayStation mode on rosie's evdev: share=8 options=9 (docs/operator-station.md)
+#   ps     the 8BitDo in PlayStation mode on rosie's evdev: select=8 start=9 (share and options on a PlayStation pad).
+#          Named with the 8BitDo's own labels, Nintendo-style letters: X is the top face button (triangle, 2), checked
+#          2026-11-16 (docs/operator-station.md).
 RECORDER_BUTTONS = {
     "sdl": ((6, 4), ("start", "back"), "Y"),
     "linux": ((11, 10), ("start", "select"), "Y"),
-    "ps": ((9, 8), ("options", "share"), "triangle"),
+    "ps": ((9, 8), ("start", "select"), "X (top)"),
 }
 HOLD_TO_STOP_S = 1.5
 

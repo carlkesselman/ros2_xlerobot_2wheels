@@ -2,6 +2,8 @@
 # operator station, docs/operator-station.md). The kernel's hid-playstation driver and SDL's evdev order give
 # 13 buttons: cross=0 circle=1 triangle=2 square=3 L1=4 R1=5 L2=6 R2=7 share=8 options=9 PS=10 L3=11 R3=12,
 # and 8 axes: left stick [0,1], L2 2, right stick [3,4], R2 5, d-pad hat [6,7].
+# The 8BitDo has Nintendo-style letters and maps them by position (checked 2026-11-16): B (bottom)=0, A (right)=1,
+# X (top)=2, Y (left)=3, select=8, start=9.
 teleop_twist_joy_node:
   ros__parameters:
     enable_button: 5        # R1, the same shoulder button as RB on the other layouts
