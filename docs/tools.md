@@ -60,6 +60,7 @@ Downloaded model weights, exported ONNX files and TensorRT engines live in `~/.c
 |---|---|
 | `xlerobot_tui.py` | Console UI on the robot: starts and stops the stack, shows every component's state, topic rates, CPU, memory and GPU, toggles the presence guard and e-stop, records and plays back motions. |
 | `motion_recorder.py` | The TUI's motion record and playback (hand-guided with torque off, or driven by teleop); playback slows to safe joint speeds and sends the wheels through twist_mux below the joystick. |
+| `station.sh` | The operator station ([operator-station.md](operator-station.md)): gamepad, leader arms and the station viewer (cameras plus leader-arm and recorder status, recorder buttons), through `station.launch.py`. On rosie it uses pixi's `rosie` environment and opens the viewer full screen on rosie's monitor, also over ssh; `station.sh build` builds the station's packages. |
 
 ## Process management
 

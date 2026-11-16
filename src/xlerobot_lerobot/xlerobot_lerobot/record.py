@@ -1,7 +1,7 @@
 """Record leader-arm demonstrations from the ROS topics into a LeRobot dataset.
 
-Needs, on the robot, bringup with_arms:=true cameras:=true sensor:=realsense, and here the leader arms streaming
-(xlerobot_teleop teleop.launch.py, engaged). Then, on the operator station:
+Needs, on the robot, bringup with_arms:=true cameras:=true sensor:=realsense, and the leader arms streaming (leader_arms,
+engaged: on the Mac, or on rosie with station.launch.py). Then, on the Mac:
 
     pixi run tools/lerobot.sh record --repo-id carl/xle_cube_to_bin --task "put the red cube in the bin"
 
@@ -12,6 +12,11 @@ saves. Keys in this terminal:
     esc, q               keep the episode and stop
 Ctrl-C stops and throws the unfinished episode away.
 
+From another room: the operator station (xlerobot_teleop station_viewer, docs/operator-station.md) sends the same three
+as /recorder/command (std_msgs/String: keep, redo, stop) from its keys or gamepad buttons, and shows /recorder/status
+(std_msgs/String, JSON, latched): state (waiting, recording, paused, saving, reset, stopped), episode, seconds recorded,
+episodes saved, the last spoken prompt.
+
 The dataset goes to ~/.cache/huggingface/lerobot/<repo-id> (--root to change). --resume adds episodes to an existing
 one, --push uploads it to the Hugging Face Hub (private) at the end.
 
@@ -20,11 +25,14 @@ stale_s: a disengaged leader or a stalled camera pauses the episode instead of f
 counts recorded frames, so a pause does not use it up.
 """
 import argparse
+import json
 import subprocess
 import sys
 import time
 
 import rclpy
+from rclpy.qos import DurabilityPolicy, QoSProfile
+from std_msgs.msg import String
 
 from .keys import KeyReader
 from .robot_io import Layout, RosRobot, init_ros, shutdown_ros
@@ -68,6 +76,15 @@ class Events:
         elif key in ("esc", "q"):
             self.stop = self.end = True
 
+    def on_command(self, msg):
+        """/recorder/command from the operator station: the same as the keys."""
+        key = {"keep": "right", "redo": "left", "stop": "q"}.get(msg.data.strip())
+        if key is None:
+            print(f"\n  ignoring /recorder/command {msg.data!r} (keep, redo or stop)", flush=True)
+            return
+        print(f"\n  station: {msg.data}", flush=True)
+        self.on_key(key)
+
 
 class Recorder:
     def __init__(self, args):
@@ -77,9 +94,27 @@ class Recorder:
         self.events = Events()
         self.robot = None
         self.dataset = None
+        self.status_pub = None
+        self.status = {"state": "waiting", "episode": 0, "t": 0.0, "of": args.episode_time, "saved": 0,
+                       "goal": args.num_episodes, "total": 0, "note": "", "prompt": "", "seq": 0,
+                       "task": args.task}
+        self.status_sent = 0.0
+
+    def publish_status(self, state=None, force=False, **fields):
+        """/recorder/status for the station viewer: on every change of state, else at most 4 times a second."""
+        if state is not None and state != self.status["state"]:
+            force = True
+            self.status["state"] = state
+        self.status.update(fields)
+        now = time.monotonic()
+        if self.status_pub is None or not (force or now - self.status_sent >= 0.25):
+            return
+        self.status_sent = now
+        self.status_pub.publish(String(data=json.dumps(self.status)))
 
     def say(self, text):
         print(f"\n>> {text}", flush=True)
+        self.publish_status(force=True, prompt=text, seq=self.status["seq"] + 1)
         if not self.args.no_sound and sys.platform == "darwin":
             subprocess.Popen(["say", text], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
 
@@ -114,6 +149,7 @@ class Recorder:
             _, problems = self.robot.observation()
             if not problems:
                 return True
+            self.publish_status("waiting", note=problems[0])
             if time.monotonic() - last > 2.0:
                 last = time.monotonic()
                 print(f"waiting for the robot: {'; '.join(problems[:3])}", flush=True)
@@ -134,6 +170,7 @@ class Recorder:
                 if gap_start is None:
                     gap_start = now
                 hint = ", leader arms engaged?" if more and problems[0] in more else ""
+                self.publish_status("paused", episode=index, t=frames / self.fps, note=problems[0] + hint)
                 if now - last_print > 1.0:
                     last_print = now
                     print(f"\r  episode {index}: {frames / self.fps:5.1f}/{self.args.episode_time:.0f} s"
@@ -144,6 +181,7 @@ class Recorder:
                 gap_start = None
                 self.dataset.add_frame({**obs, "action": action, "task": self.args.task})
                 frames += 1
+                self.publish_status("recording", episode=index, t=frames / self.fps, note="")
                 if now - last_print > 0.5:
                     last_print = now
                     print(f"\r  episode {index}: {frames / self.fps:5.1f}/{self.args.episode_time:.0f} s"
@@ -161,6 +199,7 @@ class Recorder:
         self.events.clear()
         end = time.monotonic() + seconds
         while time.monotonic() < end and not self.events.end:
+            self.publish_status("reset", left=end - time.monotonic())
             time.sleep(0.05)
         self.events.clear()
 
@@ -169,8 +208,13 @@ class Recorder:
 
         init_ros()
         self.robot = RosRobot(self.layout, "lerobot_recorder")
+        latched = QoSProfile(depth=1, durability=DurabilityPolicy.TRANSIENT_LOCAL)
+        self.status_pub = self.robot.create_publisher(String, "/recorder/status", latched)
+        self.robot.create_subscription(String, "/recorder/command", self.events.on_command, 10)
         self.robot.spin_in_background()
+        self.publish_status("waiting", force=True, note="opening the dataset")
         self.dataset = self.open_dataset()
+        self.publish_status(force=True, total=self.dataset.num_episodes, note="")
         saved = 0
         try:
             with KeyReader(self.events.on_key), VideoEncodingManager(self.dataset):
@@ -193,8 +237,10 @@ class Recorder:
                         if gap > 0.5:
                             print(f"  note: a {gap:.1f} s pause in this episode (stale stream); "
                                   "the motion jumps there")
+                        self.publish_status("saving", episode=index)
                         self.dataset.save_episode()
                         saved += 1
+                        self.publish_status(force=True, saved=saved, total=self.dataset.num_episodes)
                         print(f"  saved episode {index}: {frames} frames, in {time.monotonic() - t0:.1f} s")
                     if self.events.stop or saved >= self.args.num_episodes:
                         break
@@ -205,6 +251,10 @@ class Recorder:
             print("\ninterrupted, the unfinished episode is not saved")
         finally:
             self.dataset.finalize()
+            self.publish_status("stopped", saved=saved, total=self.dataset.num_episodes,
+                                prompt="Stopped", seq=self.status["seq"] + 1)
+            time.sleep(0.3)   # let the last status leave before the node goes
+            self.status_pub = None
             self.robot.close()
             shutdown_ros()
         self.say(f"Stopped. {saved} episodes this session, {self.dataset.num_episodes} in the dataset")

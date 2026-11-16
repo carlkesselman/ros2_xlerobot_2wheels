@@ -52,8 +52,8 @@ class HeadTeleop(Node):
         gp = lambda name: self.get_parameter(name).value  # noqa: E731
 
         layout = gp("joy_layout")
-        if layout not in ("sdl", "linux"):
-            raise ValueError(f"joy_layout must be sdl or linux, not {layout!r}")
+        if layout not in ("sdl", "linux", "ps"):   # linux and ps both have the d-pad as a hat
+            raise ValueError(f"joy_layout must be sdl, linux or ps, not {layout!r}")
         self.layout = layout
         self.buttons = list(gp("dpad_buttons"))
         self.axes = list(gp("dpad_axes"))

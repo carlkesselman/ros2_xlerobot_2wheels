@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""SO-101 leader arms -> follower arm controllers, for the operator station (the Mac).
+"""SO-101 leader arms -> follower arm controllers, for the operator station (the Mac, or rosie).
 
 Reads both leader arms over their Feetech bus boards (50 Hz) and streams their pose to the follower's
 joint_trajectory_controllers (left/right_arm_controller and left/right_gripper_controller) as
@@ -21,7 +21,7 @@ ranges come from the follower's lerobot calibration JSON (the cart's xlerobot.js
 node needs a copy of.
 
 Safety: starts DISENGAGED and publishes nothing. ~/engage (std_srvs/SetBool) or a tap of
-engage_button on /joy toggles it. On engage the command blends from where the follower is
+engage_button on /joy toggles it; ~/engaged (std_msgs/Bool, latched) says which. On engage the command blends from where the follower is
 (/joint_states) to the leader over ramp_s, so a leader held somewhere else doesn't snap the arm
 across; sts_hardware_interface also caps every joint at its position_rate_limit. If a leader
 stops answering, that arm stops streaming and its controller holds the last point.
@@ -40,7 +40,9 @@ import yaml
 from ament_index_python.packages import get_package_share_directory
 from rclpy.executors import ExternalShutdownException
 from rclpy.node import Node
+from rclpy.qos import DurabilityPolicy, QoSProfile
 from sensor_msgs.msg import JointState, Joy
+from std_msgs.msg import Bool
 from std_srvs.srv import SetBool
 from trajectory_msgs.msg import JointTrajectory, JointTrajectoryPoint
 
@@ -195,6 +197,10 @@ class LeaderArms(Node):
         self.engaged_at = 0.0
         self.start_pose = {}
         self.last_button = 0
+        # ~/engaged, latched: whether the leaders are driving the arms (the station viewer shows it)
+        latched = QoSProfile(depth=1, durability=DurabilityPolicy.TRANSIENT_LOCAL)
+        self.engaged_pub = self.create_publisher(Bool, "~/engaged", latched)
+        self.engaged_pub.publish(Bool(data=False))
         self.create_subscription(JointState, "/joint_states", self.on_joint_states, 10)
         self.create_subscription(Joy, "/joy", self.on_joy, 10)
         self.create_service(SetBool, "~/engage", self.on_engage)
@@ -231,6 +237,7 @@ class LeaderArms(Node):
             self.start_pose = {n: self.follower_state[n] for n in names}
             self.engaged_at = time.monotonic()
         self.engaged = on
+        self.engaged_pub.publish(Bool(data=on))
         why = "engaged" if on else "disengaged, follower holds its last command"
         self.get_logger().info(why)
         return True, why
@@ -269,6 +276,8 @@ class LeaderArms(Node):
                 pub.publish(msg)
 
     def destroy_node(self):
+        if hasattr(self, "engaged_pub") and rclpy.ok():
+            self.engaged_pub.publish(Bool(data=False))
         for arm in self.arms.values():
             arm["bus"].close()
         super().destroy_node()

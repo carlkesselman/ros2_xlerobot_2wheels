@@ -13,10 +13,13 @@ Both default to true (everything on one machine). For the Mac operator station:
   Mac:    ros2 launch xlerobot_teleop teleop.launch.py with_base:=false
   elroy:  ros2 launch xlerobot_bringup bringup.launch.py teleop_joy:=false
 
-joy_layout picks the button numbering: "linux" (joystick.yaml as confirmed on the robot) or
-"sdl" (macOS, where joy_node opens the pad as an SDL GameController, joystick_sdl.yaml).
+joy_layout picks the button numbering: "linux" (joystick.yaml as confirmed on the robot),
+"sdl" (macOS, where joy_node opens the pad as an SDL GameController, joystick_sdl.yaml) or
+"ps" (the 8BitDo in PlayStation mode on Linux evdev, as on rosie: joystick_ps.yaml).
 It defaults to sdl on macOS and linux everywhere else. split_stick:=true moves turning to the
-right stick (joystick_split.yaml).
+right stick (joystick_split.yaml; its axis numbers are the linux layout's).
+
+For the operator station with leader arms and the viewer, station.launch.py includes this one.
 """
 
 import os
@@ -34,10 +37,10 @@ def _joy_nodes(context):
     pkg_share = get_package_share_directory("xlerobot_teleop")
     params = [os.path.join(pkg_share, "config", "joystick.yaml")]
     layout = LaunchConfiguration("joy_layout").perform(context)
-    if layout == "sdl":
-        params.append(os.path.join(pkg_share, "config", "joystick_sdl.yaml"))
+    if layout in ("sdl", "ps"):
+        params.append(os.path.join(pkg_share, "config", f"joystick_{layout}.yaml"))
     elif layout != "linux":
-        raise RuntimeError(f"joy_layout must be linux or sdl, not {layout!r}")
+        raise RuntimeError(f"joy_layout must be linux, sdl or ps, not {layout!r}")
     if LaunchConfiguration("split_stick").perform(context).lower() == "true":
         params.append(os.path.join(pkg_share, "config", "joystick_split.yaml"))
     return [

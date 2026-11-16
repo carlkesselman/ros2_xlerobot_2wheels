@@ -11,9 +11,11 @@ setup(
         ("share/" + package_name, ["package.xml"]),
         ("share/" + package_name + "/launch", [
             "launch/teleop.launch.py", "launch/mcp_presence.launch.py", "launch/arm_servo_teleop.launch.py",
+            "launch/station.launch.py",
         ]),
         ("share/" + package_name + "/config", [
-            "config/joystick.yaml", "config/joystick_sdl.yaml", "config/joystick_split.yaml","config/twist_mux.yaml", "config/mcp_presence.yaml",
+            "config/joystick.yaml", "config/joystick_sdl.yaml", "config/joystick_ps.yaml",
+            "config/joystick_split.yaml", "config/twist_mux.yaml", "config/mcp_presence.yaml",
             "config/arm_servo_teleop.yaml",
         ]),
     ],
@@ -31,6 +33,7 @@ setup(
             "arm_servo_teleop = xlerobot_teleop.arm_servo_teleop:main",
             "leader_arms = xlerobot_teleop.leader_arms:main",
             "head_teleop = xlerobot_teleop.head_teleop:main",
+            "station_viewer = xlerobot_teleop.station_viewer:main",
         ],
     },
 )

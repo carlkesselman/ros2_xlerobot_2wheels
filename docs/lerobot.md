@@ -9,6 +9,7 @@ venv's Python. elroy keeps running bringup.
 |---|---|
 | elroy | bringup `with_arms:=true cameras:=true sensor:=realsense`, the controllers, the cameras |
 | Mac | leader arms (`xlerobot_teleop`), `tools/lerobot.sh record`, `tools/lerobot.sh policy`, small training runs |
+| rosie (optional) | the leader arms, gamepad and a monitor in another room ([operator-station.md](operator-station.md)) |
 | rented NVIDIA GPU | SmolVLA or pi0.5 fine-tuning at a useful speed |
 
 Why the Mac and not elroy: elroy is an 8 GB Orin Nano that already carries the stack. On the M5 Pro's GPU (MPS),
@@ -51,6 +52,9 @@ pixi run tools/lerobot.sh record --repo-id carl/xle_cube_to_bin --task "put the 
 - **Keys in that terminal:** right arrow or Enter keeps the episode and ends it now (during a reset: ends the reset).
   Left arrow or r throws it away and records it again. Esc or q keeps it and stops. Ctrl-C stops and drops the
   unfinished episode.
+- **From rosie's operator station** the same three come from gamepad buttons or keys in the station viewer
+  (`/recorder/command`), and the viewer shows the recorder's state and prompts (`/recorder/status`). See
+  [operator-station.md](operator-station.md).
 - A frame is recorded only while every camera, the joint state and the leader commands are fresh (`stale_s`, 0.25 s).
   A disengaged leader or a stalled camera pauses the episode, shown as `PAUSED: ...`, and the pause doesn't count
   toward the episode time.
