@@ -42,6 +42,7 @@ python = "3.12.*"
 ros-jazzy-ros-base = "*"
 ros-jazzy-joy = "*"
 ros-jazzy-teleop-twist-joy = "*"
+ros-jazzy-control-msgs = "*"   # leader_arms' guard reads the servo temperatures (/dynamic_joint_states)
 pyserial = "*"              # xlerobot_teleop leader_arms reads the leader arms
 pygame = "*"                # xlerobot_teleop station_viewer draws the cameras
 colcon-common-extensions = "*"

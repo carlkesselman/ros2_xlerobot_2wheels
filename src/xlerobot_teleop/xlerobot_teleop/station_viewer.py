@@ -3,7 +3,9 @@
 
 Made for recording demonstrations away from the Mac (docs/operator-station.md). It draws the head camera large,
 for pointing the head, and the two wrist cameras beside it. The bar underneath shows:
-  - whether the leader arms are engaged (/leader_arms/engaged, from leader_arms);
+  - whether the leader arms are engaged (/leader_arms/engaged, from leader_arms), and when leader_arms' guard
+    stopped them, why (/leader_arms/status: a stuck or overheating servo, flashed over the head image too), and
+    any servo running hot;
   - the recorder, record.py on the Mac: episode, seconds recorded, paused and why, the reset between episodes,
     stopped (/recorder/status);
   - which gamepad buttons drive the recorder.
@@ -118,6 +120,8 @@ class StationViewer(Node):
         self.cameras = [Camera("head", gp("head_topic")), Camera("left wrist", gp("left_topic")),
                         Camera("right wrist", gp("right_topic"))]
         self.engaged = None           # None until leader_arms says
+        self.arms_status = None       # leader_arms' guard: {"fault": ..., "fault_seq": ..., "hot": {...}}
+        self.alert = None             # (text, until): a guard trip, flashed over the head image
         self.status = None            # the recorder's last status (dict)
         self.status_arrival = None
         self.banner = None            # (text, until): the recorder's last spoken prompt
@@ -135,6 +139,7 @@ class StationViewer(Node):
         latched = QoSProfile(depth=1, durability=DurabilityPolicy.TRANSIENT_LOCAL)
         self.create_subscription(Bool, "/leader_arms/engaged", self.on_engaged, latched)
         self.create_subscription(String, "/recorder/status", self.on_status, latched)
+        self.create_subscription(String, "/leader_arms/status", self.on_arms_status, latched)
         self.create_subscription(Joy, "joy", self.on_joy, 10)
         self.create_subscription(JointState, "/joint_states", self.on_joint_states, 10)
         self.create_subscription(String, "/robot_description", self.on_description, latched)
@@ -180,6 +185,18 @@ class StationViewer(Node):
                 limits[joint.get("name")] = (float(limit.get("lower")), float(limit.get("upper")))
         with self.lock:
             self.head_limits = limits
+
+    def on_arms_status(self, msg):
+        try:
+            status = json.loads(msg.data)
+        except ValueError:
+            return
+        with self.lock:
+            old = self.arms_status
+            # a new trip, not the latched one from before the viewer started
+            if old is not None and status.get("fault") and status.get("fault_seq") != old.get("fault_seq"):
+                self.alert = (f"Arms stopped: {status['fault']}", time.monotonic() + 5.0)
+            self.arms_status = status
 
     def check_graph(self):
         alive = self.count_publishers("/leader_arms/engaged") > 0
@@ -285,7 +302,10 @@ class StationViewer(Node):
         self._draw_head_pose(pygame, screen, fonts, drawn[0] or head_rect, now)
         with self.lock:
             banner = self.banner if self.banner and self.banner[1] > now else None
-        if banner:
+            alert = self.alert if self.alert and self.alert[1] > now else None
+        if alert:   # a guard trip wins over the recorder's prompt
+            self._draw_banner(pygame, screen, fonts, alert[0], head_rect, bg=(150, 20, 20, 220))
+        elif banner:
             self._draw_banner(pygame, screen, fonts, banner[0], head_rect)
         self._draw_bar(pygame, screen, fonts, pygame.Rect(0, H - bar_h, W, bar_h), now)
 
@@ -429,12 +449,15 @@ class StationViewer(Node):
             screen.blit(labels[0], labels[0].get_rect(midbottom=(start[0], start[1] - size // 3)))
             screen.blit(labels[1], labels[1].get_rect(midtop=(end[0], end[1] + size // 3)))
 
-    def _draw_banner(self, pygame, screen, fonts, text, rect):
+    def _draw_banner(self, pygame, screen, fonts, text, rect, bg=(0, 0, 0, 190)):
         font = self._font(pygame, fonts, max(28, rect.height // 9))
         msg = font.render(text, True, TEXT)
+        if msg.get_width() > rect.width - 60:   # a long guard message: smaller, to fit the head image
+            font = self._font(pygame, fonts, max(18, int(font.get_height() * (rect.width - 60) / msg.get_width())))
+            msg = font.render(text, True, TEXT)
         box = msg.get_rect(center=rect.center).inflate(40, 24)
         shade = pygame.Surface(box.size, pygame.SRCALPHA)
-        shade.fill((0, 0, 0, 190))
+        shade.fill(bg)
         screen.blit(shade, box)
         screen.blit(msg, msg.get_rect(center=rect.center))
 
@@ -443,13 +466,16 @@ class StationViewer(Node):
         small = self._font(pygame, fonts, int(bar.height * 0.45))
         with self.lock:
             engaged, status, status_arrival = self.engaged, self.status, self.status_arrival
-            leader_alive = self.leader_alive
+            leader_alive, arms = self.leader_alive, self.arms_status or {}
         pad = bar.height // 5
         x = pad
 
         # leader arms
+        fault = arms.get("fault", "") if leader_alive and not engaged else ""
         if engaged is None or not leader_alive:
             text, bg = "no leader arms", GREY
+        elif fault:
+            text, bg = "ARMS STOPPED", RED
         else:
             text, bg = ("ARMS ON", GREEN) if engaged else ("ARMS OFF", GREY)
         x = self._pill(pygame, screen, font, text, bg, x, bar, pad) + pad
@@ -457,6 +483,20 @@ class StationViewer(Node):
         # recorder
         text, bg, dot = self._recorder_text(status, status_arrival, now)
         x = self._pill(pygame, screen, font, text, bg, x, bar, pad, dot=dot) + pad
+
+        # why the guard stopped the arms, and hot servos: these push the button hints out when there's no room
+        notes = []
+        if fault:
+            notes.append((fault, (255, 110, 110)))
+        hot = arms.get("hot", {}) if leader_alive else {}
+        if hot:
+            notes.append(("hot: " + ", ".join(f"{n} {t}\N{DEGREE SIGN}C" for n, t in hot.items()), AMBER))
+        for note, colour in notes:
+            msg = small.render(note, True, colour)
+            if x + msg.get_width() + pad > bar.right:
+                break
+            screen.blit(msg, msg.get_rect(midleft=(x, bar.centery)))
+            x += msg.get_width() + 2 * pad
 
         # button hints, right-aligned, dropped if they don't fit
         hint = (f"{self.keep_name}: keep   hold {self.keep_name}: stop   {self.redo_name}: redo   "

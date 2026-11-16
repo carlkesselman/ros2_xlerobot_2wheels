@@ -90,6 +90,9 @@ The recorder's own terminal keys still work as well.
 a squarer screen). The bar underneath shows:
 
 - **ARMS ON / ARMS OFF**, from `/leader_arms/engaged`. It says "no leader arms" when leader_arms isn't running.
+  **ARMS STOPPED** (red) means the guard disengaged the arms, and the reason follows in red. It also flashes over
+  the head image for a few seconds. Servos at 55 °C or more are listed in amber ("hot: right wrist_flex 58°C"). See
+  [The guard](#the-guard).
 - **The recorder**, from `/recorder/status`:
   - `REC ep 3 12.4/30 s saved 2/20` while recording;
   - `PAUSED` with the reason (a stale camera or a disengaged leader; the pause doesn't use up episode time);
@@ -119,6 +122,29 @@ To check the viewer without looking at it, the `snapshot_path` parameter writes 
 
 The same launch runs on the Mac (`tools/station.sh` there uses pixi's default environment, in a window), for
 training next to the Mac with the leader arms on a long USB cable.
+
+## The guard
+
+A position servo that can't reach its command pushes as hard as it can, for as long as it is commanded. On
+2026-11-16 the follower's right wrist_flex was sent to +1.76 rad, folded, but jammed at +1.51. It pushed there for
+almost two hours, including while the leaders were disengaged, reached 85 °C and shut down. That joint had already
+lost a servo on 2026-11-13. leader_arms now watches for this while the leaders are engaged:
+
+| Check | Does |
+|---|---|
+| An arm joint (not a gripper) more than 0.15 rad from its command for 2 s, without getting closer | disengages: "right wrist_flex stuck 14 deg short of its command for 2 s" |
+| Any arm servo, grippers too, at 65 °C (the servos' own cutoff is 70 °C) | disengages |
+| A servo at 60 °C or more | engaging is refused until it cools |
+| Leader beyond the follower's limits | the command stops at the model's own limits, not the 0.1 rad wider ones ros2_control allows |
+
+Any disengage, by X or by the guard, tells joints more than 0.05 rad from their command to hold where they are.
+Nothing keeps pushing after that. The other joints keep their last command. Grippers keep theirs, so an object stays
+gripped, unless it is a gripper that overheated. The temperatures come from `/dynamic_joint_states` (bringup's
+joint_state_broadcaster). The thresholds are leader_arms parameters (`stall_error`, `stall_s`, `temp_warn`,
+`temp_resume`, `temp_stop`, `hold_error`).
+
+A trip pauses the recording like any disengage. Look at the arm before engaging again: something is in the way, or
+the joint can't reach where the leader asks.
 
 ## If something is off
 

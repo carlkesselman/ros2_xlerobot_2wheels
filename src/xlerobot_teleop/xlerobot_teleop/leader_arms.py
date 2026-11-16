@@ -26,6 +26,21 @@ engage_button on /joy toggles it; ~/engaged (std_msgs/Bool, latched) says which.
 across; sts_hardware_interface also caps every joint at its position_rate_limit. If a leader
 stops answering, that arm stops streaming and its controller holds the last point.
 
+The guard: a servo that can't reach its command pushes at full effort until it does, and on 2026-11-16 the right
+wrist_flex did that against an obstruction for almost two hours, reached 85 C and shut down (the joint's second
+servo). So, while engaged:
+  - stall: an arm joint (not a gripper: gripping is a deliberate stall) further than stall_error from its command
+    for stall_s disengages;
+  - heat: any arm servo, grippers too, at temp_stop disengages (servo temperatures from /dynamic_joint_states,
+    read twice a second), and engaging is refused while one is at temp_resume or more;
+  - commands stay inside the model's own limits, not the limit_margin wider ones ros2_control enforces (the margin
+    is there so a measured rest pose a little past a limit doesn't stop the controller, not to be driven into).
+On any disengage, a joint further than hold_error from its command (stuck, or still catching up) is told to hold
+where it is, so nothing keeps pushing; the others keep their last command, so gravity sag doesn't turn into a
+droop. Grippers keep theirs (an object stays gripped) unless it is a gripper that overheated.
+~/status (std_msgs/String, JSON, latched) has the last fault and the servos at temp_warn or more; the station viewer
+shows both.
+
 The leaders are only read, never written: their torque stays as it is (off).
 """
 import glob
@@ -38,11 +53,13 @@ import rclpy
 import serial
 import yaml
 from ament_index_python.packages import get_package_share_directory
+from control_msgs.msg import DynamicJointState
 from rclpy.executors import ExternalShutdownException
 from rclpy.node import Node
 from rclpy.qos import DurabilityPolicy, QoSProfile
+from rclpy.serialization import deserialize_message
 from sensor_msgs.msg import JointState, Joy
-from std_msgs.msg import Bool
+from std_msgs.msg import Bool, String
 from std_srvs.srv import SetBool
 from trajectory_msgs.msg import JointTrajectory, JointTrajectoryPoint
 
@@ -146,6 +163,13 @@ class LeaderArms(Node):
         p("rate_hz", 50.0)
         p("ramp_s", 2.0)
         p("engage_button", -1)            # /joy button that toggles engage, -1 = service only
+        # the guard (see the module docstring)
+        p("stall_error", 0.15)            # rad
+        p("stall_s", 2.0)
+        p("temp_warn", 55.0)              # C: shown on the station viewer
+        p("temp_resume", 60.0)            # C: no engaging while a servo is this hot
+        p("temp_stop", 65.0)              # C: disengage (the servos' own cutoff is 70)
+        p("hold_error", 0.05)             # rad
         gp = self.get_parameter
         self.mode = gp("mapping").value
         if self.mode not in ("degrees", "range"):
@@ -153,11 +177,13 @@ class LeaderArms(Node):
         self.period = 1.0 / gp("rate_hz").value
         self.ramp_s = gp("ramp_s").value
         self.engage_button = gp("engage_button").value
+        self.stall_error, self.stall_s = gp("stall_error").value, gp("stall_s").value
+        self.temp_warn, self.temp_resume, self.temp_stop = (gp(n).value for n in ("temp_warn", "temp_resume", "temp_stop"))
+        self.hold_error = gp("hold_error").value
 
         dims_file = os.path.join(get_package_share_directory("xlerobot_description"),
                                  "config", "robot_dimensions.yaml")
         dims = yaml.safe_load(open(dims_file))["xlerobot"]["arms"]
-        margin = dims["limit_margin"]
         follower = json.load(open(gp("follower_calibration").value))
 
         self.arms = {}
@@ -169,9 +195,9 @@ class LeaderArms(Node):
             arm = {"bus": bus, "joints": {}, "failures": 0}
             for j in ALL_JOINTS:
                 jd = dims["joints"][j]
-                m = -jd["direction"]   # the model's limits, as in ros2_control.xacro
-                lo = min(m * jd["lower"], m * jd["upper"]) - margin
-                hi = max(m * jd["lower"], m * jd["upper"]) + margin
+                m = -jd["direction"]   # the model's limits, as in ros2_control.xacro but without limit_margin
+                lo = min(m * jd["lower"], m * jd["upper"])
+                hi = max(m * jd["lower"], m * jd["upper"])
                 lcal = (bus.read(IDS[j], MIN_POSITION_LIMIT, 2), bus.read(IDS[j], MAX_POSITION_LIMIT, 2))
                 fc = follower[f"{side}_arm_{j}"]
                 arm["joints"][j] = {
@@ -197,14 +223,27 @@ class LeaderArms(Node):
         self.engaged_at = 0.0
         self.start_pose = {}
         self.last_button = 0
+        self.last_target = {}         # joint name -> the last position sent
+        self.stall_since = {}         # joint name -> when it went further than stall_error from its command
+        self.temps = {}               # joint name -> servo temperature, C
+        self.temps_at = 0.0
+        self.dynamic_raw = None       # the newest /dynamic_joint_states, still serialized
+        self.fault = ""               # why the guard last disengaged, "" after a clean engage
+        self.fault_seq = 0
+        self.last_status = None
         # ~/engaged, latched: whether the leaders are driving the arms (the station viewer shows it)
         latched = QoSProfile(depth=1, durability=DurabilityPolicy.TRANSIENT_LOCAL)
         self.engaged_pub = self.create_publisher(Bool, "~/engaged", latched)
         self.engaged_pub.publish(Bool(data=False))
+        self.status_pub = self.create_publisher(String, "~/status", latched)
         self.create_subscription(JointState, "/joint_states", self.on_joint_states, 10)
+        # 100 Hz and large: kept serialized here, decoded twice a second in check_temps
+        self.create_subscription(DynamicJointState, "/dynamic_joint_states", self.on_dynamic, 10, raw=True)
         self.create_subscription(Joy, "/joy", self.on_joy, 10)
         self.create_service(SetBool, "~/engage", self.on_engage)
         self.create_timer(self.period, self.tick)
+        self.create_timer(0.5, self.check_temps)
+        self.publish_status()
         self.get_logger().info(
             f"leader arms up ({self.mode} mapping), DISENGAGED - call "
             f"`ros2 service call /leader_arms/engage std_srvs/srv/SetBool \"{{data: true}}\"`"
@@ -212,6 +251,82 @@ class LeaderArms(Node):
 
     def on_joint_states(self, msg):
         self.follower_state.update(zip(msg.name, msg.position))
+
+    def on_dynamic(self, data):
+        self.dynamic_raw = data
+
+    @staticmethod
+    def short(name):
+        """right_arm_wrist_flex_joint -> right wrist_flex"""
+        side, _, rest = name.partition("_arm_")
+        return f"{side} {rest.removesuffix('_joint')}"
+
+    def check_temps(self):
+        data, self.dynamic_raw = self.dynamic_raw, None
+        now = time.monotonic()
+        if data is not None:
+            msg = deserialize_message(data, DynamicJointState)
+            ours = {j["name"] for a in self.arms.values() for j in a["joints"].values()}
+            for name, iv in zip(msg.joint_names, msg.interface_values):
+                if name in ours and "temperature" in iv.interface_names:
+                    self.temps[name] = iv.values[iv.interface_names.index("temperature")]
+            self.temps_at = now
+        elif now - self.temps_at > 5.0:
+            self.temps = {}           # none for a while (bringup down): don't act on old readings
+        over = [n for n, t in self.temps.items() if t >= self.temp_stop]
+        if over and self.engaged:
+            name = max(over, key=self.temps.get)
+            relax = {name.split("_arm_")[0]} if name.endswith("_gripper_joint") else set()
+            self.trip(f"{self.short(name)} at {self.temps[name]:.0f} C (the guard stops at {self.temp_stop:.0f} C)",
+                      relax_grippers=relax)
+        self.publish_status()
+
+    def publish_status(self):
+        status = {
+            "engaged": self.engaged,
+            "fault": self.fault,
+            "fault_seq": self.fault_seq,
+            "hot": {self.short(n): round(t) for n, t in sorted(self.temps.items()) if t >= self.temp_warn},
+        }
+        if status != self.last_status:
+            self.status_pub.publish(String(data=json.dumps(status)))
+            self.last_status = status
+
+    def trip(self, why, relax_grippers=()):
+        self.fault = why
+        self.fault_seq += 1
+        self.get_logger().error(f"guard: {why} - disengaging")
+        self.set_engaged(False, relax_grippers=relax_grippers)
+
+    def hold_where_stuck(self, relax_grippers=()):
+        """Joints further than hold_error from their last command hold where they are measured instead."""
+        for side, arm in self.arms.items():
+            groups = [(arm["arm_pub"], ARM_JOINTS)]
+            if side in relax_grippers:
+                groups.append((arm["grip_pub"], ("gripper",)))
+            for pub, joints in groups:
+                names = [arm["joints"][j]["name"] for j in joints]
+                held, positions = [], []
+                for n in names:
+                    last, measured = self.last_target.get(n), self.follower_state.get(n)
+                    if last is None or measured is None:
+                        break
+                    if abs(last - measured) > self.hold_error or joints == ("gripper",):
+                        held.append(self.short(n))
+                        last = measured
+                    positions.append(float(last))
+                if len(positions) < len(names) or not held:
+                    continue
+                msg = JointTrajectory()
+                msg.joint_names = names
+                pt = JointTrajectoryPoint()
+                pt.positions = positions
+                pt.time_from_start.nanosec = 200_000_000
+                msg.points = [pt]
+                pub.publish(msg)
+                for n, pos in zip(names, positions):
+                    self.last_target[n] = pos
+                self.get_logger().info(f"holding where they are: {', '.join(held)}")
 
     def on_joy(self, msg):
         if self.engage_button < 0 or self.engage_button >= len(msg.buttons):
@@ -226,7 +341,7 @@ class LeaderArms(Node):
         resp.success, resp.message = ok, why
         return resp
 
-    def set_engaged(self, on):
+    def set_engaged(self, on, relax_grippers=()):
         if on and not self.engaged:
             names = [j["name"] for a in self.arms.values() for j in a["joints"].values()]
             missing = [n for n in names if n not in self.follower_state]
@@ -234,11 +349,24 @@ class LeaderArms(Node):
                 why = f"no follower state for {missing[0]} (is bringup with_arms:=true running?)"
                 self.get_logger().error(why)
                 return False, why
+            hot = [n for n, t in self.temps.items() if t >= self.temp_resume]
+            if hot:
+                name = max(hot, key=self.temps.get)
+                why = (f"not engaging: {self.short(name)} is at {self.temps[name]:.0f} C, "
+                       f"let it cool below {self.temp_resume:.0f} C")
+                self.get_logger().warn(why)
+                return False, why
             self.start_pose = {n: self.follower_state[n] for n in names}
             self.engaged_at = time.monotonic()
+            self.stall_since = {}
+            self.fault = ""
+        was = self.engaged
         self.engaged = on
         self.engaged_pub.publish(Bool(data=on))
-        why = "engaged" if on else "disengaged, follower holds its last command"
+        if was and not on:
+            self.hold_where_stuck(relax_grippers)
+        self.publish_status()
+        why = "engaged" if on else "disengaged"
         self.get_logger().info(why)
         return True, why
 
@@ -259,6 +387,8 @@ class LeaderArms(Node):
                     self.get_logger().warn(f"{side} leader: {arm['failures']} incomplete reads, not streaming")
                 continue
             arm["failures"] = 0
+            if self.stalled(side, arm, blend):
+                return
             target = {}
             for j, jc in arm["joints"].items():
                 mode = "range" if j == "gripper" else self.mode
@@ -266,6 +396,7 @@ class LeaderArms(Node):
                 angle = min(max(step_to_angle(step, jc["zero"]), jc["lo"]), jc["hi"])
                 start = self.start_pose[jc["name"]]
                 target[j] = start + blend * (angle - start)
+                self.last_target[jc["name"]] = target[j]
             for pub, joints in ((arm["arm_pub"], ARM_JOINTS), (arm["grip_pub"], ("gripper",))):
                 msg = JointTrajectory()
                 msg.joint_names = [arm["joints"][j]["name"] for j in joints]
@@ -274,6 +405,30 @@ class LeaderArms(Node):
                 pt.time_from_start.nanosec = stamp_ns
                 msg.points = [pt]
                 pub.publish(msg)
+
+    def stalled(self, side, arm, blend):
+        """True, after disengaging, if one of the arm's joints has stayed further than stall_error from the last
+        command sent, without getting any closer, for stall_s. A joint that trails a fast leader keeps moving, so it
+        isn't stuck. Not during the engage blend, when the whole arm may be on its way somewhere."""
+        if blend < 1.0:
+            self.stall_since = {}
+            return False
+        now = time.monotonic()
+        for j in ARM_JOINTS:
+            name = arm["joints"][j]["name"]
+            last, measured = self.last_target.get(name), self.follower_state.get(name)
+            if last is None or measured is None or abs(last - measured) <= self.stall_error:
+                self.stall_since.pop(name, None)
+                continue
+            since, where = self.stall_since.get(name, (now, measured))
+            if abs(measured - where) > self.stall_error / 2:   # still moving: start over from here
+                since, where = now, measured
+            self.stall_since[name] = (since, where)
+            if now - since >= self.stall_s:
+                self.trip(f"{side} {j} stuck {math.degrees(abs(last - measured)):.0f} deg short of its command "
+                          f"for {self.stall_s:.0f} s")
+                return True
+        return False
 
     def destroy_node(self):
         if hasattr(self, "engaged_pub") and rclpy.ok():
