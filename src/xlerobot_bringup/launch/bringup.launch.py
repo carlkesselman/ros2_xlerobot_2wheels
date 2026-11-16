@@ -147,6 +147,13 @@ def generate_launch_description():
     head_controller_condition = PythonExpression([
         "'", with_head, "' == 'true' and ('", torque_off, "' == 'false' or '", use_sim, "' == 'true')",
     ])
+    # servo_guard: real servos only (the sim and mock hardware have no temperatures and can't stall), and only when
+    # there are commanded ones
+    servo_guard_condition = PythonExpression([
+        "'", LaunchConfiguration("servo_guard"), "' == 'true' and ('", with_arms, "' == 'true' or '", with_head,
+        "' == 'true') and '", torque_off, "' == 'false' and '", use_sim, "' == 'false' and '", use_mock_hardware,
+        "' == 'false'",
+    ])
     # The twin's overrides of controllers.yaml (the wheel signs), loaded after it. Without
     # use_sim the second file is controllers.yaml again, which changes nothing.
     controllers_override_yaml = PythonExpression([
@@ -206,6 +213,9 @@ def generate_launch_description():
         # Torqued and commandable by default now that both arms and the head are calibrated,
         # live-tested, and MoveIt2-integrated. Pass torque_off:=true for a states-only bringup.
         DeclareLaunchArgument("torque_off", default_value="false"),
+        # xlerobot_teleop servo_guard: holds, and as a last resort cuts the torque of, a stalled or overheating
+        # servo whatever commands it (after the right wrist_flex burned out on 2026-11-16)
+        DeclareLaunchArgument("servo_guard", default_value="true"),
         DeclareLaunchArgument("record", default_value="false"),
         DeclareLaunchArgument("foxglove", default_value="false"),
         DeclareLaunchArgument("cameras", default_value="false"),
@@ -263,6 +273,26 @@ def generate_launch_description():
             executable="spawner",
             arguments=["head_controller"],
             condition=IfCondition(head_controller_condition),
+        ),
+        # servo_guard's hold controllers (controllers.yaml), loaded inactive: it swaps one in for a trajectory
+        # controller whose servo stalls or overheats
+        Node(
+            package="controller_manager",
+            executable="spawner",
+            arguments=["left_arm_hold", "right_arm_hold", "left_gripper_hold", "right_gripper_hold", "--inactive"],
+            condition=IfCondition(arm_controllers),
+        ),
+        Node(
+            package="controller_manager",
+            executable="spawner",
+            arguments=["head_hold", "--inactive"],
+            condition=IfCondition(head_controller_condition),
+        ),
+        Node(
+            package="xlerobot_teleop",
+            executable="servo_guard",
+            output="screen",
+            condition=IfCondition(servo_guard_condition),
         ),
 
         IncludeLaunchDescription(

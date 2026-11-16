@@ -16,6 +16,7 @@
   <depend>geometry_msgs</depend>
   <depend>sensor_msgs</depend>
   <depend>control_msgs</depend>
+  <depend>controller_manager_msgs</depend>  <!-- servo_guard deactivates controllers -->
   <depend>std_msgs</depend>
   <depend>std_srvs</depend>
   <depend>trajectory_msgs</depend>

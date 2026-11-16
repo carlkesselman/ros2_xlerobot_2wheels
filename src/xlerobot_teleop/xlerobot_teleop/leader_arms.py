@@ -39,7 +39,8 @@ On any disengage, a joint further than hold_error from its command (stuck, or st
 where it is, so nothing keeps pushing; the others keep their last command, so gravity sag doesn't turn into a
 droop. Grippers keep theirs (an object stays gripped) unless it is a gripper that overheated.
 ~/status (std_msgs/String, JSON, latched) has the last fault and the servos at temp_warn or more; the station viewer
-shows both.
+shows both. The robot has a guard of its own for every commander (servo_guard, started by bringup), which locks a
+stalled controller out; engaging sends it "reset" (/servo_guard/command) to bring them back.
 
 The leaders are only read, never written: their torque stays as it is (off).
 """
@@ -236,6 +237,9 @@ class LeaderArms(Node):
         self.engaged_pub = self.create_publisher(Bool, "~/engaged", latched)
         self.engaged_pub.publish(Bool(data=False))
         self.status_pub = self.create_publisher(String, "~/status", latched)
+        # the robot's own guard (servo_guard, with bringup): engaging resets it, so controllers it locked out after a
+        # stall come back. A topic, not a service, so it gets from rosie to elroy.
+        self.guard_pub = self.create_publisher(String, "/servo_guard/command", 10)
         self.create_subscription(JointState, "/joint_states", self.on_joint_states, 10)
         # 100 Hz and large: kept serialized here, decoded twice a second in check_temps
         self.create_subscription(DynamicJointState, "/dynamic_joint_states", self.on_dynamic, 10, raw=True)
@@ -356,6 +360,7 @@ class LeaderArms(Node):
                        f"let it cool below {self.temp_resume:.0f} C")
                 self.get_logger().warn(why)
                 return False, why
+            self.guard_pub.publish(String(data="reset"))
             self.start_pose = {n: self.follower_state[n] for n in names}
             self.engaged_at = time.monotonic()
             self.stall_since = {}

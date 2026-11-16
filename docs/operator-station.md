@@ -146,6 +146,35 @@ joint_state_broadcaster). The thresholds are leader_arms parameters (`stall_erro
 A trip pauses the recording like any disengage. Look at the arm before engaging again: something is in the way, or
 the joint can't reach where the leader asks.
 
+### The robot's own guard
+
+leader_arms' guard only acts while the leaders drive. On the robot, bringup also starts **servo_guard**
+(xlerobot_teleop). It watches every arm, gripper and head servo whatever commands it: the leader arms, the lerobot
+policy, MoveIt, the skills, the d-pad. It reads each trajectory controller's `controller_state` (command and measured
+position) and the servo temperatures.
+
+| Check | Does |
+|---|---|
+| A joint (not a gripper) more than 0.15 rad from its command, within the joint's limits, for 3 s without getting closer | **hold**: the controller is swapped for its hold twin, which keeps the joints stiff where they are |
+| Any servo at 65 °C | hold its controller |
+| Any servo at 70 °C | every controller on its bus held, then **that bus's torque cut** (the arm goes limp) |
+
+The hold twins (`left_arm_hold`, `right_arm_hold`, `left_gripper_hold`, `right_gripper_hold`, `head_hold`) are
+forward_command_controllers that bringup loads inactive (controllers.yaml). While one is in, no commander reaches
+those joints: they all talk to the trajectory controller.
+
+The station viewer shows a hold or a cut in red ("robot guard holds right arm: ..."), flashed over the head image too.
+To bring the joints back, **engage the leaders (X)**: leader_arms sends servo_guard `reset`. Or from any machine:
+
+```bash
+ros2 topic pub --once /servo_guard/command std_msgs/msg/String "{data: reset}"
+```
+
+The reset is a topic, not a service, so it also gets from rosie to elroy. It's refused while a servo is 60 °C or
+more. After a cut, the reset first sets the holds to where the limp arm is now and gives torque back after that, so
+the arm doesn't jump back up. An emergency stop set by hand (`/emergency_stop_xlerobot_bus2`) is left alone.
+`servo_guard:=false` on bringup turns it off.
+
 ## If something is off
 
 - **No window over ssh:** `station.sh` points SDL at the desktop session's Wayland socket

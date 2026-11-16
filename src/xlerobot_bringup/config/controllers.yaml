@@ -41,6 +41,21 @@ controller_manager:
     head_controller:
       type: joint_trajectory_controller/JointTrajectoryController
 
+    # servo_guard's hold controllers, loaded inactive next to the trajectory controllers above. When a servo
+    # stalls or overheats, servo_guard swaps its trajectory controller for the hold twin in one switch and
+    # sends it the measured position: nothing pushes, and no commander (they all talk to the trajectory
+    # controllers) can drive those joints until its reset swaps them back. Same joints, same order.
+    left_arm_hold:
+      type: forward_command_controller/ForwardCommandController
+    right_arm_hold:
+      type: forward_command_controller/ForwardCommandController
+    left_gripper_hold:
+      type: forward_command_controller/ForwardCommandController
+    right_gripper_hold:
+      type: forward_command_controller/ForwardCommandController
+    head_hold:
+      type: forward_command_controller/ForwardCommandController
+
 diff_drive_controller:
   ros__parameters:
     left_wheel_names: ["left_wheel_joint"]
@@ -218,3 +233,30 @@ head_controller:
     action_monitor_rate: 20.0
     constraints:
       stopped_velocity_tolerance: 0.05
+
+# servo_guard's hold controllers (see the list at the top). The joints must be in the same order as their trajectory
+# controllers': servo_guard sends the measured positions in that order on <name>/commands.
+left_arm_hold:
+  ros__parameters:
+    joints: [left_arm_shoulder_pan_joint, left_arm_shoulder_lift_joint, left_arm_elbow_flex_joint, left_arm_wrist_flex_joint, left_arm_wrist_roll_joint]
+    interface_name: position
+
+right_arm_hold:
+  ros__parameters:
+    joints: [right_arm_shoulder_pan_joint, right_arm_shoulder_lift_joint, right_arm_elbow_flex_joint, right_arm_wrist_flex_joint, right_arm_wrist_roll_joint]
+    interface_name: position
+
+left_gripper_hold:
+  ros__parameters:
+    joints: [left_arm_gripper_joint]
+    interface_name: position
+
+right_gripper_hold:
+  ros__parameters:
+    joints: [right_arm_gripper_joint]
+    interface_name: position
+
+head_hold:
+  ros__parameters:
+    joints: [head_pan_joint, head_tilt_joint]
+    interface_name: position

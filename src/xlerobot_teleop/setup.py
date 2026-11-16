@@ -34,6 +34,7 @@ setup(
             "leader_arms = xlerobot_teleop.leader_arms:main",
             "head_teleop = xlerobot_teleop.head_teleop:main",
             "station_viewer = xlerobot_teleop.station_viewer:main",
+            "servo_guard = xlerobot_teleop.servo_guard:main",
         ],
     },
 )

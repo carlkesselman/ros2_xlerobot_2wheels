@@ -109,6 +109,10 @@ where the arm is. The base model runs too, with its inputs fed in layout order: 
 - It starts disengaged. Press **e** (or call `/lerobot_policy/engage`, `std_srvs/SetBool`) to engage. **Space** or
   **Esc** stops: the controllers get an empty trajectory, drop the goal and hold. **q** quits.
 - It refuses to engage while something else commands the arms. Disengage the leader arms first.
+- The robot's servo_guard watches the policy too ([operator-station.md](operator-station.md#the-robots-own-guard)).
+  A joint stuck short of its command for 3 s, or a servo at 65 °C, swaps that arm's controller for its hold twin.
+  The policy's chunks then go nowhere. Bring it back with
+  `ros2 topic pub --once /servo_guard/command std_msgs/msg/String "{data: reset}"`.
 - Each chunk goes to the four controllers as one `JointTrajectory` each. The actions whose time passed during
   inference are dropped, the rest clamped to the joint limits and cut at `--max-horizon` (1.5 s). If the node dies,
   the arms stop that soon.

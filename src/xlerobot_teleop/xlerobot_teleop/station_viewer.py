@@ -121,6 +121,7 @@ class StationViewer(Node):
                         Camera("right wrist", gp("right_topic"))]
         self.engaged = None           # None until leader_arms says
         self.arms_status = None       # leader_arms' guard: {"fault": ..., "fault_seq": ..., "hot": {...}}
+        self.robot_guard = None       # the robot's servo_guard: {"held": {controller: why}, "cut": {bus: why}, ...}
         self.alert = None             # (text, until): a guard trip, flashed over the head image
         self.status = None            # the recorder's last status (dict)
         self.status_arrival = None
@@ -140,6 +141,7 @@ class StationViewer(Node):
         self.create_subscription(Bool, "/leader_arms/engaged", self.on_engaged, latched)
         self.create_subscription(String, "/recorder/status", self.on_status, latched)
         self.create_subscription(String, "/leader_arms/status", self.on_arms_status, latched)
+        self.create_subscription(String, "/servo_guard/status", self.on_robot_guard, latched)
         self.create_subscription(Joy, "joy", self.on_joy, 10)
         self.create_subscription(JointState, "/joint_states", self.on_joint_states, 10)
         self.create_subscription(String, "/robot_description", self.on_description, latched)
@@ -197,6 +199,18 @@ class StationViewer(Node):
             if old is not None and status.get("fault") and status.get("fault_seq") != old.get("fault_seq"):
                 self.alert = (f"Arms stopped: {status['fault']}", time.monotonic() + 5.0)
             self.arms_status = status
+
+    def on_robot_guard(self, msg):
+        try:
+            status = json.loads(msg.data)
+        except ValueError:
+            return
+        with self.lock:
+            old = self.robot_guard
+            if old is not None and status.get("seq") != old.get("seq") and (status.get("held") or status.get("cut")):
+                why = next(iter({**status.get("cut", {}), **status.get("held", {})}.values()), "")
+                self.alert = (f"Robot guard: {why}", time.monotonic() + 5.0)
+            self.robot_guard = status
 
     def check_graph(self):
         alive = self.count_publishers("/leader_arms/engaged") > 0
@@ -466,7 +480,7 @@ class StationViewer(Node):
         small = self._font(pygame, fonts, int(bar.height * 0.45))
         with self.lock:
             engaged, status, status_arrival = self.engaged, self.status, self.status_arrival
-            leader_alive, arms = self.leader_alive, self.arms_status or {}
+            leader_alive, arms, robot = self.leader_alive, self.arms_status or {}, self.robot_guard or {}
         pad = bar.height // 5
         x = pad
 
@@ -488,7 +502,12 @@ class StationViewer(Node):
         notes = []
         if fault:
             notes.append((fault, (255, 110, 110)))
-        hot = arms.get("hot", {}) if leader_alive else {}
+        for bus, why in robot.get("cut", {}).items():
+            notes.append((f"robot guard cut {bus} torque: {why}", (255, 110, 110)))
+        for controller, why in robot.get("held", {}).items():
+            notes.append((f"robot guard holds {controller.removesuffix('_controller').replace('_', ' ')}: {why}",
+                          (255, 110, 110)))
+        hot = {**robot.get("hot", {}), **(arms.get("hot", {}) if leader_alive else {})}
         if hot:
             notes.append(("hot: " + ", ".join(f"{n} {t}\N{DEGREE SIGN}C" for n, t in hot.items()), AMBER))
         for note, colour in notes:
