@@ -9,6 +9,10 @@ for pointing the head, and the two wrist cameras beside it. The bar underneath s
   - which gamepad buttons drive the recorder.
 A camera whose frames stop coming gets a red frame and the age of its last frame.
 
+Over the head image: the head's pan and tilt in degrees (/joint_states), and a scale for each between the joint's
+limits (/robot_description). The pan scale runs along the bottom with its left end turned fully left, the tilt scale
+along the right edge with up at the top, so the marker moves the way the view does.
+
 The recorder is driven from here, by keys in this window or gamepad buttons: both publish /recorder/command (keep,
 redo, stop), which record.py treats like the keys in its own terminal.
   keep   end the episode now and keep it; during the reset, end the reset      right arrow, enter / tap keep button
@@ -25,16 +29,18 @@ the callbacks only keep the newest message; the window decodes and draws in the 
 """
 import io
 import json
+import math
 import os
 import threading
 import time
+import xml.etree.ElementTree as ET
 from collections import deque
 
 import rclpy
 from rclpy.executors import ExternalShutdownException, SingleThreadedExecutor
 from rclpy.node import Node
 from rclpy.qos import DurabilityPolicy, QoSProfile, ReliabilityPolicy
-from sensor_msgs.msg import CompressedImage, Joy
+from sensor_msgs.msg import CompressedImage, JointState, Joy
 from std_msgs.msg import Bool, String
 
 # Recorder buttons per joy_layout: (keep, redo) button numbers and the names printed in the bar, plus the name of the
@@ -50,6 +56,8 @@ RECORDER_BUTTONS = {
     "ps": ((9, 8), ("start", "select"), "X (top)"),
 }
 HOLD_TO_STOP_S = 1.5
+# The head's joints: positive pan turns it left, positive tilt looks up (head_teleop, checked on the cart 2026-11-14).
+HEAD_JOINTS = ("head_pan_joint", "head_tilt_joint")
 
 BG = (14, 14, 16)
 TILE = (32, 32, 36)
@@ -117,6 +125,9 @@ class StationViewer(Node):
         self.keep_down_at = None      # time the keep button went down, None while up
         self.stop_sent = False
         self.last_buttons = []
+        self.head_pose = None         # (pan, tilt) in rad, from /joint_states
+        self.head_pose_arrival = None
+        self.head_limits = {}         # joint -> (lower, upper) in rad, from /robot_description
 
         image_qos = QoSProfile(depth=1, reliability=ReliabilityPolicy.BEST_EFFORT)
         for cam in self.cameras:
@@ -125,6 +136,8 @@ class StationViewer(Node):
         self.create_subscription(Bool, "/leader_arms/engaged", self.on_engaged, latched)
         self.create_subscription(String, "/recorder/status", self.on_status, latched)
         self.create_subscription(Joy, "joy", self.on_joy, 10)
+        self.create_subscription(JointState, "/joint_states", self.on_joint_states, 10)
+        self.create_subscription(String, "/robot_description", self.on_description, latched)
         self.command_pub = self.create_publisher(String, "/recorder/command", 10)
         # The latched engaged state outlives a leader_arms that was killed, so also check it is still there.
         self.leader_alive = False
@@ -146,6 +159,27 @@ class StationViewer(Node):
     def on_engaged(self, msg):
         with self.lock:
             self.engaged = msg.data
+
+    def on_joint_states(self, msg):
+        pos = dict(zip(msg.name, msg.position))
+        if all(j in pos for j in HEAD_JOINTS):
+            with self.lock:
+                self.head_pose = tuple(pos[j] for j in HEAD_JOINTS)
+                self.head_pose_arrival = time.monotonic()
+
+    def on_description(self, msg):
+        try:
+            root = ET.fromstring(msg.data)
+        except ET.ParseError as e:
+            self.get_logger().warn(f"robot_description does not parse: {e}")
+            return
+        limits = {}
+        for joint in root.iter("joint"):
+            limit = joint.find("limit")
+            if joint.get("name") in HEAD_JOINTS and limit is not None:
+                limits[joint.get("name")] = (float(limit.get("lower")), float(limit.get("upper")))
+        with self.lock:
+            self.head_limits = limits
 
     def check_graph(self):
         alive = self.count_publishers("/leader_arms/engaged") > 0
@@ -247,8 +281,8 @@ class StationViewer(Node):
         bar_h = max(34, H // 12)
         rects = [pygame.Rect(*map(int, r)) for r in self._tiles(W, H - bar_h)]
         head_rect = rects[0]
-        for cam, rect in zip(self.cameras, rects):
-            self._draw_camera(pygame, screen, fonts, cam, rect, now)
+        drawn = [self._draw_camera(pygame, screen, fonts, cam, rect, now) for cam, rect in zip(self.cameras, rects)]
+        self._draw_head_pose(pygame, screen, fonts, drawn[0] or head_rect, now)
         with self.lock:
             banner = self.banner if self.banner and self.banner[1] > now else None
         if banner:
@@ -279,6 +313,7 @@ class StationViewer(Node):
         return [head] + wrists
 
     def _draw_camera(self, pygame, screen, fonts, cam, rect, now):
+        """Draws the camera into rect. Returns the image's rect, None while there is no frame yet."""
         pygame.draw.rect(screen, TILE, rect)
         with self.lock:   # on_frame appends to cam.arrivals from the executor thread
             data, seq, arrival, fps = cam.data, cam.seq, cam.arrival, cam.fps(now)
@@ -293,7 +328,7 @@ class StationViewer(Node):
         if cam.surface is None:
             msg = font.render(f"{cam.name}: waiting for {cam.topic}", True, DIM)
             screen.blit(msg, msg.get_rect(center=rect.center))
-            return
+            return None
         sw, sh = cam.surface.get_size()
         scale = min(rect.width / sw, rect.height / sh)
         size = (max(1, int(sw * scale)), max(1, int(sh * scale)))
@@ -313,6 +348,86 @@ class StationViewer(Node):
         shade.fill((0, 0, 0, 150))
         screen.blit(shade, (img_rect.x + 6, img_rect.y + 6))
         screen.blit(text, (img_rect.x + 12, img_rect.y + 9))
+        return img_rect
+
+    @staticmethod
+    def _shade(pygame, screen, box, alpha=150):
+        shade = pygame.Surface(box.size, pygame.SRCALPHA)
+        shade.fill((0, 0, 0, alpha))
+        screen.blit(shade, box)
+
+    def _draw_head_pose(self, pygame, screen, fonts, img, now):
+        """The head's pan and tilt over its image: degrees in the top right corner, and a scale for each between the
+        joint's limits, pan along the bottom (left end = turned fully left) and tilt down the right edge (up at the
+        top)."""
+        with self.lock:
+            pose, arrival, limits = self.head_pose, self.head_pose_arrival, dict(self.head_limits)
+        font = self._font(pygame, fonts, max(18, img.height // 16))
+        if pose is None or now - arrival > self.stale_s:
+            lines = [("pan / tilt: no joint states", DIM)]
+            pose = None
+        else:
+            def words(rad, plus, minus):
+                deg = math.degrees(rad)
+                side = plus if deg >= 0.5 else minus if deg <= -0.5 else ""
+                return f"{abs(deg):.0f}\N{DEGREE SIGN} {side}".rstrip()
+            lines = [(f"pan  {words(pose[0], 'left', 'right')}", TEXT), (f"tilt  {words(pose[1], 'up', 'down')}", TEXT)]
+        texts = [font.render(t, True, c) for t, c in lines]
+        box = pygame.Rect(0, 0, max(t.get_width() for t in texts) + 16, sum(t.get_height() for t in texts) + 10)
+        box.topright = (img.right - 6, img.y + 6)
+        self._shade(pygame, screen, box)
+        y = box.y + 5
+        for t in texts:
+            screen.blit(t, (box.x + 8, y))
+            y += t.get_height()
+        if pose is None:
+            return
+        size = max(10, img.height // 30)
+        small = self._font(pygame, fonts, max(14, img.height // 26))
+        pan_limits, tilt_limits = (limits.get(j) for j in HEAD_JOINTS)
+        if pan_limits:
+            y = img.bottom - 2 * size
+            self._draw_scale(pygame, screen, small, (img.x + img.width * 0.3, y), (img.right - img.width * 0.3, y),
+                             pan_limits, pose[0], ("L", "R"), size)
+        if tilt_limits:
+            x = img.right - 2 * size
+            self._draw_scale(pygame, screen, small, (x, img.y + img.height * 0.28), (x, img.bottom - img.height * 0.2),
+                             tilt_limits, pose[1], ("up", "down"), size)
+
+    def _draw_scale(self, pygame, screen, font, start, end, limits, value, names, size):
+        """A scale from start (the joint's upper limit) to end (its lower limit), a tick at 0 and a marker at value.
+        names label the two ends."""
+        lo, hi = limits
+        if hi <= lo:
+            return
+        along = lambda v: (hi - min(max(v, lo), hi)) / (hi - lo)  # noqa: E731
+        point = lambda f: (start[0] + (end[0] - start[0]) * f, start[1] + (end[1] - start[1]) * f)  # noqa: E731
+        horizontal = start[1] == end[1]
+        labels = [font.render(n, True, DIM) for n in names]
+        if horizontal:   # the end labels sit beyond the ends
+            box = pygame.Rect(start[0] - labels[0].get_width() - size, start[1] - size,
+                              end[0] - start[0] + labels[0].get_width() + labels[1].get_width() + 2 * size, 2 * size)
+        else:            # above and below
+            box = pygame.Rect(start[0] - size, start[1] - labels[0].get_height() - size // 2,
+                              2 * size, end[1] - start[1] + labels[0].get_height() + labels[1].get_height() + size)
+            box.inflate_ip(max(0, max(lb.get_width() for lb in labels) + 8 - box.width), 0)
+        self._shade(pygame, screen, box.inflate(8, 6), alpha=120)
+        line_w = max(2, size // 5)
+        pygame.draw.line(screen, DIM, start, end, line_w)
+        for f, length in ((0.0, size * 0.6), (1.0, size * 0.6), (along(0.0), size * 1.2)):
+            x, y = point(f)
+            if horizontal:
+                pygame.draw.line(screen, TEXT, (x, y - length / 2), (x, y + length / 2), line_w)
+            else:
+                pygame.draw.line(screen, TEXT, (x - length / 2, y), (x + length / 2, y), line_w)
+        x, y = point(along(value))
+        pygame.draw.circle(screen, AMBER, (int(x), int(y)), max(4, int(size * 0.45)))
+        if horizontal:
+            screen.blit(labels[0], labels[0].get_rect(midright=(start[0] - size // 2, start[1])))
+            screen.blit(labels[1], labels[1].get_rect(midleft=(end[0] + size // 2, end[1])))
+        else:
+            screen.blit(labels[0], labels[0].get_rect(midbottom=(start[0], start[1] - size // 3)))
+            screen.blit(labels[1], labels[1].get_rect(midtop=(end[0], end[1] + size // 3)))
 
     def _draw_banner(self, pygame, screen, fonts, text, rect):
         font = self._font(pygame, fonts, max(28, rect.height // 9))

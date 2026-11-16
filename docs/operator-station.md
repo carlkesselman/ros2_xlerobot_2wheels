@@ -100,6 +100,9 @@ a squarer screen). The bar underneath shows:
 - The recorder's spoken prompts ("Recording episode 3", "Reset the scene") flash over the head image. The Mac's
   speech is in another room.
 - A camera whose frames stop gets a red frame and the age of its last frame.
+- Over the head image are the head's pan and tilt in degrees, with a scale for each between the joint's limits. Pan
+  runs along the bottom, with turned fully left at the left end; tilt runs down the right edge, with up at the top.
+  It reads `/joint_states` and the limits from `/robot_description`, and says "no joint states" when they stop.
 
 The buttons and keys publish `/recorder/command` (`keep`, `redo`, `stop`), which `record.py` treats like its own
 keys.
