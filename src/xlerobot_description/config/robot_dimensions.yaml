@@ -240,6 +240,16 @@ xlerobot:
     #   outside its limits makes the trajectory controller shut down. The servos' own
     #   calibrated range limits are the real stops.
     limit_margin: 0.1
+    # elbow_plus_wrist_min: with the arm folded the wrist can't bend back (down, wrist_flex negative) as far as it
+    #   does with the arm open: the gripper meets the upper arm. Measured by hand on both arms 2026-11-16 (torque off,
+    #   positions read off the bus): folded, the back bend stopped at wrist -1.14 rad with the elbow at -3.28 (left)
+    #   and wrist -1.27 at elbow -3.15 (right), 22 and 26 degrees short of the calibrated ends. Both are
+    #   elbow + wrist = -4.42: the angle between gripper and upper arm is the sum, so the limit eases off one for
+    #   one as the elbow opens and is gone about 0.5 rad open. The fold side is free at every elbow angle. No sample
+    #   of 8000 went below. leader_arms keeps elbow + wrist at or above this + elbow_plus_wrist_margin, so a folded
+    #   leader with its wrist bent back doesn't stall the follower's wrist against its upper arm.
+    elbow_plus_wrist_min: -4.42
+    elbow_plus_wrist_margin: 0.09
     # rest_pose: the folded pose the arms rest in, in the model's joint angles (lift and elbow
     #   near their limits, the gripper closed at its limit), the same for both arms. The
     #   sim's arms start in it and MoveIt has it as the named state `rest`. The real arms rest
@@ -289,7 +299,11 @@ xlerobot:
       #   (2015, 2019, 2013, mean 2016), 1224 above its fold end and 1125 below its other end, which
       #   gives 2065 from the fold end and 2066 from the other one. Its model_offset was fitted on an
       #   older servo (-0.28337) and is reset.
-      wrist_flex:    {zero_step: {left: 2230, right: 2065}, direction:  1, max_velocity: 0.8, lower: -1.6580628, upper: 1.6580627, model_offset: {left: 0.06606, right: 0.0}}
+      # right wrist_flex: the 2026-11-14 servo died 2026-11-16 (it stalled about 2 h at +1.50 and overheated; the
+      #   block was in it or the wrist, not the arm's geometry). The fourth servo (an old omniwheel unit, id 7 -> 4,
+      #   position mode, P/D 16/43) recalibrated: homing -299, range 862..3210, the same 2348-step span. Straight
+      #   carried over from the ends as before: 862 + 1224 = 2086, 3210 - 1125 = 2085.
+      wrist_flex:    {zero_step: {left: 2230, right: 2085}, direction:  1, max_velocity: 0.8, lower: -1.6580628, upper: 1.6580627, model_offset: {left: 0.06606, right: 0.0}}
       wrist_roll:    {zero_step: {left: 1995, right: 2016}, direction: -1, max_velocity: 0.8, lower: -2.7438473, upper: 2.8412063, model_offset: {left: -0.00000, right: -0.00000}}
       gripper:       {zero_step: {left: 1640, right: 1673}, direction:  1, max_velocity: 0.8, lower: -0.374533,  upper: 1.7453292}
 

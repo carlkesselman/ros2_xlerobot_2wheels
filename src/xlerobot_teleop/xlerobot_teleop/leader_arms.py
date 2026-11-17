@@ -34,7 +34,11 @@ servo). So, while engaged:
   - heat: any arm servo, grippers too, at temp_stop disengages (servo temperatures from /dynamic_joint_states,
     read twice a second), and engaging is refused while one is at temp_resume or more;
   - commands stay inside the model's own limits, not the limit_margin wider ones ros2_control enforces (the margin
-    is there so a measured rest pose a little past a limit doesn't stop the controller, not to be driven into).
+    is there so a measured rest pose a little past a limit doesn't stop the controller, not to be driven into);
+  - elbow + wrist_flex stays at or above robot_dimensions.yaml's elbow_plus_wrist_min (+ margin): with the arm
+    folded the wrist bending back meets the upper arm, 22-26 degrees before its end (measured 2026-11-16), and the
+    limit eases off one for one as the elbow opens. A folded leader with its wrist bent back would otherwise stall
+    the follower's wrist there.
 On any disengage, a joint further than hold_error from its command (stuck, or still catching up) is told to hold
 where it is, so nothing keeps pushing; the others keep their last command, so gravity sag doesn't turn into a
 droop. Grippers keep theirs (an object stays gripped) unless it is a gripper that overheated.
@@ -186,6 +190,9 @@ class LeaderArms(Node):
                                  "config", "robot_dimensions.yaml")
         dims = yaml.safe_load(open(dims_file))["xlerobot"]["arms"]
         follower = json.load(open(gp("follower_calibration").value))
+        # With the arm folded the wrist meets the upper arm bending back: keep elbow + wrist above this
+        # (robot_dimensions.yaml elbow_plus_wrist_min, measured 2026-11-16, plus its margin)
+        self.elbow_plus_wrist_min = dims["elbow_plus_wrist_min"] + dims["elbow_plus_wrist_margin"]
 
         self.arms = {}
         for side in gp("arms").value:
@@ -401,6 +408,9 @@ class LeaderArms(Node):
                 angle = min(max(step_to_angle(step, jc["zero"]), jc["lo"]), jc["hi"])
                 start = self.start_pose[jc["name"]]
                 target[j] = start + blend * (angle - start)
+            # folded, the wrist bending back meets the upper arm: lift it to where it clears
+            target["wrist_flex"] = max(target["wrist_flex"], self.elbow_plus_wrist_min - target["elbow_flex"])
+            for j, jc in arm["joints"].items():
                 self.last_target[jc["name"]] = target[j]
             for pub, joints in ((arm["arm_pub"], ARM_JOINTS), (arm["grip_pub"], ("gripper",))):
                 msg = JointTrajectory()

@@ -136,6 +136,7 @@ lost a servo on 2026-11-13. leader_arms now watches for this while the leaders a
 | Any arm servo, grippers too, at 65 °C (the servos' own cutoff is 70 °C) | disengages |
 | A servo at 60 °C or more | engaging is refused until it cools |
 | Leader beyond the follower's limits | the command stops at the model's own limits, not the 0.1 rad wider ones ros2_control allows |
+| Arm folded, wrist bent back (down) | the wrist command is lifted to keep elbow + wrist ≥ -4.33 rad. Folded, the gripper meets the upper arm 22–26° before the wrist's end; the limit eases off one for one as the elbow opens (robot_dimensions.yaml `elbow_plus_wrist_min`, measured 2026-11-16) |
 
 Any disengage, by X or by the guard, tells joints more than 0.05 rad from their command to hold where they are.
 Nothing keeps pushing after that. The other joints keep their last command. Grippers keep theirs, so an object stays
