@@ -91,6 +91,10 @@ def _realsense_head(cfg):
         executable="realsense2_camera_node",
         namespace="cameras",
         name="head",
+        # Started again if it dies: on 2026-11-16 it aborted with "double free or corruption" right after setting
+        # up its ffmpeg (H.264) publisher, once in several bringups, and came up fine when started again.
+        respawn=True,
+        respawn_delay=2.0,
         parameters=[{
             "camera_name": "head",
             "serial_no": str(cfg.get("serial_no", "")),
