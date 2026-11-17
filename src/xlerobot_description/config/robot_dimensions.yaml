@@ -250,6 +250,14 @@ xlerobot:
     #   leader with its wrist bent back doesn't stall the follower's wrist against its upper arm.
     elbow_plus_wrist_min: -4.42
     elbow_plus_wrist_margin: 0.09
+    # elbow_plus_wrist_min_by_roll: the same limit by wrist roll, which elbow_plus_wrist_min (measured at normal roll)
+    #   doesn't cover: rolled about 180 degrees the wrist camera faces the upper arm and touches it first. Measured
+    #   the same way 2026-11-16, both arms folded, wrist bent back until something touched at roll 0/90/180/270:
+    #   -4.43 near 0, -4.32..-4.36 out to 120 degrees, then -3.92 (left) / -3.85 (right) near 150-180, about 30 degrees
+    #   tighter. Pairs of [degrees of wrist roll from its zero_step, either way; limit], the tighter arm at each,
+    #   interpolated between. Only one roll direction was measured (to about -150 and +178); the other side is taken
+    #   to be the same.
+    elbow_plus_wrist_min_by_roll: [[0, -4.42], [60, -4.35], [120, -4.32], [150, -3.85], [180, -3.85]]
     # rest_pose: the folded pose the arms rest in, in the model's joint angles (lift and elbow
     #   near their limits, the gripper closed at its limit), the same for both arms. The
     #   sim's arms start in it and MoveIt has it as the named state `rest`. The real arms rest

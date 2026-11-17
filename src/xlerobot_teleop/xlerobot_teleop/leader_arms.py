@@ -36,10 +36,11 @@ servo). So, while engaged:
     is refused while one is at temp_resume or more;
   - commands stay inside the model's own limits, not the limit_margin wider ones ros2_control enforces (the margin
     is there so a measured rest pose a little past a limit doesn't stop the controller, not to be driven into);
-  - elbow + wrist_flex stays at or above robot_dimensions.yaml's elbow_plus_wrist_min (+ margin): with the arm
-    folded the wrist bending back meets the upper arm, 22-26 degrees before its end (measured 2026-11-16), and the
-    limit eases off one for one as the elbow opens. A folded leader with its wrist bent back would otherwise stall
-    the follower's wrist there.
+  - elbow + wrist_flex stays at or above robot_dimensions.yaml's elbow_plus_wrist_min_by_roll (+ margin): with the
+    arm folded the wrist bending back meets the upper arm, 22-26 degrees before its end at normal roll and about 30
+    degrees sooner again rolled near 180, where the wrist camera touches first (measured 2026-11-16). The limit
+    eases off one for one as the elbow opens. A folded leader with its wrist bent back would otherwise stall the
+    follower's wrist there.
 On any disengage, a joint further than hold_error from its command (stuck, or still catching up) is told to hold
 where it is, so nothing keeps pushing; the others keep their last command, so gravity sag doesn't turn into a
 droop. Grippers keep theirs (an object stays gripped) unless it is a gripper that overheated.
@@ -193,9 +194,12 @@ class LeaderArms(Node):
                                  "config", "robot_dimensions.yaml")
         dims = yaml.safe_load(open(dims_file))["xlerobot"]["arms"]
         follower = json.load(open(gp("follower_calibration").value))
-        # With the arm folded the wrist meets the upper arm bending back: keep elbow + wrist above this
-        # (robot_dimensions.yaml elbow_plus_wrist_min, measured 2026-11-16, plus its margin)
-        self.elbow_plus_wrist_min = dims["elbow_plus_wrist_min"] + dims["elbow_plus_wrist_margin"]
+        # With the arm folded the wrist meets the upper arm bending back: keep elbow + wrist above this, which depends
+        # on the wrist roll (rolled about 180 degrees the camera touches first). robot_dimensions.yaml
+        # elbow_plus_wrist_min_by_roll, measured 2026-11-16, plus elbow_plus_wrist_margin.
+        self.elbow_plus_wrist_margin = dims["elbow_plus_wrist_margin"]
+        self.elbow_plus_wrist_table = sorted(
+            (float(d), float(v)) for d, v in dims.get("elbow_plus_wrist_min_by_roll", [[0, dims["elbow_plus_wrist_min"]]]))
 
         self.arms = {}
         for side in gp("arms").value:
@@ -416,8 +420,10 @@ class LeaderArms(Node):
                 angle = min(max(step_to_angle(step, jc["zero"]), jc["lo"]), jc["hi"])
                 start = self.start_pose[jc["name"]]
                 target[j] = start + blend * (angle - start)
-            # folded, the wrist bending back meets the upper arm: lift it to where it clears
-            target["wrist_flex"] = max(target["wrist_flex"], self.elbow_plus_wrist_min - target["elbow_flex"])
+            # folded, the wrist bending back meets the upper arm (the camera first, rolled about 180 degrees): lift it
+            # to where it clears
+            target["wrist_flex"] = max(target["wrist_flex"],
+                                       self.elbow_plus_wrist_min(target["wrist_roll"]) - target["elbow_flex"])
             for j, jc in arm["joints"].items():
                 self.last_target[jc["name"]] = target[j]
             for pub, joints in ((arm["arm_pub"], ARM_JOINTS), (arm["grip_pub"], ("gripper",))):
@@ -428,6 +434,22 @@ class LeaderArms(Node):
                 pt.time_from_start.nanosec = stamp_ns
                 msg.points = [pt]
                 pub.publish(msg)
+
+    def elbow_plus_wrist_min(self, roll):
+        """The lowest elbow + wrist_flex allowed at this wrist roll (rad, from its zero step), margin included:
+        robot_dimensions.yaml's table, by degrees of roll either way, interpolated."""
+        deg = abs((math.degrees(roll) + 180.0) % 360.0 - 180.0)
+        table = self.elbow_plus_wrist_table
+        if deg <= table[0][0]:
+            limit = table[0][1]
+        elif deg >= table[-1][0]:
+            limit = table[-1][1]
+        else:
+            for (d0, v0), (d1, v1) in zip(table, table[1:]):
+                if d0 <= deg <= d1:
+                    limit = v0 + (v1 - v0) * (deg - d0) / (d1 - d0)
+                    break
+        return limit + self.elbow_plus_wrist_margin
 
     def stalled(self, side, arm, blend):
         """True, after disengaging, if one of the arm's joints has stayed further than stall_error from the last
