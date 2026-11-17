@@ -32,7 +32,8 @@ servo). So, while engaged:
   - stall: an arm joint (not a gripper: gripping is a deliberate stall) further than stall_error from its command
     for stall_s disengages;
   - heat: any arm servo, grippers too, at temp_stop disengages (servo temperatures from /dynamic_joint_states,
-    read twice a second), and engaging is refused while one is at temp_resume or more;
+    read twice a second, each the median of its last 5 readings: single readings glitch 8-40 C high), and engaging
+    is refused while one is at temp_resume or more;
   - commands stay inside the model's own limits, not the limit_margin wider ones ros2_control enforces (the margin
     is there so a measured rest pose a little past a limit doesn't stop the controller, not to be driven into);
   - elbow + wrist_flex stays at or above robot_dimensions.yaml's elbow_plus_wrist_min (+ margin): with the arm
@@ -52,7 +53,9 @@ import glob
 import json
 import math
 import os
+import statistics
 import time
+from collections import deque
 
 import rclpy
 import serial
@@ -233,7 +236,8 @@ class LeaderArms(Node):
         self.last_button = 0
         self.last_target = {}         # joint name -> the last position sent
         self.stall_since = {}         # joint name -> when it went further than stall_error from its command
-        self.temps = {}               # joint name -> servo temperature, C
+        self.temps = {}               # joint name -> servo temperature, C (median of the last few readings)
+        self.temp_hist = {}           # joint name -> recent readings
         self.temps_at = 0.0
         self.dynamic_raw = None       # the newest /dynamic_joint_states, still serialized
         self.fault = ""               # why the guard last disengaged, "" after a clean engage
@@ -280,10 +284,14 @@ class LeaderArms(Node):
             ours = {j["name"] for a in self.arms.values() for j in a["joints"].values()}
             for name, iv in zip(msg.joint_names, msg.interface_values):
                 if name in ours and "temperature" in iv.interface_names:
-                    self.temps[name] = iv.values[iv.interface_names.index("temperature")]
+                    # the median of the last 5 (2.5 s): single readings glitch 8-40 C high
+                    hist = self.temp_hist.setdefault(name, deque(maxlen=5))
+                    hist.append(iv.values[iv.interface_names.index("temperature")])
+                    if len(hist) >= 3:
+                        self.temps[name] = statistics.median(hist)
             self.temps_at = now
         elif now - self.temps_at > 5.0:
-            self.temps = {}           # none for a while (bringup down): don't act on old readings
+            self.temps, self.temp_hist = {}, {}   # none for a while (bringup down): don't act on old readings
         over = [n for n, t in self.temps.items() if t >= self.temp_stop]
         if over and self.engaged:
             name = max(over, key=self.temps.get)

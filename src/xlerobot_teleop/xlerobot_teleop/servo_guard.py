@@ -13,7 +13,8 @@ is following and the measured position) and /dynamic_joint_states (each servo's 
   stall   a joint further than stall_error from its command (the command clamped to the joint's limits from
           /robot_description, since ros2_control clamps it there too), not getting any closer, for stall_s.
           Not for grippers: gripping is a deliberate stall.
-  hot     any servo, grippers too, at temp_stop.
+  hot     any servo, grippers too, at temp_stop: its median reading over temp_window_s (2 s), since single readings
+          glitch 8-40 C high.
   either  hold: one controller switch swaps the trajectory controller for its hold twin (<group>_hold, a
           forward_command_controller loaded inactive by bringup, controllers.yaml), which is then sent the measured
           positions. Nothing pushes, the joints stay stiff where they are, and no commander can drive them: they all
@@ -34,8 +35,10 @@ station viewer shows it.
 """
 import json
 import math
+import statistics
 import time
 import xml.etree.ElementTree as ET
+from collections import deque
 
 import rclpy
 from control_msgs.msg import DynamicJointState, JointTrajectoryControllerState
@@ -72,7 +75,12 @@ class ServoGuard(Node):
         p("temp_stop", 65.0)        # C: hold and deactivate
         p("temp_cut", 70.0)         # C: torque off on the bus
         p("rate_hz", 10.0)
+        # The servos' temperature readings carry single glitches 8-40 C high (seen 2026-11-16: a 34 C shoulder read
+        # 67 and 74 within seconds and the guard cut its bus). A servo's temperature is the median of its readings
+        # over this window: real heating takes minutes.
+        p("temp_window_s", 2.0)
         gp = lambda n: self.get_parameter(n).value  # noqa: E731
+        self.temp_samples = max(5, int(gp("rate_hz") * gp("temp_window_s")))
         self.stall_error, self.stall_s = gp("stall_error"), gp("stall_s")
         self.temp_warn, self.temp_resume, self.temp_stop, self.temp_cut = (
             gp(n) for n in ("temp_warn", "temp_resume", "temp_stop", "temp_cut"))
@@ -97,7 +105,8 @@ class ServoGuard(Node):
 
         self.limits = {}              # joint -> (lower, upper)
         self.bus_of = {}              # joint -> ros2_control hardware component (xlerobot_bus1, ...)
-        self.temps = {}               # joint -> C
+        self.temps = {}               # joint -> C, the median of the last temp_window_s of readings
+        self.temp_hist = {}           # joint -> recent readings
         self.positions = {}           # joint -> rad, measured (also while its controller is inactive)
         self.temps_at = 0.0
         self.stall_since = {}         # joint -> (since, position then)
@@ -153,12 +162,15 @@ class ServoGuard(Node):
             for name, iv in zip(m.joint_names, m.interface_values):
                 values = dict(zip(iv.interface_names, iv.values))
                 if "temperature" in values:
-                    self.temps[name] = values["temperature"]
+                    hist = self.temp_hist.setdefault(name, deque(maxlen=self.temp_samples))
+                    hist.append(values["temperature"])
+                    if len(hist) >= hist.maxlen // 2:   # enough readings for a median that ignores a glitch
+                        self.temps[name] = statistics.median(hist)
                 if "position" in values:
                     self.positions[name] = values["position"]
             self.temps_at = now
         elif now - self.temps_at > 5.0:
-            self.temps = {}           # none for a while: don't act on old readings
+            self.temps, self.temp_hist = {}, {}   # none for a while: don't act on old readings
 
     # -- the checks
 
