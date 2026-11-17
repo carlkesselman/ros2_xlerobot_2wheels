@@ -42,6 +42,9 @@
        declared for head_pan/head_tilt alone and tries to open bus1_port,
        which doesn't exist until the head is actually plugged in. -->
   <xacro:arg name="with_head"         default="false"/>
+  <!-- The wheels' ros2_control hardware (the ODrive). false leaves it out, so the arms and head come up with the
+       base's pack switched off: leader-arm recording doesn't move the cart. The wheels stay in the model. -->
+  <xacro:arg name="with_base"         default="true"/>
 
   <!-- rad/s. Above 0, replaces every arm joint's max_velocity (the URDF velocity limit that
        controller_manager enforces, and the driver's position_rate_limit at 1.25x) and turns off
@@ -154,6 +157,7 @@
           with_arms="$(arg with_arms)"
           torque_off="$(arg torque_off)"
           with_head="$(arg with_head)"
+          with_base="$(arg with_base)"
           dims="${dims}"/>
     </xacro:unless>
     <xacro:if value="$(arg use_sim)">

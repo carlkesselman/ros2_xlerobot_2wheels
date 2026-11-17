@@ -97,7 +97,7 @@
     </joint>
   </xacro:macro>
 
-  <xacro:macro name="xlerobot_ros2_control" params="bus1_port bus2_port use_mock_hardware with_arms torque_off with_head dims">
+  <xacro:macro name="xlerobot_ros2_control" params="bus1_port bus2_port use_mock_hardware with_arms torque_off with_head dims with_base:=true">
 
     <xacro:property name="b"      value="${dims['base']}"/>
     <xacro:property name="h"      value="${dims['head']}"/>
@@ -170,7 +170,11 @@
 
          The left motor is the mirrored one on this cart. That sign lives in exactly one place,
          diff_drive_controller's left_wheel_radius_multiplier: -1.0 (controllers.yaml); the joints
-         here report the raw axis, as the ODrive does. -->
+         here report the raw axis, as the ODrive does.
+
+         with_base false leaves it out: ros2_control won't start with hardware that isn't there, and the ODrive
+         only shows on USB while the base's pack powers it. -->
+    <xacro:if value="${with_base}">
     <xacro:property name="od" value="${b['odrive']}"/>
     <ros2_control name="xlerobot_base" type="system">
       <hardware>
@@ -190,6 +194,7 @@
       <xacro:odrive_wheel_joint name="left_wheel_joint"  axis="${od['left_axis']}"  wmax="${wmax}"/>
       <xacro:odrive_wheel_joint name="right_wheel_joint" axis="${od['right_axis']}" wmax="${wmax}"/>
     </ros2_control>
+    </xacro:if>
 
   </xacro:macro>
 </robot>

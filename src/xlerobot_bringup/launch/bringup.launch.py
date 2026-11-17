@@ -30,6 +30,11 @@ cameras:=true starts the USB cameras from config/cameras.yaml, see
 cameras.launch.py. Off by default, a camera that is not connected is skipped.
 
 lidar:=true starts the LD19 (/dev/ldlidar), see lidar.launch.py. Off by default.
+
+with_base:=false leaves the wheels out: no ODrive hardware, no diff_drive_controller, no twist_mux or safety
+supervisor. ros2_control won't start with hardware that isn't there, and the ODrive only shows on USB while the
+base's pack powers it, so this is how the arms, head and cameras come up with the base switched off, e.g. for
+leader-arm recording, which doesn't move the cart. On by default.
 """
 
 import datetime
@@ -181,6 +186,7 @@ def generate_launch_description():
             " with_arms:=", with_arms,
             " torque_off:=", torque_off,
             " with_head:=", with_head,
+            " with_base:=", LaunchConfiguration("with_base"),
             " sensor:=", sensor,
             " arm_max_velocity:=", LaunchConfiguration("arm_max_velocity"),
         ]),
@@ -210,6 +216,8 @@ def generate_launch_description():
         # with_arms:=true adds their joints to ros2_control (real buses, or use
         # use_mock_hardware:=true to see the model). Controllers come with phase 3.
         DeclareLaunchArgument("with_arms", default_value="false"),
+        # false: no wheels (the ODrive's pack can stay off), see the docstring
+        DeclareLaunchArgument("with_base", default_value="true"),
         # Torqued and commandable by default now that both arms and the head are calibrated,
         # live-tested, and MoveIt2-integrated. Pass torque_off:=true for a states-only bringup.
         DeclareLaunchArgument("torque_off", default_value="false"),
@@ -253,6 +261,7 @@ def generate_launch_description():
             package="controller_manager",
             executable="spawner",
             arguments=["diff_drive_controller"],
+            condition=IfCondition(LaunchConfiguration("with_base")),
         ),
         # Arm controllers need command interfaces on the arm joints: not in the read-only
         # bringup (torque_off:=true), always there in the sim. Each hardware component
@@ -297,7 +306,9 @@ def generate_launch_description():
 
         IncludeLaunchDescription(
             PythonLaunchDescriptionSource(teleop_launch_file),
-            launch_arguments={"with_joy": LaunchConfiguration("teleop_joy")}.items(),
+            # with_base: twist_mux and the safety supervisor drive and guard the wheels, nothing else
+            launch_arguments={"with_joy": LaunchConfiguration("teleop_joy"),
+                              "with_base": LaunchConfiguration("with_base")}.items(),
             condition=IfCondition(teleop),
         ),
 

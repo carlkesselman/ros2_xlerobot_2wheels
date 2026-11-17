@@ -64,6 +64,11 @@ Python, launch and config changes take effect at the next start (`--symlink-inst
    and the follower trails every quick leader move. elroy's log then fills with "Command of at least one joint is out
    of limits".
 
+   Recording doesn't move the cart, so the base's pack can stay off: add `with_base:=false`. That leaves the
+   ODrive, diff_drive_controller, twist_mux and the safety supervisor out. Without it, bringup won't start while the
+   ODrive is off USB, because ros2_control refuses hardware that isn't there. R + left stick then drives nothing,
+   and the wheel links have no transforms (their joints have no states), which only shows in RViz.
+
 2. **rosie:** `tools/station.sh`, from rosie's own terminal or over ssh (`ssh rosie Developer/ros2_xlerobot_2wheels/tools/station.sh`).
    The viewer opens full screen on rosie's monitor either way.
 3. **Mac**, at the Mac or over ssh: `pixi run tools/lerobot.sh record --repo-id ... --task "..."`.
