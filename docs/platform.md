@@ -48,7 +48,7 @@ elroy's `sts_hardware_interface` carries the local `servo_acceleration` patch (c
 | Item | Detail |
 |---|---|
 | Left leader arm | SO-101 leader, Feetech bus board `/dev/serial/by-id/usb-1a86_USB_Single_Serial_5B90149222-if00` |
-| Right leader arm | SO-101 leader, `/dev/serial/by-id/usb-1a86_USB_Single_Serial_5A7A017922-if00` |
+| Right leader arm | SO-101 leader, Feetech bus board `/dev/serial/by-id/usb-1a86_USB_Single_Serial_5A68009991-if00` (replaced 2026-11-21, was `5A7A017922`) |
 | Gamepad | 8BitDo SF30 Pro, wired, PlayStation-compatible mode (`054c:05c4`, 6 axes, 13 buttons). Left stick Y forward/back, right stick X turn, D-pad head, R1/L2 speed up/down. Re-probe if it power-cycles into another mode |
 | Leader calibration | lerobot JSONs on rosie (`~/.cache/huggingface/lerobot/calibration/`) |
 | Power | mains: the Pi 5 on a standard Raspberry Pi USB-C power supply; the leader arms on their own DC power supply. Nothing at the operator station is on the cart's batteries |

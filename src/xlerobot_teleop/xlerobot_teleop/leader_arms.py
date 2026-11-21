@@ -165,7 +165,7 @@ class LeaderArms(Node):
         p = self.declare_parameter
         p("arms", ["left", "right"])
         p("left_serial", "5B90149222")    # docs/platform.md: left leader bus board
-        p("right_serial", "5A7A017922")
+        p("right_serial", "5A68009991")   # board replaced 2026-11-21 (was 5A7A017922)
         p("follower_calibration",
           os.path.expanduser("~/.cache/huggingface/lerobot/calibration/robots/xlerobot/xlerobot.json"))
         p("mapping", "degrees")

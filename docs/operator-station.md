@@ -17,7 +17,7 @@ station viewer takes the cameras' 10 fps viewer copies, about 1.3 MB/s for all t
 
 ## Hardware on rosie
 
-- **Leader arms:** both Feetech bus boards (left `5B90149222`, right `5A7A017922`) on rosie's USB, with their own DC
+- **Leader arms:** both Feetech bus boards (left `5B90149222`, right `5A68009991`) on rosie's USB, with their own DC
   supply. Their servos run torque off and draw little.
 - **Gamepad:** the 8BitDo, wired, in PlayStation mode (`054c:05c4`).
 - **Monitor:** the Pi 5's video outputs are micro-HDMI.
