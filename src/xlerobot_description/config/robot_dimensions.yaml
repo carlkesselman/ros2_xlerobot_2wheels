@@ -290,8 +290,13 @@ xlerobot:
     wrist_camera:
       left:  {xyz: "-0.015770 0.015190 0.003387", rpy: "0.376871 -1.549444 2.303024"}
       right: {xyz: "0.004451 0.026293 0.013168", rpy: "-0.319586 -1.544162 3.034952"}
+    # shoulder_pan zero_step: both pans recalibrated 2026-11-22 (servo.sh recal). The old ranges, recorded before
+    #   2026-10-08 in the rear layout, spanned only 164 degrees, about 80 inward, too little to reach into the
+    #   basket. The new ones span 238 (left 713..3422, right 861..3576): 122 (left) and 114 (right) degrees inward.
+    #   Same servos, so zero_step carried over by the change of homing offset (step = raw - homing):
+    #   left 2065 + (1963 - 1995) = 2033, right 2002 + (-1435 - -1587) = 2154.
     joints:
-      shoulder_pan:  {zero_step: {left: 2065, right: 2002}, direction:  1, max_velocity: 0.8, lower: -2.16,      upper: 2.16, model_offset: {left: -0.05780, right: -0.03181}}
+      shoulder_pan:  {zero_step: {left: 2033, right: 2154}, direction:  1, max_velocity: 0.8, lower: -2.16,      upper: 2.16, model_offset: {left: -0.05780, right: -0.03181}}
       shoulder_lift: {zero_step: {left: 3146, right: 3218}, direction: -1, max_velocity: 0.8, lower: -0.22,      upper: 3.37, model_offset: {left: -0.05564, right: 0.04402}}
       elbow_flex:    {zero_step: {left:  904, right:  833}, direction:  1, max_velocity: 0.8, lower: -0.22,      upper: 3.14, model_offset: {left: -0.01166, right: 0.04683}}
       # Zero steps read on the cart 2026-11-13, each arm held stretched straight forward and level, wrist in
