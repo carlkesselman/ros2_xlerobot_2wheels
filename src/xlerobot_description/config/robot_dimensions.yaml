@@ -292,19 +292,28 @@ xlerobot:
       right: {xyz: "0.004451 0.026293 0.013168", rpy: "-0.319586 -1.544162 3.034952"}
     # shoulder_pan zero_step: both pans recalibrated 2026-11-22 (servo.sh recal). The old ranges, recorded before
     #   2026-10-08 in the rear layout, spanned only 164 degrees, about 80 inward, too little to reach into the
-    #   basket. The new ones span 238 (left 713..3422, right 861..3576): 122 (left) and 114 (right) degrees inward.
-    #   Same servos, so zero_step carried over by the change of homing offset (step = raw - homing):
-    #   left 2065 + (1963 - 1995) = 2033, right 2002 + (-1435 - -1587) = 2154.
+    #   basket. The new ones span 238 (left 713..3422, right 861..3576), the same to half a degree, so both sweeps
+    #   reached the hard stops. The zero is the middle of that travel (2067.5, 2218.5): the SO-101's pan stops are
+    #   symmetric about straight ahead (upstream URDF and this one), and straight held by eye isn't repeatable
+    #   enough - carried over by the homing change the 2026-11-13 holds gave 2033 and 2154, 3.0 and 5.7 degrees
+    #   off the middle in the same turning direction, which left the right arm 8.5 degrees less inward reach than
+    #   the left on paper, and the right's middle held for the recal was another 9 degrees off that. Now 119
+    #   degrees each way on both arms. Only the model uses zero_step: leader_arms maps leader to follower by the
+    #   range middles in steps and the driver converts back with the same zero_step, so teleop doesn't change.
+    # model_offset: the reference robot's fits (see the joints note below), not this robot's, and different on the
+    #   two arms, which made the model's arms asymmetric. Reset to 0 on 2026-11-22 for pan, lift, elbow and
+    #   wrist_flex until they are refitted on this robot (calibrate_arm_camera.py). Were pan -0.05780 / -0.03181,
+    #   lift -0.05564 / 0.04402, elbow -0.01166 / 0.04683, wrist_flex 0.06606 / 0.0 (left / right).
     joints:
-      shoulder_pan:  {zero_step: {left: 2033, right: 2154}, direction:  1, max_velocity: 0.8, lower: -2.16,      upper: 2.16, model_offset: {left: -0.05780, right: -0.03181}}
-      shoulder_lift: {zero_step: {left: 3146, right: 3218}, direction: -1, max_velocity: 0.8, lower: -0.22,      upper: 3.37, model_offset: {left: -0.05564, right: 0.04402}}
-      elbow_flex:    {zero_step: {left:  904, right:  833}, direction:  1, max_velocity: 0.8, lower: -0.22,      upper: 3.14, model_offset: {left: -0.01166, right: 0.04683}}
+      shoulder_pan:  {zero_step: {left: 2067, right: 2218}, direction:  1, max_velocity: 0.8, lower: -2.16,      upper: 2.16, model_offset: {left: 0.0, right: 0.0}}
+      shoulder_lift: {zero_step: {left: 3146, right: 3218}, direction: -1, max_velocity: 0.8, lower: -0.22,      upper: 3.37, model_offset: {left: 0.0, right: 0.0}}
+      elbow_flex:    {zero_step: {left:  904, right:  833}, direction:  1, max_velocity: 0.8, lower: -0.22,      upper: 3.14, model_offset: {left: 0.0, right: 0.0}}
       # Zero steps read on the cart 2026-11-13, each arm held stretched straight forward and level, wrist in
       # line with the forearm (lerobot calibration unchanged except the right wrist_flex). The gripper's is
       # range_min + 244 as above. Two holds each for the wrists: left wrist_flex 2236 / 2223 - its
       # calibrated middle is about 16 degrees off straight, the same both times - and wrist_roll 2022 / 1968
-      # left, 2016 right with the gripper mirrored to the left's. The model_offsets are still the reference
-      # robot's fits against its zero steps; refit them (calibrate_arm_camera.py).
+      # left, 2016 right with the gripper mirrored to the left's. The model_offsets were the reference
+      # robot's fits against its zero steps, reset to 0 on 2026-11-22; refit them (calibrate_arm_camera.py).
       # right wrist_flex: servo replaced again 2026-11-14, the 2026-11-13 one drove only toward the fold.
       #   Recalibrated: homing 236, range 841..3191, the same 2350-step span as the 2026-11-13 servo's
       #   792..3141, so the end stops are the same and only the middle was held 49 steps further from
@@ -316,7 +325,7 @@ xlerobot:
       #   block was in it or the wrist, not the arm's geometry). The fourth servo (an old omniwheel unit, id 7 -> 4,
       #   position mode, P/D 16/43) recalibrated: homing -299, range 862..3210, the same 2348-step span. Straight
       #   carried over from the ends as before: 862 + 1224 = 2086, 3210 - 1125 = 2085.
-      wrist_flex:    {zero_step: {left: 2230, right: 2085}, direction:  1, max_velocity: 0.8, lower: -1.6580628, upper: 1.6580627, model_offset: {left: 0.06606, right: 0.0}}
+      wrist_flex:    {zero_step: {left: 2230, right: 2085}, direction:  1, max_velocity: 0.8, lower: -1.6580628, upper: 1.6580627, model_offset: {left: 0.0, right: 0.0}}
       wrist_roll:    {zero_step: {left: 1995, right: 2016}, direction: -1, max_velocity: 0.8, lower: -2.7438473, upper: 2.8412063, model_offset: {left: -0.00000, right: -0.00000}}
       gripper:       {zero_step: {left: 1640, right: 1673}, direction:  1, max_velocity: 0.8, lower: -0.374533,  upper: 1.7453292}
 
